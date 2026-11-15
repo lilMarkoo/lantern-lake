@@ -1,8 +1,8 @@
 {
-  "version": "1.6.0",
+  "version": "1.7.0",
   "notes": [
-    "Play together over the internet: Host online opens your router's port and gives you a room code.",
-    "Friends join by pasting the room code. Anyone without the code is turned away.",
-    "A Paste button and Ctrl+V for codes, and the code is always in the pause menu."
+    "A calmer HUD: the toolbar slides away while you fish, and one tracked objective card (arrow to switch).",
+    "New HUD setting in Options > Gameplay: Calm, Compact (small clock and bait) or Full.",
+    "Frame your wildlife photos and hang them on the cabin wall. Each frame is stamped with the season and place."
   ]
 }

@@ -96,7 +96,8 @@ UI_SCALES = [50, 60, 67, 75, 85, 100, 110]      # interface size, percent (100 =
 DEFAULT_SETTINGS = dict(master=1.0, music=0.5, sfx=0.8, amb=0.8, assist=False, fullscreen=False, window=None,
                         fps=60, show_fps=False, shake=1.0, zoom=True, hints=True, clock24=False, speed=1.0,
                         bg_pause=True, ui_scale=100, mp_name='', mp_addr='', slot=1, prompts='auto',
-                        tutorial=True, binds={})
+                        tutorial=True, binds={}, hud='calm')
+HUD_STYLES = ('full', 'calm', 'compact')
 PROMPTS = ['auto', 'keyboard', 'xbox', 'ps', 'switch']
 PROMPT_LABELS = ['Auto', 'Keyboard', 'Xbox', 'PS', 'Switch']
 SLOTS = (1, 2, 3)
@@ -208,6 +209,10 @@ class Game:
         self.drag = None
         self.opt_tab = 'audio'
         self.options_from = None
+        self.tracked = None          # which objective the HUD card follows (None: the most urgent)
+        self.hud_tuck = 0.0          # 0 = toolbar shown, 1 = tucked away while a cast is out
+        self._hud_t = 0.0
+        self._dock_n = 6
         self._bufs = {}
         self._ui_pct = None
         self._small = pygame.Surface((W, H), 0, 32)
@@ -511,7 +516,7 @@ class Game:
         self.race = None             # a fishing race with friends online (coop.py)
         self.gift_to = None
         self.garden = gardenmod.new()   # the cabin garden (garden.py)
-        self.nature = {}             # animals photographed: id -> {'stars', 'day', 'n'} (wildlife.py)
+        self.nature = {}             # animals photographed: id -> {'stars', 'day', 'n', 'at'} (wildlife.py)
         self.photos = {}             # their best photos this session, and drawn stand-ins
         self.critter = None          # the animal visiting right now
         self.critter_cd = 8.0
@@ -738,7 +743,8 @@ class Game:
         self.home = homemod.clean(self.home)
         self.garden = gardenmod.clean(self.garden)
         self.nature = {k: {'stars': max(1, min(3, int(v.get('stars', 1)))), 'day': int(v.get('day', 0)),
-                           'n': max(1, int(v.get('n', 1)))}
+                           'n': max(1, int(v.get('n', 1))),
+                           'at': v.get('at') if v.get('at') in SPOT_BY_ID or v.get('at') == 'town' else None}
                        for k, v in self.nature.items() if k in wildlife.SPECIES_BY_ID and isinstance(v, dict)} \
             if isinstance(self.nature, dict) else {}
         self.photos = {}
@@ -2797,120 +2803,215 @@ class Game:
         pygame.draw.circle(s, (255, 252, 240), (int(x + math.cos(a) * (r - 3)), int(y + math.sin(a) * (r - 3))), 4)
         U.weather_icon(s, (x, y), self.weather, night, int(r * 0.52), sky)
 
+    # ---------------- HUD
+    def hud_style(self):
+        v = self.settings.get('hud', 'calm')
+        return v if v in HUD_STYLES else 'calm'
+
+    def hud_tucked(self):
+        """Calm HUD: while a cast is out, the menu toolbar and the day's notes step aside."""
+        if self.hud_style() == 'full' or self.place == 'town' or self.overlay is not None:
+            return False
+        st = self.fishing.state
+        if st == 'idle':
+            return False
+        # pointing at the corner while you wait brings the toolbar back
+        if st == 'waiting' and self.ui.mouse[0] > SW - 16 - (20 + self._dock_n * 72) and self.ui.mouse[1] > SH - 130:
+            return False
+        return True
+
+    def objectives(self):
+        """What the HUD can track: today's festival and the open request. The live festival comes first."""
+        out = []
+        fest = self.festival_today() and not self.festival.get('done')
+        req = self.request and not self.request.get('done')
+        if fest and self.minute >= self.festival['start']:
+            out.append('festival')
+        if req:
+            out.append('request')
+        if fest and 'festival' not in out:
+            out.append('festival')
+        return out
+
+    def tracked_objective(self):
+        objs = self.objectives()
+        if not objs:
+            return None, objs
+        return (self.tracked if self.tracked in objs else objs[0]), objs
+
+    def cycle_objective(self):
+        cur, objs = self.tracked_objective()
+        if len(objs) > 1:
+            self.tracked = objs[(objs.index(cur) + 1) % len(objs)]
+            self.audio.play('ui', 0.5)
+
+    def _hud_switch(self, s, r, objs, cur):
+        """A 'next' arrow with page dots on the objective card: click it to track the other one."""
+        ui = self.ui
+        chip = pygame.Rect(0, 0, 30, 46)
+        chip.midright = (r.right - 10, r.centery)
+        hov = chip.collidepoint(ui.mouse)
+        pygame.draw.rect(s, (255, 246, 226) if hov else (244, 232, 210), chip, border_radius=10)
+        cx, cy = chip.centerx, chip.y + 17
+        col = U.INK if hov else U.BROWN
+        pygame.draw.polygon(s, col, [(cx - 4, cy - 7), (cx + 5, cy), (cx - 4, cy + 7)])
+        k = objs.index(cur)
+        x0 = cx - (len(objs) - 1) * 4
+        for i in range(len(objs)):
+            pygame.draw.circle(s, col if i == k else (206, 188, 160), (x0 + i * 8, chip.bottom - 9), 3)
+        ui.hotspot(chip.inflate(8, 8), self.cycle_objective)
+        return chip.w + 8
+
+    def _hud_request(self, s, y, CW, objs):
+        ui = self.ui
+        req = self.request
+        f = FISH_BY_ID[req['fish']]
+        bday = req.get('birthday')
+        r2 = ui.panel(s, (16, y, CW, 64), fill=(252, 236, 240) if bday else U.PAPER, radius=16)
+        if bday:
+            U.cake(s, (r2.x + 30, r2.y + 32), 1.1)
+        else:
+            U.envelope(s, (r2.x + 16, r2.y + 20, 30, 22))
+        ui.hotspot(r2, self.read_request)
+        extra = self._hud_switch(s, r2, objs, 'request') if len(objs) > 1 else 0
+        who = req['who'].split(' (')[0]
+        pill = pygame.Rect(0, 0, 64, 28)
+        pill.midright = (r2.right - 14 - extra, r2.centery)
+        ui.blit_text(s, ("%s's birthday" % who) if bday else '%s needs' % who, (r2.x + 58, r2.y + 10),
+                     'small', U.SOFT, maxw=pill.x - r2.x - 66)
+        ui.blit_text(s, f['name'], (r2.x + 58, r2.y + 34), 'smallb', U.INK, maxw=pill.x - r2.x - 66)
+        done = req['have'] >= req['need']
+        pill = U.snap_rect(pill)
+        s.blit(ui._button_skin(pill.w, pill.h, U.SAGE if done else (234, 220, 194),
+                               U.SAGE_D if done else U.BROWN, 1), pill)
+        ui.blit_text(s, '%d/%d' % (req['have'], req['need']), (pill.centerx, pill.centery - 1), 'smallb',
+                     (255, 255, 250) if done else U.INK, 'center')
+
+    def _hud_festival(self, s, y, CW, objs):
+        ui = self.ui
+        fest = self.festival
+        r6 = ui.panel(s, (16, y, CW, 64), fill=(252, 236, 240), border=(176, 100, 130), radius=16)
+        U.trophy(s, (r6.x + 30, r6.y + 32), 0.9)
+        extra = self._hud_switch(s, r6, objs, 'festival') if len(objs) > 1 else 0
+        tw = CW - 70 - extra
+        if self.minute < fest['start']:
+            ui.blit_text(s, '%s today!' % fest['name'], (r6.x + 58, r6.y + 10), 'smallb', U.INK, maxw=tw)
+            ui.blit_text(s, 'Starts at %s' % fmt_clock(fest['start']), (r6.x + 58, r6.y + 34), 'small', U.SOFT,
+                         maxw=tw)
+        else:
+            lead_nm, lead_sz = max(fest['rivals'] + self.friend_scores(), key=lambda e: e[1])
+            ui.blit_text(s, '%s: %s' % (fest['name'], self.fest_score(fest['rule'], fest['best'])),
+                         (r6.x + 58, r6.y + 10), 'smallb', U.INK, maxw=tw)
+            if fest['best'] > lead_sz:
+                ui.blit_text(s, 'In the lead! Ends %s' % fmt_clock(fest['end']), (r6.x + 58, r6.y + 34),
+                             'small', (80, 130, 70), maxw=tw)
+            else:
+                ui.blit_text(s, 'To beat: %s, %s' % (lead_nm, self.fest_score(fest['rule'], lead_sz)),
+                             (r6.x + 58, r6.y + 34), 'small', U.SOFT, maxw=tw)
+
+    def day_lines(self):
+        """The day's notes under the objective: where you are, snacks, visitors, sky events..."""
+        lines = []
+        run = self.run_fish(self.day)
+        if self.place == 'town':
+            lines.append(('town', 'In Fernwick Village'))
+        elif self.spot != 'dock':
+            lines.append(('spot', 'Fishing at %s' % SPOT_BY_ID[self.spot]['name']))
+        for sn in townmod.SNACKS + townmod.NIGHT_SNACKS:
+            if self.buff(sn['id']):
+                lines.append(('snack', {'bun': 'Honey Bun: a little luck', 'tea': 'Lakeside Tea: quick bites',
+                                        'pie': 'Blueberry Pie: bigger fish',
+                                        'cookie': 'Star Cookie: rare fish',
+                                        'cocoa': 'Hot Cocoa: night bites come sooner',
+                                        'mooncake': 'Moon Cake: more night fish'}[sn['id']]))
+        meal = self.meal_today()
+        if meal:
+            r_ = kitchenmod.RECIPE_BY_ID[meal]
+            lines.append(('snack', '%s: %s' % (r_['name'], r_['effect'].lower())))
+        if self.wagon_here():
+            lines.append(('wagon', "Wren's Wagon until %s" % fmt_clock(1200)))
+        sl = story.hud_line(self)
+        if sl:
+            lines.append(('lantern', sl))
+        ll = legends.hud_line(self)
+        if ll:
+            lines.append(('festival', ll))
+        bl = biscuit.hud_line(self)
+        if bl:
+            lines.append(('birthday', bl))
+        gl = gardenmod.hud_line(self)
+        if gl:
+            lines.append(('garden', gl))
+        wl = wildlife.hud_line(self)
+        if wl:
+            lines.append(('critter', wl))
+        rl = coop.hud_line(self)
+        if rl:
+            lines.append(('festival', rl))
+        if self.place == 'lake' and self.has('pot') and seasons.pot_ready(self):
+            lines.append(('spot', 'Crab pot ready: haul it up (E)'))
+        if seasons.sky_live(self, 'storm'):
+            lines.append(('meteor', 'Thunderstorm: Thunderfin are rising'))
+        elif seasons.sky_live(self, 'aurora'):
+            lines.append(('meteor', 'Northern lights tonight'))
+        if run:
+            lines.append(('run', '%s run today' % FISH_BY_ID[run]['name']))
+        if almanac.dow(self.day) == METEOR_DAY and self.minute >= 1080:
+            lines.append(('meteor', 'Meteor shower now!' if self.meteor_live()
+                          else 'Meteors from %s' % fmt_clock(1260)))
+        elif self.meteor_live():
+            lines.append(('meteor', 'Meteor shower now!'))
+        return lines
+
     def draw_hud(self, s):
         ui = self.ui
         env = self.env
         if self.net.online:
             self.draw_name_tags(s)
+        style = self.hud_style()
+        compact = style == 'compact'
+        # the calm HUD eases the toolbar away while a cast is out
+        now = self.t
+        dt = max(0.0, min(0.1, now - self._hud_t))
+        self._hud_t = now
+        target = 1.0 if self.hud_tucked() else 0.0
+        self.hud_tuck += (target - self.hud_tuck) * min(1.0, dt * 9)
+        if abs(target - self.hud_tuck) < 0.01:
+            self.hud_tuck = target
+        tuck = 1 - (1 - self.hud_tuck) ** 3
         CW = 372                   # width of the left-hand cards
-        # clock card
-        r = ui.panel(s, (16, 14, CW, 88), radius=20)
-        self._dial(s, (r.x + 46, r.y + 44), 30)
-        ui.blit_text(s, fmt_clock(self.minute), (r.x + 92, r.y + 12), 'big', U.INK)
-        sub = '%s, %s %d' % (almanac.weekday(self.day), SEASONS[env.season], almanac.dow(self.day))
-        ui.blit_text(s, sub, (r.x + 94, r.y + 58), 'small', U.SOFT, maxw=CW - 150)
-        ui.keycap(s, 'K', (r.right - 14, r.y + 14), 'topright')
-        if env.full_moon and env.nf > 0.4:
-            U.moon_phase(s, (r.right - 60, r.y + 26), 0, 10)
-        ui.hotspot(r, lambda: self.toggle('calendar'))
-        y = 110
         tw = CW - 70               # room for text beside the card icons
-        # request card (birthdays use the same card)
-        req = self.request
-        if req and not req.get('done'):
-            f = FISH_BY_ID[req['fish']]
-            bday = req.get('birthday')
-            r2 = ui.panel(s, (16, y, CW, 64), fill=(252, 236, 240) if bday else U.PAPER, radius=16)
-            if bday:
-                U.cake(s, (r2.x + 30, r2.y + 32), 1.1)
-            else:
-                U.envelope(s, (r2.x + 16, r2.y + 20, 30, 22))
-            who = req['who'].split(' (')[0]
-            pill = pygame.Rect(0, 0, 64, 28)
-            pill.midright = (r2.right - 14, r2.centery)
-            ui.blit_text(s, ("%s's birthday" % who) if bday else '%s needs' % who, (r2.x + 58, r2.y + 10),
-                         'small', U.SOFT, maxw=pill.x - r2.x - 66)
-            ui.blit_text(s, f['name'], (r2.x + 58, r2.y + 34), 'smallb', U.INK, maxw=pill.x - r2.x - 66)
-            done = req['have'] >= req['need']
-            pill = U.snap_rect(pill)
-            s.blit(ui._button_skin(pill.w, pill.h, U.SAGE if done else (234, 220, 194),
-                                   U.SAGE_D if done else U.BROWN, 1), pill)
-            ui.blit_text(s, '%d/%d' % (req['have'], req['need']), (pill.centerx, pill.centery - 1), 'smallb',
-                         (255, 255, 250) if done else U.INK, 'center')
-            ui.hotspot(r2, self.read_request)
+        # clock
+        if compact:
+            r = ui.panel(s, (16, 14, 262, 48), radius=22)
+            self._dial(s, (r.x + 27, r.centery), 17)
+            ui.blit_text(s, fmt_clock(self.minute), (r.x + 54, r.centery), 'bodyb', U.INK, 'midleft')
+            ui.blit_text(s, almanac.weekday(self.day), (r.right - 16, r.centery), 'small', U.SOFT, 'midright',
+                         maxw=100)
+            y = 70
+        else:
+            r = ui.panel(s, (16, 14, CW, 88), radius=20)
+            self._dial(s, (r.x + 46, r.y + 44), 30)
+            ui.blit_text(s, fmt_clock(self.minute), (r.x + 92, r.y + 12), 'big', U.INK)
+            sub = '%s, %s %d' % (almanac.weekday(self.day), SEASONS[env.season], almanac.dow(self.day))
+            ui.blit_text(s, sub, (r.x + 94, r.y + 58), 'small', U.SOFT, maxw=CW - 150)
+            ui.keycap(s, 'K', (r.right - 14, r.y + 14), 'topright')
+            if env.full_moon and env.nf > 0.4:
+                U.moon_phase(s, (r.right - 60, r.y + 26), 0, 10)
+            y = 110
+        ui.hotspot(r, lambda: self.toggle('calendar'))
+        # one tracked objective (a request, a birthday or today's festival); the chip switches between them
+        cur, objs = self.tracked_objective()
+        if cur == 'request':
+            self._hud_request(s, y, CW, objs)
             y += 72
-        # festival card
-        if self.festival_today() and not self.festival.get('done'):
-            fest = self.festival
-            r6 = ui.panel(s, (16, y, CW, 64), fill=(252, 236, 240), border=(176, 100, 130), radius=16)
-            U.trophy(s, (r6.x + 30, r6.y + 32), 0.9)
-            if self.minute < fest['start']:
-                ui.blit_text(s, '%s today!' % fest['name'], (r6.x + 58, r6.y + 10), 'smallb', U.INK, maxw=tw)
-                ui.blit_text(s, 'Starts at %s' % fmt_clock(fest['start']), (r6.x + 58, r6.y + 34), 'small', U.SOFT,
-                             maxw=tw)
-            else:
-                lead_nm, lead_sz = max(fest['rivals'] + self.friend_scores(), key=lambda e: e[1])
-                ui.blit_text(s, '%s: %s' % (fest['name'], self.fest_score(fest['rule'], fest['best'])),
-                             (r6.x + 58, r6.y + 10), 'smallb', U.INK, maxw=tw)
-                if fest['best'] > lead_sz:
-                    ui.blit_text(s, 'In the lead! Ends %s' % fmt_clock(fest['end']), (r6.x + 58, r6.y + 34),
-                                 'small', (80, 130, 70), maxw=tw)
-                else:
-                    ui.blit_text(s, 'To beat: %s, %s' % (lead_nm, self.fest_score(fest['rule'], lead_sz)),
-                                 (r6.x + 58, r6.y + 34), 'small', U.SOFT, maxw=tw)
+        elif cur == 'festival':
+            self._hud_festival(s, y, CW, objs)
             y += 72
-        # today's other events (hidden while reeling, the reel ring needs the room)
-        if self.fishing.state not in ('fight', 'landing'):
-            lines = []
-            run = self.run_fish(self.day)
-            if self.place == 'town':
-                lines.append(('town', 'In Fernwick Village'))
-            elif self.spot != 'dock':
-                lines.append(('spot', 'Fishing at %s' % SPOT_BY_ID[self.spot]['name']))
-            for sn in townmod.SNACKS + townmod.NIGHT_SNACKS:
-                if self.buff(sn['id']):
-                    lines.append(('snack', {'bun': 'Honey Bun: a little luck', 'tea': 'Lakeside Tea: quick bites',
-                                            'pie': 'Blueberry Pie: bigger fish',
-                                            'cookie': 'Star Cookie: rare fish',
-                                            'cocoa': 'Hot Cocoa: night bites come sooner',
-                                            'mooncake': 'Moon Cake: more night fish'}[sn['id']]))
-            meal = self.meal_today()
-            if meal:
-                r_ = kitchenmod.RECIPE_BY_ID[meal]
-                lines.append(('snack', '%s: %s' % (r_['name'], r_['effect'].lower())))
-            if self.wagon_here():
-                lines.append(('wagon', "Wren's Wagon until %s" % fmt_clock(1200)))
-            sl = story.hud_line(self)
-            if sl:
-                lines.append(('lantern', sl))
-            ll = legends.hud_line(self)
-            if ll:
-                lines.append(('festival', ll))
-            bl = biscuit.hud_line(self)
-            if bl:
-                lines.append(('birthday', bl))
-            gl = gardenmod.hud_line(self)
-            if gl:
-                lines.append(('garden', gl))
-            wl = wildlife.hud_line(self)
-            if wl:
-                lines.append(('critter', wl))
-            rl = coop.hud_line(self)
-            if rl:
-                lines.append(('festival', rl))
-            if self.place == 'lake' and self.has('pot') and seasons.pot_ready(self):
-                lines.append(('spot', 'Crab pot ready: haul it up (E)'))
-            if seasons.sky_live(self, 'storm'):
-                lines.append(('meteor', 'Thunderstorm: Thunderfin are rising'))
-            elif seasons.sky_live(self, 'aurora'):
-                lines.append(('meteor', 'Northern lights tonight'))
-            if run:
-                lines.append(('run', '%s run today' % FISH_BY_ID[run]['name']))
-            if almanac.dow(self.day) == METEOR_DAY and self.minute >= 1080:
-                lines.append(('meteor', 'Meteor shower now!' if self.meteor_live()
-                              else 'Meteors from %s' % fmt_clock(1260)))
-            elif self.meteor_live():
-                lines.append(('meteor', 'Meteor shower now!'))
+        # today's other notes: they step aside while a cast is out (and always while reeling)
+        quiet = (self.hud_tuck > 0.5) if style != 'full' else self.fishing.state in ('fight', 'landing')
+        if not quiet:
+            lines = self.day_lines()
             if lines:
                 r7 = ui.panel(s, (16, y, CW, 20 + 30 * len(lines)), radius=16)
                 for i, (kind, text) in enumerate(lines):
@@ -2926,26 +3027,36 @@ class Game:
                     ui.blit_text(s, text, (r7.x + 58, r7.y + 25 + i * 30), 'small', U.INK, 'midleft', maxw=tw)
                 y = r7.bottom + 8
         self._hud_left = y           # the chat sits under the left-hand cards
-        # coins
-        r3 = ui.panel(s, (SW - 16 - 188, 14, 188, 56), radius=26)
-        U.coin(s, (r3.x + 32, r3.centery), 14)
-        ui.blit_text(s, '{:,}'.format(self.coins), (r3.x + 56, r3.centery + 2), 'big', U.INK, 'midleft',
-                     maxw=r3.w - 66)
-        # bait
+        # coins, bait and luck down the right-hand side
         b = BAIT_BY_ID[self.bait]
         label = b['name'] if self.bait == 'worm' else '%s x%d' % (b['name'], self.baits.get(self.bait, 0))
-        r4 = ui.panel(s, (SW - 16 - 300, 78, 300, 48), radius=22)
-        s.blit(art.item_icon(self.bait, 2), (r4.x + 12, r4.y + 8))
-        ui.blit_text(s, label, (r4.x + 52, r4.centery), 'smallb', U.INK, 'midleft', maxw=r4.w - 120)
-        ui.keycap(s, 'Tab', (r4.right - 12, r4.centery), 'midright')
+        if compact:
+            r3 = ui.panel(s, (SW - 16 - 164, 14, 164, 48), radius=22)
+            U.coin(s, (r3.x + 26, r3.centery), 11)
+            ui.blit_text(s, '{:,}'.format(self.coins), (r3.x + 46, r3.centery), 'bodyb', U.INK, 'midleft',
+                         maxw=r3.w - 56)
+            r4 = ui.panel(s, (SW - 16 - 236, 70, 236, 42), radius=20)
+            s.blit(art.item_icon(self.bait, 2), (r4.x + 10, r4.centery - 16))
+            ui.blit_text(s, label, (r4.x + 48, r4.centery), 'small', U.INK, 'midleft', maxw=r4.w - 60)
+            ry = 120
+        else:
+            r3 = ui.panel(s, (SW - 16 - 188, 14, 188, 56), radius=26)
+            U.coin(s, (r3.x + 32, r3.centery), 14)
+            ui.blit_text(s, '{:,}'.format(self.coins), (r3.x + 56, r3.centery + 2), 'big', U.INK, 'midleft',
+                         maxw=r3.w - 66)
+            r4 = ui.panel(s, (SW - 16 - 300, 78, 300, 48), radius=22)
+            s.blit(art.item_icon(self.bait, 2), (r4.x + 12, r4.y + 8))
+            ui.blit_text(s, label, (r4.x + 52, r4.centery), 'smallb', U.INK, 'midleft', maxw=r4.w - 120)
+            ui.keycap(s, 'Tab', (r4.right - 12, r4.centery), 'midright')
+            ry = 134
         ui.hotspot(r4, self.cycle_bait)
-        # luck
         if self.luck > 0.05:
-            r5 = ui.panel(s, (SW - 16 - 150, 134, 150, 40), radius=19)
+            r5 = ui.panel(s, (SW - 16 - 150, ry, 150, 40), radius=19)
             n = min(3, int(math.ceil(self.luck)))
             for i in range(n):
                 U.clover(s, (r5.x + 24 + i * 22, r5.centery - 2), 8)
             ui.blit_text(s, 'Luck', (r5.right - 14, r5.centery), 'smallb', U.SOFT, 'midright')
+            ry += 48
         # toolbar of menu buttons, bottom right: item-slot style tiles
         if self.place == 'town':
             slots = [('Journal', 'J', lambda: self.toggle('journal')),
@@ -2964,47 +3075,50 @@ class Game:
                 slots.insert(5, ('Boat', 'B', self.open_map))
         n = len(slots)
         self._dock_n = n
-        dock = ui.panel(s, (SW - 16 - (20 + n * 72), SH - 16 - 92, 20 + n * 72, 92), radius=24)
-        tip = None
-        for i, (label, key, act) in enumerate(slots):
-            rr = pygame.Rect(dock.x + 10 + i * 72, dock.y + 10, 68, 72)
-            hover = rr.collidepoint(ui.mouse)
-            lift = -2 if hover else 0
-            slot = rr.move(0, lift)
-            s.blit(ui._frame(slot.w, slot.h, (255, 250, 238) if hover else (236, 222, 196),
-                             (196, 160, 120) if hover else (170, 134, 100), 2), slot)
-            c = (slot.centerx, slot.y + 28)
-            if label == 'Journal':
-                U.book(s, c)
-            elif label == 'Shop':
-                U.bag(s, (c[0], c[1] + 2))
-            elif label == 'Cabin':
-                U.house(s, (c[0], c[1] + 1))
-            elif label == 'Calendar':
-                U.calendar_icon(s, c)
-            elif label == 'Boat':
-                U.rowboat(s, (c[0], c[1] + 2), 1.0)
-            elif label in ('Town', 'Lake'):
-                townmod.signpost_icon(s, c, label == 'Lake')
-            else:
-                U.moon_icon(s, c, U.CREAM)
-            ui.blit_text(s, label, (slot.centerx, slot.bottom - 16), 'tiny', U.INK, 'center', maxw=slot.w - 6)
-            ui.hotspot(rr, act)
-            if hover:
-                tip = (slot, label, key)
-        if tip:
-            slot, label, key = tip
-            w = ui.fonts['smallb'].size(label)[0] + 62
-            tr = pygame.Rect(0, 0, w, 40)
-            tr.midbottom = (slot.centerx, dock.y - 6)
-            tr.right = min(tr.right, SW - 12)
-            tr = ui.panel(s, tr, radius=12)
-            ui.blit_text(s, label, (tr.x + 12, tr.centery), 'smallb', U.INK, 'midleft')
-            ui.keycap(s, key, (tr.right - 10, tr.centery), 'midright')
+        drop = int(tuck * 124)
+        if drop < 120:
+            dock = ui.panel(s, (SW - 16 - (20 + n * 72), SH - 16 - 92 + drop, 20 + n * 72, 92), radius=24)
+            tip = None
+            for i, (label, key, act) in enumerate(slots):
+                rr = pygame.Rect(dock.x + 10 + i * 72, dock.y + 10, 68, 72)
+                hover = rr.collidepoint(ui.mouse) and not drop
+                lift = -2 if hover else 0
+                slot = rr.move(0, lift)
+                s.blit(ui._frame(slot.w, slot.h, (255, 250, 238) if hover else (236, 222, 196),
+                                 (196, 160, 120) if hover else (170, 134, 100), 2), slot)
+                c = (slot.centerx, slot.y + 28)
+                if label == 'Journal':
+                    U.book(s, c)
+                elif label == 'Shop':
+                    U.bag(s, (c[0], c[1] + 2))
+                elif label == 'Cabin':
+                    U.house(s, (c[0], c[1] + 1))
+                elif label == 'Calendar':
+                    U.calendar_icon(s, c)
+                elif label == 'Boat':
+                    U.rowboat(s, (c[0], c[1] + 2), 1.0)
+                elif label in ('Town', 'Lake'):
+                    townmod.signpost_icon(s, c, label == 'Lake')
+                else:
+                    U.moon_icon(s, c, U.CREAM)
+                ui.blit_text(s, label, (slot.centerx, slot.bottom - 16), 'tiny', U.INK, 'center', maxw=slot.w - 6)
+                if not drop:
+                    ui.hotspot(rr, act)
+                if hover:
+                    tip = (slot, label, key)
+            if tip:
+                slot, label, key = tip
+                w = ui.fonts['smallb'].size(label)[0] + 62
+                tr = pygame.Rect(0, 0, w, 40)
+                tr.midbottom = (slot.centerx, dock.y - 6)
+                tr.right = min(tr.right, SW - 12)
+                tr = ui.panel(s, tr, radius=12)
+                ui.blit_text(s, label, (tr.x + 12, tr.centery), 'smallb', U.INK, 'midleft')
+                ui.keycap(s, key, (tr.right - 10, tr.centery), 'midright')
         # fishing feedback
         self.draw_fishing_ui(s)
         if self.net.online:
-            self.draw_friends(s, 182 if self.luck > 0.05 else 134)
+            self.draw_friends(s, ry)
         self.draw_chat(s)
 
     def draw_fishing_ui(self, s):
@@ -3030,7 +3144,7 @@ class Game:
                              [('pad', 'A'), 'to start a fly cast'])
         if hint and self.overlay is None and self.settings.get('hints', True) and self.typing != 'chat':
             w = ui.rich(s, hint, (0, 0), measure=True) + 40
-            room = SW - 16 - (20 + getattr(self, '_dock_n', 6) * 72) - 16 - 16
+            room = SW - 16 - (0 if self.hud_tuck > 0.5 else 20 + self._dock_n * 72) - 16 - 16
             if w > room:
                 hint = {'idle': [('key', 'Hold Click'), 'or', ('key', 'Space'), 'to wind up a cast'],
                         'waiting': ['Wait for a real bite', ('key', 'Click'), 'reels in']}.get(st, hint)
@@ -4533,6 +4647,9 @@ class Game:
                      lambda i: self.set_opt('speed', DAY_SPEEDS[i]), True),
                     ('choice', 'Clock', 'How times are shown', ['12-hour', '24-hour'], int(bool(st['clock24'])),
                      lambda i: self.set_opt('clock24', bool(i)), True),
+                    ('choice', 'HUD', 'Calm hides the toolbar while you fish', ['Full', 'Calm', 'Compact'],
+                     HUD_STYLES.index(self.hud_style()),
+                     lambda i: self.set_opt('hud', HUD_STYLES[i]), True),
                     ('choice', 'Hints', 'Tips along the bottom of the screen', ['Off', 'On'],
                      int(bool(st['hints'])), lambda i: self.set_opt('hints', bool(i)), True),
                     ('choice', 'Pause in the background', 'Pauses when you switch to another window',
@@ -4700,7 +4817,7 @@ class Game:
     def reset_tab(self):
         keys = {'audio': ('master', 'music', 'sfx', 'amb'),
                 'display': ('fps', 'show_fps', 'shake', 'zoom', 'ui_scale'),
-                'game': ('assist', 'speed', 'clock24', 'hints', 'bg_pause', 'tutorial')}.get(self.opt_tab, ())
+                'game': ('assist', 'speed', 'clock24', 'hud', 'hints', 'bg_pause', 'tutorial')}.get(self.opt_tab, ())
         for k in keys:
             self.settings[k] = DEFAULT_SETTINGS[k]
         if self.opt_tab == 'display' and self.fullscreen:
@@ -5593,7 +5710,7 @@ def run_bot(seconds):
             biscuit.give_treat(g)                 # Biscuit's day, and a bit of decorating
             if biscuit.toys(g):
                 biscuit.play(g)
-            pick = rng.choice(homemod.CATALOGUE + homemod.mounts(g))
+            pick = rng.choice(homemod.CATALOGUE + homemod.mounts(g) + homemod.photos(g))
             if not homemod.owns(g, pick['id']) and g.coins > pick['price'] + 600:
                 if pick['kind'] in ('wall', 'floor'):
                     g.home_sel = (pick['kind'], rng.randrange(4))

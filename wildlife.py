@@ -14,6 +14,7 @@ import pygame
 
 import ui as U
 from art import W, H, HORIZON, darken, lighten
+from data import SEASONS, DAYS_PER_SEASON, SPOT_BY_ID
 
 NIGHT = ((1200, 1440), (0, 300))
 DAWN_DUSK = ((300, 600), (1020, 1200))
@@ -1212,8 +1213,10 @@ def snap(g):
         reward += NEW_REWARD
     if stars == 3 and (new or rec['stars'] < 3):
         reward += NEW_REWARD
+    here = 'town' if g.place == 'town' else g.spot
     g.nature[sp['id']] = {'stars': max(stars, rec['stars'] if rec else 0),
-                          'day': g.day if better else rec['day'], 'n': (rec['n'] if rec else 0) + 1}
+                          'day': g.day if better else rec['day'], 'n': (rec['n'] if rec else 0) + 1,
+                          'at': here if better else rec.get('at')}
     if better:
         g.photos[sp['id']] = surf
         d = g.photo_dir()
@@ -1238,6 +1241,26 @@ def _crop(cx, cy):
     r.center = (int(cx), int(cy))
     r.clamp_ip(pygame.Rect(0, 0, W, H))
     return r
+
+
+def season_of(day):
+    return ((day - 1) // DAYS_PER_SEASON) % 4
+
+
+def stamp(g, cid):
+    """When and where your best photo of an animal was taken: 'Summer 12, Lily Cove'."""
+    rec = g.nature.get(cid) or {}
+    day = rec.get('day') or g.day
+    out = '%s %d' % (SEASONS[season_of(day)], (day - 1) % DAYS_PER_SEASON + 1)
+    year = (day - 1) // (DAYS_PER_SEASON * 4) + 1
+    if year > 1:
+        out += ', year %d' % year
+    at = rec.get('at')
+    if at == 'town':
+        out += ', Fernwick'
+    elif at in SPOT_BY_ID:
+        out += ', ' + SPOT_BY_ID[at]['name']
+    return out
 
 
 def photo(g, cid):
@@ -1407,7 +1430,9 @@ def draw_page(g, s, rect):
         for k in range(3):
             U.star(s, (dr.x + 24 + k * 22, y + 8), 8, U.GOLD if k < rec['stars'] else (214, 204, 190))
         ui.blit_text(s, 'Photos: %d' % rec['n'], (dr.right - 16, y), 'small', U.SOFT, 'topright')
-        y += 30
+        y += 26
+        ui.blit_text(s, stamp(g, sp['id']), (dr.x + 16, y), 'tiny', (150, 120, 80), maxw=dr.w - 32)
+        y += 24
         for line in ui.wrap(sp['desc'], 'small', dr.w - 32):
             ui.blit_text(s, line, (dr.x + 16, y), 'small', U.INK)
             y += 22

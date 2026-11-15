@@ -6,6 +6,7 @@ import pygame
 import actors
 import art
 import ui as U
+import wildlife
 from data import FISH, FISH_BY_ID
 
 RW, RH = 320, 170           # the room canvas, shown at x2
@@ -15,6 +16,8 @@ FLOOR_SLOTS = [40, 98, 222, 282]                              # x centres, stand
 FEET = 140
 MOUNT_PRICE = 60
 MOUNT_AT = 0.7              # a record: at least 70% of the way to the biggest size
+PHOTO_PRICE = 40            # framing one of your wildlife photos
+SEASON_INK = [(226, 128, 150), (230, 186, 70), (206, 112, 60), (110, 150, 200)]   # the stamp on each frame
 
 
 def F(id, name, price, kind, desc):
@@ -70,7 +73,7 @@ def clean(h):
     base = new()
     if not isinstance(h, dict):
         return base
-    owned = [i for i in h.get('owned', []) if isinstance(i, str) and (i in BY_ID or mount_spec(i))]
+    owned = [i for i in h.get('owned', []) if isinstance(i, str) and (i in BY_ID or mount_spec(i) or photo_spec(i))]
     base['owned'] = list(dict.fromkeys(owned))
     for kind, n in (('wall', 4), ('floor', 4)):
         v = h.get(kind)
@@ -91,8 +94,15 @@ def mount_spec(iid):
     return None
 
 
+def photo_spec(iid):
+    """'photo:<animal>' is one of your wildlife photos in a frame."""
+    if isinstance(iid, str) and iid.startswith('photo:'):
+        return wildlife.SPECIES_BY_ID.get(iid[6:])
+    return None
+
+
 def item_kind(iid):
-    if mount_spec(iid):
+    if mount_spec(iid) or photo_spec(iid):
         return 'wall'
     return BY_ID[iid]['kind'] if iid in BY_ID else None
 
@@ -101,6 +111,9 @@ def item_name(iid):
     sp = mount_spec(iid)
     if sp:
         return '%s Mount' % sp['name']
+    ps = photo_spec(iid)
+    if ps:
+        return '%s, framed' % ps['name']
     return BY_ID[iid]['name']
 
 
@@ -123,10 +136,22 @@ def mounts(g):
     return out
 
 
+def photos(g):
+    """Frames on offer: one for every animal on your Nature page, holding your best photo of it."""
+    out = []
+    for sp in wildlife.SPECIES:
+        rec = g.nature.get(sp['id'])
+        if rec:
+            stars = '%d-star' % rec['stars'] if rec['stars'] else 'blurry'
+            out.append(dict(id='photo:' + sp['id'], name=sp['name'], price=PHOTO_PRICE, kind='wall',
+                            desc='Your %s photo in a frame, stamped %s.' % (stars, wildlife.stamp(g, sp['id']))))
+    return out
+
+
 def items(g, kind):
     its = [c for c in CATALOGUE if c['kind'] == kind and (not c.get('gift') or c['id'] in g.home['owned'])]
     if kind == 'wall':
-        its += mounts(g)
+        its += mounts(g) + photos(g)
     return its
 
 
@@ -377,6 +402,10 @@ def _wall_item(s, g, iid, pos, t):
         s.blit(spr, spr.get_rect(center=(cx, cy - 1)))
         s.fill((220, 186, 90), (cx - 5, cy + 9, 10, 3))
         return
+    ps = photo_spec(iid)
+    if ps:
+        _photo_frame(s, g, ps['id'], cx, cy)
+        return
     if iid == 'painting':
         r = pygame.Rect(cx - 18, cy - 13, 36, 26)
         s.fill((170, 130, 60), r.inflate(4, 4))
@@ -425,6 +454,43 @@ def _wall_item(s, g, iid, pos, t):
         s.set_at((r.x + 20, r.y + 12), (60, 40, 40))
         s.fill((200, 70, 60), (r.x + 9, r.y + 9, 2, 2))
         pygame.draw.line(s, (120, 150, 110), (r.x + 26, r.y + 4), (r.right - 2, r.y + 2))
+
+
+_thumbs = {}
+
+
+def _thumb(g, cid, size):
+    """Your best photo of an animal (or its drawn portrait), shrunk to fit a frame."""
+    src = wildlife.photo(g, cid) or wildlife._portrait_cached(g, cid)
+    key = (cid, id(src), size)
+    if key not in _thumbs:
+        try:
+            _thumbs[key] = pygame.transform.smoothscale(src.convert(), size)
+        except (pygame.error, ValueError):
+            _thumbs[key] = pygame.transform.scale(src, size)
+    return _thumbs[key]
+
+
+def _photo_frame(s, g, cid, cx, cy):
+    """A framed photo on a string, with the season's ink stamp in the corner of the mat."""
+    nail = (cx, cy - 18)
+    pygame.draw.line(s, (90, 70, 50), nail, (cx - 13, cy - 11))
+    pygame.draw.line(s, (90, 70, 50), nail, (cx + 13, cy - 11))
+    s.fill((150, 140, 130), (nail[0] - 1, nail[1] - 1, 2, 2))
+    outer = pygame.Rect(cx - 20, cy - 12, 40, 27)
+    s.fill((70, 46, 30), outer.move(1, 1))                 # a little shadow on the wall
+    s.fill((128, 86, 54), outer)
+    s.fill((150, 106, 70), (outer.x, outer.y, outer.w, 1))
+    mat = outer.inflate(-4, -4)
+    s.fill((246, 240, 226), mat)
+    pic = pygame.Rect(mat.x + 2, mat.y + 2, mat.w - 4, mat.h - 6)
+    s.blit(_thumb(g, cid, pic.size), pic)
+    rec = g.nature.get(cid) if hasattr(g, 'nature') else None
+    if rec:
+        ink = SEASON_INK[wildlife.season_of(rec.get('day', 1))]
+        s.fill(ink, (mat.right - 7, mat.bottom - 4, 5, 3))
+        for i in range(min(3, rec.get('stars', 0))):
+            s.set_at((mat.x + 2 + i * 2, mat.bottom - 2), (220, 170, 60))
 
 
 def _floor_item(s, g, iid, x, t, env):
@@ -569,8 +635,11 @@ def draw_tab(g, s, rect):
         iid = g.home[sel[0]][sel[1]]
         where = '%s spot %d' % ('Wall' if sel[0] == 'wall' else 'Floor', sel[1] + 1)
         ui.blit_text(s, item_name(iid) if iid else where + ': empty', (rx, iy), 'h3', U.INK)
+        ps = photo_spec(iid)
         ui.blit_text(s, where + ('.  Pick something on the right to put here.' if not iid else
-                                 '.  Pick something else to swap it.'), (rx, iy + 30), 'small', U.SOFT)
+                                 '.  Taken %s.' % wildlife.stamp(g, ps['id']) if ps else
+                                 '.  Pick something else to swap it.'), (rx, iy + 30), 'small', U.SOFT,
+                     maxw=RW * 2 - 180)
         if iid:
             ui.button(s, (rx + RW * 2 - 170, iy, 170, 44), 'Take down', lambda: take_down(g), 'rose')
     else:
@@ -618,9 +687,13 @@ def draw_tab(g, s, rect):
         ui.blit_text(s, hover['name'], (cx0, dy), 'bodyb', U.INK)
         for j, line in enumerate(ui.wrap(hover['desc'], 'small', cw)[:3]):
             ui.blit_text(s, line, (cx0, dy + 26 + j * 20), 'small', U.SOFT)
-    elif tab == 'wall' and not mounts(g):
-        for j, line in enumerate(ui.wrap('Catch a record-size fish (near its biggest) and you can mount it here.',
-                                         'small', cw)):
+    elif tab == 'wall' and not (mounts(g) and photos(g)):
+        tip = ('Catch a record-size fish (near its biggest) and you can mount it here.' if photos(g) else
+               'Photograph an animal (photo mode, %s) and you can frame it here.' % wildlife.photo_key(g)
+               if mounts(g) else
+               'Mount a record-size fish here, or frame your wildlife photos (photo mode, %s).'
+               % wildlife.photo_key(g))
+        for j, line in enumerate(ui.wrap(tip, 'small', cw)):
             ui.blit_text(s, line, (cx0, dy + j * 20), 'small', U.SOFT)
     elif tab == 'tank':
         ui.blit_text(s, 'Changes the look of your fish tank.', (cx0, dy), 'small', U.SOFT)
@@ -656,12 +729,16 @@ _icons = {}
 def icon(g, iid):
     """A 64x64 preview of a catalogue item, drawn by the room code itself."""
     sp = mount_spec(iid)
-    key = iid
+    ps = photo_spec(iid)
+    # a framed photo's icon changes when you take a better photo
+    key = (iid, id(wildlife.photo(g, ps['id']))) if ps else iid
     if key in _icons:
         return _icons[key]
     tmp = pygame.Surface((48, 40), pygame.SRCALPHA)
     kind = item_kind(iid)
-    if sp or kind == 'wall':
+    if ps:
+        _wall_item(tmp, g, iid, (24, 22), 0.0)
+    elif sp or kind == 'wall':
         _wall_item(tmp, _IconGame, iid, (24, 20), 0.0)
     elif kind == 'floor':
         tmp2 = pygame.Surface((48, 70), pygame.SRCALPHA)

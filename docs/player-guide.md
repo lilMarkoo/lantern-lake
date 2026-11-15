@@ -81,10 +81,24 @@ your save, so they stay the same when you start a new game.
   (30 / 60 / 120 / 144), a frame rate counter, screen shake (off / gentle / full) and the camera zoom while reeling.
   The interface size row lists which sizes land on whole screen pixels for your window. Those are the sharpest
   and also the fastest to draw (on a 1080p screen: 67% and 100%)
-- **Gameplay**: relaxed reeling, day length (slow, normal or quick days), 12 or 24-hour clock, hints,
-  pausing when you switch to another window, and the first-day tips (seven short tips at the top of the screen
+- **Gameplay**: relaxed reeling, day length (slow, normal or quick days), 12 or 24-hour clock, the HUD style
+  (see below), hints, pausing when you switch to another window, and the first-day tips (seven short tips at the top of the screen
   in a new game, each gone once you've done it, with a Skip button)
 - **Controls**: rebind the keyboard keys, or see the controller buttons when a pad is in use
+
+### The HUD
+
+The top left shows the clock and **one tracked objective**: a villager's request, a birthday or today's festival.
+When there are two, a small arrow on the card switches between them (dots show which one you're on). The live
+festival comes first, then the request. Under it are the day's notes: snacks, visitors, fish runs, the sky.
+
+The **HUD** setting (Options > Gameplay) has three styles:
+
+- **Calm** (the default): while a cast is out, the menu toolbar slides away and the day's notes step aside, so
+  it's just you and the water. The keys (J, S, C, K...) still work, and pointing at the bottom-right corner while
+  you wait for a bite brings the toolbar back
+- **Compact**: like Calm, with a small clock, coin and bait display
+- **Full**: everything stays on screen, as before
 
 The whole screen, menus and text included, is pixel art on the lake's 640x360 grid. Panels have wooden frames,
 and the text uses a bitmap font drawn in code (`pixfont.py`). Fullscreen uses your monitor's own resolution, and
@@ -294,7 +308,12 @@ mornings she leaves a present by the door: a fish, a few coins, some bait, or a 
 The cabin's **Home** tab shows your room. Click a spot on the wall or floor, then pick something from the
 catalogue on the right: paintings, a clock that keeps the lake's time, shelves, an armchair, a wood stove, lamps
 that glow in the evening, a cat basket and three toys for Biscuit, four rugs and five wallpapers. Moving things
-around is free. Any fish you've caught at 70% of its biggest size can be mounted on the wall as a trophy. The
+around is free. Any fish you've caught at 70% of its biggest size can be mounted on the wall as a trophy.
+
+Your wildlife photos can go up too. Every animal on the Nature page shows up in the **Wall art** catalogue: frame
+your best photo of it for 40 coins and hang it in any wall spot. Each frame carries a little ink stamp in the
+season's colour, and the room tells you when and where you took it (*Summer 5, Lily Cove*). Take a better photo
+later and the frame shows the new one. The
 **Tank** tab of the catalogue changes the fish tank: Coral Garden, Mossy Log, Sunken Rowboat or Moonlit Tank.
 
 ## The garden
@@ -326,7 +345,8 @@ shore on snowy winter dawns.
 Press **P** for photo mode and **Space** (or click) to take a photo. The camera frames whatever is in view and
 shows how good the shot would be: one star while the animal is on the move, two once it settles, and three if you
 catch its special moment (the heron's strike, the loon's call, the swans making a heart). The best photo of each
-animal goes on the **Nature** page of the journal, with a tip on where to look for the ones you haven't found.
+animal goes on the **Nature** page of the journal, stamped with the day and the place you took it, with a tip on
+where to look for the ones you haven't found. You can frame your photos for the cabin wall (see *Your cabin*).
 A new animal earns 25 coins, and its first three-star photo 25 more. Photos are saved in the `photos` folder next
 to your save.
 
@@ -411,7 +431,8 @@ The calendar (K) shows a three-day weather forecast, the moon phase and every ev
 - Aim your casts. Bubbling hotspots on the water give quicker bites and rarer fish
 - Cabin fish tank (8 fish) and a wardrobe with 7 hats and 5 outfits for Biscuit
 - 23 badges with coin rewards (Journal, Badges tab)
-- A cabin garden with 13 crops, and 16 animals to photograph for the Nature page
+- A cabin garden with 13 crops, and 16 animals to photograph for the Nature page and frame on your wall
+- A calm HUD that steps aside while you fish, with one tracked objective
 - Four legend hunts, one a season, with tales, clues, crafted lures and three-stage fights
 - Co-op for up to four players: over the internet with a room code, or on your home Wi-Fi
 - Shop: rods, bait, a dock lantern and nine dock decorations, including a telescope that brings more and luckier
