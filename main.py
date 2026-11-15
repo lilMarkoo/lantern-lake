@@ -126,6 +126,24 @@ BAR_COLOR = (16, 14, 24)
 WEATHERS = ('clear', 'cloudy', 'rain', 'fog', 'snow')
 FISH_STATES = ('idle', 'charging', 'casting', 'waiting', 'bite', 'fight', 'landing', 'caught', 'reel_back')
 SYS_C = (150, 140, 160)          # colour of "so-and-so came to fish" chat lines
+
+
+def clip_put(text):
+    """Copy text to the clipboard. True when it worked."""
+    try:
+        import pygame.scrap
+        pygame.scrap.put_text(text)
+        return True
+    except Exception:
+        return False
+
+
+def clip_get():
+    try:
+        import pygame.scrap
+        return pygame.scrap.get_text() or ''
+    except Exception:
+        return ''
 NET_ARGS = dict(host='--host' in sys.argv, join=None, port=netmod.PORT, name=None, speed=None)
 for _flag, _key, _conv in (('--join', 'join', str), ('--port', 'port', int), ('--name', 'name', str),
                            ('--speed', 'speed', float)):
@@ -227,6 +245,7 @@ class Game:
         self.emote = None            # [kind, seconds left]
         self.mp_ready = False        # voted to rest for the night
         self.lobby_msg = ''
+        self.online_seen = None      # the last internet state we told the host about (portmap.Opener.state)
         self.net_send_t = 0.0
         self.net_world_t = 0.0
         self.clock = pygame.time.Clock()
@@ -3796,7 +3815,7 @@ class Game:
     def draw_pause(self, s):
         ui = self.ui
         n = self.net
-        extra = 92 if n.online else 68
+        extra = 168 if n.role == 'host' else 92 if n.online else 68
         rect = pygame.Rect(SW // 2 - 230, SH // 2 - (472 + extra) // 2, 460, 472 + extra)
         ui.panel(s, rect, radius=26)
         ui.blit_text(s, 'Taking a break', (rect.centerx, rect.y + 50), 'h1', U.INK, 'center')
@@ -3813,16 +3832,27 @@ class Game:
         y += 68
         if n.role == 'host':
             ui.button(s, (bx, y, bw, 52), 'Close my lake to friends', self.stop_hosting, nav=True)
-            ui.blit_text(s, 'Friends join at  %s' % self.my_address(), (rect.centerx, y + 64), 'small', U.SOFT,
+            y += 64
+            st, code = n.online_state(), n.room_code()
+            if code:
+                ui.button(s, (bx, y, bw, 64), 'Copy room code', self.copy_room_code, nav=True, sub=code)
+            elif st == 'working':
+                ui.blit_text(s, 'Opening your lake to the internet' + '.' * (1 + int(self.t * 2) % 3),
+                             (rect.centerx, y + 32), 'smallb', U.SOFT, 'center', maxw=bw)
+            else:
+                ui.button(s, (bx, y, bw, 52), 'Try again online' if st else 'Open to the internet',
+                          self.go_online, nav=True)
+            y += 76
+            ui.blit_text(s, 'On your Wi-Fi:  %s' % self.my_address(), (rect.centerx, y), 'small', U.SOFT,
                          'center', maxw=bw)
-            y += 92
+            y += 28
         elif n.role == 'guest':
             ui.button(s, (bx, y, bw, 52), "Leave %s's lake" % n.host_name, self.leave_lake, nav=True)
             ui.blit_text(s, 'Your own lake keeps its own calendar.', (rect.centerx, y + 64), 'small', U.SOFT,
                          'center', maxw=bw)
             y += 92
         else:
-            ui.button(s, (bx, y, bw, 52), 'Open my lake to friends', self.open_to_friends, nav=True)
+            ui.button(s, (bx, y, bw, 52), 'Open my lake to friends', lambda: self.open_to_friends(True), nav=True)
             y += 68
         ui.button(s, (bx, y, bw, 52), 'Save and return to title', self.quit_to_title, nav=True)
         y += 68
@@ -3872,28 +3902,82 @@ class Game:
         self.save_settings()
         self.audio.play('page', 0.5)
 
-    def host_lake(self):
+    def host_lake(self, online=False):
         self.save_settings()
         err = self.net.host(self.my_name(), NET_ARGS['port'])
         if err:
             self.lobby_msg = err
             self.audio.play('sad', 0.5)
             return
+        self.online_seen = None
         self.net.listen_lan(False)
         self.typing = None
         self.overlay = None
         self.start_game(self.has_save)
-        self.toast('Your lake is open! Friends can join at %s' % self.my_address(), (110, 150, 190))
-        self.add_chat('', 'Your lake is open. Friends join at %s' % self.my_address(), SYS_C)
+        self.add_chat('', 'Your lake is open. Friends on your Wi-Fi join at %s' % self.my_address(), SYS_C)
+        if online:
+            self.go_online()
+        else:
+            self.toast('Your lake is open! Friends can join at %s' % self.my_address(), (110, 150, 190))
 
-    def open_to_friends(self):
+    def open_to_friends(self, online=False):
         err = self.net.host(self.my_name(), NET_ARGS['port'])
         if err:
             self.toast(err, (200, 120, 100))
             return
+        self.online_seen = None
         self.overlay = None
-        self.toast('Your lake is open! Friends can join at %s' % self.my_address(), (110, 150, 190))
-        self.add_chat('', 'Your lake is open. Friends join at %s' % self.my_address(), SYS_C)
+        self.add_chat('', 'Your lake is open. Friends on your Wi-Fi join at %s' % self.my_address(), SYS_C)
+        if online:
+            self.go_online()
+        else:
+            self.toast('Your lake is open! Friends can join at %s' % self.my_address(), (110, 150, 190))
+
+    def go_online(self):
+        """Host: ask the router to open the port, then hand out a room code (see on_online)."""
+        if self.net.role != 'host':
+            return
+        self.online_seen = 'working'
+        self.net.open_online()
+        self.toast('Opening your lake to the internet...', (110, 150, 190))
+
+    def on_online(self, st):
+        n = self.net
+        code = n.room_code()
+        why = n.opener.why if n.opener else ''
+        if code:
+            copied = clip_put(code)
+            self.add_chat('', 'Room code: %s   Friends paste it in Play together > Join.' % code, SYS_C)
+            if st == 'open':
+                self.toast('Your lake is online! Room code %s%s' % (code, '  (copied)' if copied else ''),
+                           (110, 150, 190))
+                self.audio.play('jingle1', 0.5)
+            else:
+                self.toast('Room code %s%s. Your router needs a hand first: see the chat.'
+                           % (code, '  (copied)' if copied else ''), (200, 160, 90))
+                self.add_chat('', why, SYS_C)
+        else:
+            self.toast("Your lake couldn't go online. See the chat for why.", (200, 120, 100))
+            self.add_chat('', why or "Your lake couldn't go online.", SYS_C)
+            self.add_chat('', 'Friends on your Wi-Fi can still join.', SYS_C)
+            self.audio.play('sad', 0.5)
+
+    def copy_room_code(self):
+        code = self.net.room_code()
+        if code and clip_put(code):
+            self.toast('Room code copied. Send it to your friends!', (110, 150, 190))
+        elif code:
+            self.toast('Room code: %s' % code, (110, 150, 190))
+
+    def paste_addr(self):
+        txt = ' '.join(clip_get().split())
+        if txt:
+            self.settings['mp_addr'] = ''
+            self.typing = 'mp_addr'
+            self.type_text(txt)
+            self.typing = None
+        else:
+            self.lobby_msg = 'Nothing to paste. Copy the room code your friend sent first.'
 
     def stop_hosting(self):
         self.net.close()
@@ -3907,7 +3991,7 @@ class Game:
         addr = self.settings.get('mp_addr', '').strip()
         self.typing = None
         if not addr:
-            self.lobby_msg = 'Type the address your friend sees in their pause menu.'
+            self.lobby_msg = 'Paste the room code your friend sent (it is in their pause menu).'
             return
         self.save_settings()
         err = self.net.join(addr, self.my_name())
@@ -4064,6 +4148,12 @@ class Game:
             return
         for ev in n.poll():
             self.net_event(ev)
+        if n.role == 'host':
+            st = n.online_state()
+            if st != self.online_seen:
+                self.online_seen = st
+                if st not in (None, 'working'):
+                    self.on_online(st)
         if not n.online or self.mode != 'play':
             return
         for pid, p in n.peers.items():
@@ -4177,7 +4267,9 @@ class Game:
 
     def typing_key(self, k):
         t = self.typing
-        if k == pygame.K_BACKSPACE:
+        if k == pygame.K_v and pygame.key.get_mods() & pygame.KMOD_CTRL:
+            self.type_text(' '.join(clip_get().split()))
+        elif k == pygame.K_BACKSPACE:
             if t == 'chat':
                 self.chat_text = self.chat_text[:-1]
             else:
@@ -4237,34 +4329,33 @@ class Game:
         lx, cw = rect.x + 50, rect.w // 2 - 90
         ui.blit_text(s, 'Host', (lx, rect.y + 208), 'h2', U.INK)
         yy = rect.y + 254
-        for line in ui.wrap('Open your own lake. Friends on the same Wi-Fi will see it in their list.', 'small', cw):
+        for line in ui.wrap('Open your own lake. Friends anywhere join with a room code; friends on your Wi-Fi see '
+                            'it in their list.', 'small', cw):
             ui.blit_text(s, line, (lx, yy), 'small', U.SOFT)
             yy += 24
         busy = n.role == 'joining'
-        ui.button(s, (lx, rect.y + 320, cw, 56), 'Host my lake', self.host_lake, 'primary', enabled=not busy,
-                  font='h3', nav=True)
-        ui.blit_text(s, 'Your address:  %s' % self.my_address(), (lx, rect.y + 392), 'smallb', U.INK, maxw=cw)
-        yy = rect.y + 420
-        for line in ui.wrap('Over the internet, forward TCP port %d on your router, or both use a VPN app such as '
-                            'Tailscale.' % netmod.PORT, 'small', cw):
-            ui.blit_text(s, line, (lx, yy), 'small', U.SOFT)
-            yy += 22
+        ui.button(s, (lx, rect.y + 326, cw, 56), 'Host online', lambda: self.host_lake(True), 'primary',
+                  enabled=not busy, font='h3', nav=True)
+        ui.button(s, (lx, rect.y + 394, cw, 46), 'Host on this Wi-Fi only', self.host_lake, enabled=not busy,
+                  nav=True)
+        ui.blit_text(s, 'Your Wi-Fi address:  %s' % self.my_address(), (lx, rect.y + 452), 'small', U.SOFT, maxw=cw)
         # join
         rx = rect.centerx + 40
         rw = rect.right - 50 - rx
         ui.blit_text(s, 'Join', (rx, rect.y + 208), 'h2', U.INK)
-        self.text_field(s, (rx, rect.y + 252, rw - 116, 48), 'mp_addr', 'Address, e.g. 192.168.1.20')
-        ui.button(s, (rect.right - 50 - 104, rect.y + 252, 104, 48), 'Join', self.join_lake, 'primary',
+        self.text_field(s, (rx, rect.y + 252, rw, 48), 'mp_addr', 'Room code or address')
+        ui.button(s, (rx, rect.y + 308, 112, 44), 'Paste', self.paste_addr, enabled=not busy, nav=True)
+        ui.button(s, (rx + 124, rect.y + 308, rw - 124, 44), 'Join', self.join_lake, 'primary',
                   enabled=not busy, font='h3', nav=True)
-        ui.blit_text(s, 'Lakes nearby', (rx, rect.y + 322), 'smallb', U.SOFT)
-        lakes = n.lan_lakes()[:3]
+        ui.blit_text(s, 'Lakes on your Wi-Fi', (rx, rect.y + 368), 'smallb', U.SOFT)
+        lakes = n.lan_lakes()[:2]
         for i, (ip, port, name, cnt) in enumerate(lakes):
             addr = ip if port == netmod.PORT else '%s:%d' % (ip, port)
-            ui.button(s, (rx, rect.y + 350 + i * 52, rw, 44), "%s's lake   (%d/%d)" % (name, cnt, netmod.MAX_PLAYERS),
+            ui.button(s, (rx, rect.y + 394 + i * 50, rw, 42), "%s's lake   (%d/%d)" % (name, cnt, netmod.MAX_PLAYERS),
                       (lambda a=addr: self.join_lake(a)), enabled=not busy, nav=True)
         if not lakes:
             dots = '.' * (1 + int(self.t * 2) % 3)
-            ui.blit_text(s, 'Looking on your network' + dots, (rx, rect.y + 356), 'small', (170, 150, 136))
+            ui.blit_text(s, 'Looking on your network' + dots, (rx, rect.y + 400), 'small', (170, 150, 136))
         # status and back
         msg = self.lobby_msg
         if busy:

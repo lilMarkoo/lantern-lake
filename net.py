@@ -6,16 +6,23 @@ thread through Net.poll(). The host is the hub. It hands each guest an id, relay
 else, and owns the clock and the weather.
 
 On the local network the host also broadcasts a small UDP beacon so the join screen can list nearby lakes.
+
+Over the internet (portmap.py) the router opens the port and friends join with a room code that carries a random
+key. Anyone connecting from the internet must know that key; the host also caps connection attempts, bans
+addresses that keep guessing, and drops connections that flood it.
 """
+import hmac
 import json
 import queue
 import socket
 import threading
 import time
 
+import portmap
+
 PORT = 24680             # TCP, the game itself
 BEACON_PORT = 24681      # UDP, "there is a lake here" on the local network
-VERSION = 1
+VERSION = 2              # 2: room codes and keys (1.6.0)
 MAX_PLAYERS = 4          # the host plus three friends (the dock has three free spots)
 MAX_LINE = 32 * 1024     # anything longer is not ours: drop the connection
 NAME_MAX = 14
@@ -23,6 +30,19 @@ CHAT_MAX = 80
 TIMEOUT = 20.0           # seconds of silence before a connection counts as lost
 HELLO_WAIT = 8.0
 RELAY = ('st', 'chat', 'catch', 'gift', 'race')
+# guarding a lake that is open to the internet
+MAX_PENDING = 8          # connections that haven't said hello yet
+MAX_PENDING_PER_IP = 3
+MAX_CONNS = 16
+BAD_KEYS_BEFORE_BAN = 5
+BAN_SECONDS = 600
+MSG_BURST = 300          # messages a connection may send at once...
+MSG_RATE = 40.0          # ...and per second after that (the game sends about 10)
+
+
+def needs_key(ip):
+    """Only connections from the open internet must know the room key; home networks and VPNs join freely."""
+    return portmap.is_public(ip)
 
 
 def clean_text(s, n, allowed):
@@ -62,12 +82,16 @@ class Conn:
     """One TCP connection: a reader thread that queues parsed messages and a writer thread with an outbox,
     so the game never waits on the network."""
 
-    def __init__(self, sock, inbox, cid):
+    def __init__(self, sock, inbox, cid, ip=''):
         self.sock = sock
         self.inbox = inbox
         self.cid = cid
+        self.ip = ip
         self.alive = True
         self.last = time.time()
+        self.tokens = float(MSG_BURST)
+        self.tok_t = time.time()
+        self.guard = False          # the host guards the guests it accepted; guests trust the host they chose
         self.outbox = queue.Queue(maxsize=600)
         try:
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -102,6 +126,14 @@ class Conn:
                     continue
                 if isinstance(msg, dict) and isinstance(msg.get('t'), str) and not msg['t'].startswith('_'):
                     self.inbox.put((self.cid, msg))
+            # flood guard: a token bucket, refilled over time; nothing the real game sends comes near it
+            if self.guard:
+                now = time.time()
+                self.tokens = min(float(MSG_BURST), self.tokens + (now - self.tok_t) * MSG_RATE)
+                self.tok_t = now
+                self.tokens -= data.count(b'\n')
+                if self.tokens < 0:
+                    break
             if len(buf) > MAX_LINE:
                 break
         self.close()
@@ -182,6 +214,10 @@ class Net:
         self.found = {}          # LAN lakes heard: (ip, port) -> (name, players, time)
         self._listen = None
         self.sent = self.received = 0
+        self.key = b''           # host: the room key; guest: the key from the code they typed
+        self.opener = None       # host: portmap.Opener while the lake is open to the internet
+        self.bad = {}            # host: ip -> [wrong keys, first try time]
+        self.banned = {}         # host: ip -> banned until
 
     # ---------------------------------------------------------------- state
     @property
@@ -220,10 +256,28 @@ class Net:
         self.name = self.clean_name(name)
         self.peers = {}
         self.next_id = 1
+        self.key = portmap.new_key()
+        self.bad, self.banned = {}, {}
         threading.Thread(target=self._accept, args=(srv, self.stop, self.inbox), daemon=True).start()
         if not bind:
             threading.Thread(target=self._beacon, args=(self.stop,), daemon=True).start()
         return None
+
+    # ---------------------------------------------------------------- the internet
+    def open_online(self, ssdp_target=portmap.SSDP, stun=portmap.stun_address):
+        """Host: ask the router to open the port and work out the room code (in the background)."""
+        if self.role != 'host':
+            return
+        if self.opener is not None:
+            self.opener.close()
+        self.opener = portmap.Opener(self.port, ssdp_target, stun).start()
+
+    def online_state(self):
+        """None (not trying), or the opener's state: working, open, manual, shared or failed."""
+        return self.opener.state if self.opener is not None else None
+
+    def room_code(self):
+        return self.opener.code(self.key) if self.opener is not None else None
 
     def _accept(self, srv, stop, inbox):
         while not stop.is_set():
@@ -233,14 +287,42 @@ class Net:
                 continue
             except OSError:
                 break
+            ip = addr[0]
+            now = time.time()
             with self.lock:
+                if self.banned.get(ip, 0) > now:
+                    refuse = True
+                else:
+                    self.banned.pop(ip, None)
+                    pending = [c for c in self.conns.values() if c.alive and not c.hello]
+                    refuse = (len(self.conns) >= MAX_CONNS or len(pending) >= MAX_PENDING
+                              or sum(1 for c in pending if c.ip == ip) >= MAX_PENDING_PER_IP)
+                if refuse:
+                    try:
+                        sock.close()
+                    except OSError:
+                        pass
+                    continue
                 cid = self.next_id
                 self.next_id += 1
-                conn = Conn(sock, inbox, cid)
+                conn = Conn(sock, inbox, cid, ip)
+                conn.guard = True
                 conn.hello = False
-                conn.born = time.time()
+                conn.born = now
                 self.conns[cid] = conn
             conn.start()
+
+    def _wrong_key(self, ip):
+        now = time.time()
+        n, t0 = self.bad.get(ip, (0, now))
+        if now - t0 > BAN_SECONDS:
+            n, t0 = 0, now
+        n += 1
+        self.bad[ip] = (n, t0)
+        if n >= BAD_KEYS_BEFORE_BAN:
+            with self.lock:
+                self.banned[ip] = now + BAN_SECONDS
+            self.bad.pop(ip, None)
 
     def _beacon(self, stop):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -259,12 +341,20 @@ class Net:
 
     # ---------------------------------------------------------------- joining
     def join(self, addr, name):
-        """Start connecting in the background. Returns an error message or None."""
-        try:
-            host, port = parse_addr(addr)
-        except ValueError:
-            return 'That address does not look right. Try something like 192.168.1.20'
+        """Start connecting in the background, to a room code or an address. Returns an error message or None."""
+        key = b''
+        code = portmap.parse_code(addr)
+        if code:
+            host, port, key = code
+        elif portmap.looks_like_code(addr):
+            return "That room code doesn't look right. Check it letter by letter (or paste it with Ctrl+V)."
+        else:
+            try:
+                host, port = parse_addr(addr)
+            except ValueError:
+                return 'That address does not look right. Paste a room code, or try something like 192.168.1.20'
         self.close()
+        self.key = key
         self.stop = threading.Event()
         self.inbox = queue.Queue()
         self.role = 'joining'
@@ -293,7 +383,7 @@ class Net:
         with self.lock:
             self.conns = {0: conn}
         conn.start()
-        conn.send({'t': 'hello', 'v': VERSION, 'name': self.name})
+        conn.send({'t': 'hello', 'v': VERSION, 'name': self.name, 'key': self.key.hex()})
 
     # ---------------------------------------------------------------- LAN discovery (join screen)
     def listen_lan(self, on):
@@ -406,8 +496,21 @@ class Net:
         if t == 'hello':
             if conn.hello:
                 return
+            if needs_key(conn.ip):
+                given = msg.get('key')
+                try:
+                    given = bytes.fromhex(given) if isinstance(given, str) and len(given) <= 64 else b''
+                except ValueError:
+                    given = b''
+                if not self.key or not hmac.compare_digest(given, self.key):
+                    self._wrong_key(conn.ip)
+                    conn.send({'t': 'deny', 'why': "That room code isn't right, or the lake was reopened with a "
+                                                   'new one. Ask your friend for the code again.'})
+                    conn.finish()
+                    return
             if msg.get('v') != VERSION:
-                conn.send({'t': 'deny', 'why': 'Your game is a different version from the host\'s.'})
+                conn.send({'t': 'deny', 'why': "Your game is a different version from the host's. Update it from "
+                                               'the launcher.'})
                 conn.finish()
                 return
             if len(self.peers) + 1 >= MAX_PLAYERS:
@@ -501,6 +604,10 @@ class Net:
     def close(self):
         """Leave or stop hosting. Safe to call at any time."""
         self.stop.set()
+        if self.opener is not None:
+            op, self.opener = self.opener, None
+            # not a daemon thread: closing the port on the router still finishes if the game is quitting
+            threading.Thread(target=op.close).start()
         if self.server is not None:
             try:
                 self.server.close()

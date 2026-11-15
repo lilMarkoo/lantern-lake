@@ -359,13 +359,30 @@ After four seasons a new year begins, and Mayor Hazel writes with the news:
 
 Up to four people can fish the same lake. Choose **Play together** on the title screen.
 
-- **Host**: click *Host my lake*. Your address (like `192.168.1.20`) is shown there and in the pause menu.
-  You can also open a game that is already running from the pause menu (*Open my lake to friends*)
-- **Join**: type the host's address and click *Join*. Lakes hosted on the same Wi-Fi show up by themselves under
-  *Lakes nearby*
-- **Over the internet**: the host forwards TCP port 24680 on their router, or both players use a VPN app such as
-  Tailscale and join with the Tailscale address. The first time you host, Windows asks whether Python may use
-  the network: allow it on private networks
+- **Host online**: the game asks your router to open its port and gives you a **room code** like
+  `7KQ2M-9X4TB-HC1PE-W3RA`. It is copied for you, shown in the chat, and kept in the pause menu
+  (*Copy room code*). Send it to your friends. You can also open a game that is already running from the pause
+  menu (*Open my lake to friends*)
+- **Join**: paste the room code (*Paste*, or Ctrl+V) and click *Join*. A typing mistake in a code is caught
+  before connecting. Lakes hosted on the same Wi-Fi show up by themselves, and you can still type an address
+  like `192.168.1.20`
+- *Host on this Wi-Fi only* keeps the lake on your home network
+- The first time you host, Windows asks whether Lantern Lake may use the network. Allow it, or friends can't
+  reach you
+
+The room code holds your address and a secret key that changes every time you host. Anyone joining from the
+internet needs the key. Someone who keeps guessing is shut out for ten minutes, and a connection that floods
+the lake with messages is dropped. Closing your lake (or the game) closes the port on the router again.
+
+If going online doesn't work, the chat says why:
+
+- *Automatic port opening is switched off*: turn on UPnP in your router's settings, or forward TCP port
+  24680 to your computer by hand (the chat shows its address). You still get a room code
+- *Your internet provider shares one address between many homes*: friends can't reach your lake directly.
+  Let a friend host, or both install a VPN app such as Tailscale and join with its address
+
+To learn your public address, the game asks the router and also sends one tiny request to a public STUN server
+(Cloudflare's, or Google's as a backup), the same kind of service video calls use. Nothing about you is sent.
 
 How it works:
 
@@ -410,6 +427,7 @@ The calendar (K) shows a three-day weather forecast, the moon phase and every ev
 - 23 badges with coin rewards (Journal, Badges tab)
 - A cabin garden with 13 crops, and 16 animals to photograph for the Nature page
 - Four legend hunts, one a season, with tales, clues, crafted lures and three-stage fights
+- Co-op for up to four players: over the internet with a room code, or on your home Wi-Fi
 - Shop: rods, bait, a dock lantern and nine dock decorations, including a telescope that brings more and luckier
   shooting stars
 - Daily fish requests from the villagers through the mailbox

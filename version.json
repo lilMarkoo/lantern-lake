@@ -1,8 +1,8 @@
 {
-  "version": "1.5.0",
+  "version": "1.6.0",
   "notes": [
-    "A garden under the cabin: six beds and 13 crops to grow through the seasons.",
-    "Sixteen animals visit the lake. Photograph them for the new Nature page.",
-    "Lantern Lake has its own launcher now, and it keeps the game up to date."
+    "Play together over the internet: Host online opens your router's port and gives you a room code.",
+    "Friends join by pasting the room code. Anyone without the code is turned away.",
+    "A Paste button and Ctrl+V for codes, and the code is always in the pause menu."
   ]
 }
