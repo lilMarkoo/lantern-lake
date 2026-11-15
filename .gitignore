@@ -1,0 +1,20 @@
+# your saves and personal files: never published
+save*.json
+save*.json.*
+settings.json
+screenshots/
+photos/
+log.txt
+*.log
+
+# build output and local-only files
+build/
+release/
+update_tmp/
+update.json
+release.json
+__pycache__/
+*.pyc
+*.tmp
+*.bak
+.env
