@@ -470,6 +470,7 @@ BADGES = [
     dict(id='restorer', name='Shorekeeper', desc='Finish all three shoreline projects.', reward=400),
     dict(id='rosie', name="Rosie's Secret", desc='Follow Biscuit all the way to the hidden bench.', reward=300),
     dict(id='outing', name='Good Company', desc='Finish an expedition with friends.', reward=200),
+    dict(id='curator', name='Curator', desc='Complete five exhibits at the aquarium.', reward=400),
 ]
 TANK_SIZE = 8
 

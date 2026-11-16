@@ -62,6 +62,7 @@ import garden as gardenmod
 import wildlife
 import shore as shoremod
 import discover
+import aquarium as aqmod
 import pad as padmod
 import ui as U
 from art import W, H, DECK_Y
@@ -527,6 +528,7 @@ class Game:
         self.shore = shoremod.new()     # restoring the shore by the dock (shore.py)
         self.finds = discover.new()     # what Biscuit has found in Fernwick (discover.py)
         self.disc = None
+        self.aqscene = None          # inside the aquarium (aquarium.py), under overlay 'aquarium'
         self.nature = {}             # animals photographed: id -> {'stars', 'day', 'n', 'at'} (wildlife.py)
         self.photos = {}             # their best photos this session, and drawn stand-ins
         self.critter = None          # the animal visiting right now
@@ -585,6 +587,8 @@ class Game:
         self.sky = None              # tonight's rare sky: 'storm' or 'aurora'
         self.ice_hole = 0            # the day you last drilled through the ice
         self.icescene = None         # ice fishing (icefish.py), under overlay 'ice'
+        aqmod.HEADLESS, aqmod.fmt_clock = HEADLESS, fmt_clock
+        self.aqscene = None
         self.cat_bond = 0            # Biscuit (biscuit.py): bond points, today's little things, a present
         self.cat_day = {}
         self.cat_gift = None
@@ -1156,6 +1160,7 @@ class Game:
                     "name on it." if full else
                     "The aquarium now has %d fish on display, thanks to you! The children press their noses to the "
                     "glass all day. Please accept %%s from the museum fund." % n) % what, '- Juniper')))
+        aqmod.on_donate(self, fid)
         self.check_badges()
         self.save()
 
@@ -1303,6 +1308,7 @@ class Game:
             'restorer': all(shoremod.done(self, p['id']) for p in shoremod.PROJECTS),
             'rosie': bool(self.finds.get('secret')),
             'outing': self.stats.get('expeditions', 0) >= 1,
+            'curator': len(self.stats.get('exhibits', [])) >= aqmod.CURATOR,
         }
         for b in BADGES:
             if b['id'] not in self.badges and cond.get(b['id']):
@@ -2042,6 +2048,9 @@ class Game:
         if self.overlay == 'ice' and self.icescene:
             self.icescene.press('mouse')
             return
+        if self.overlay == 'aquarium' and self.aqscene:
+            self.aqscene.press('mouse')
+            return
         if self.overlay == 'scene' and self.scene:
             self.scene.press()
             return
@@ -2226,6 +2235,9 @@ class Game:
         if ov == 'ice' and self.icescene:
             self.icescene.key(k)
             return
+        if ov == 'aquarium' and self.aqscene:
+            self.aqscene.key(k)
+            return
         if ov == 'scene' and self.scene:
             self.scene.key(k)
             return
@@ -2389,6 +2401,8 @@ class Game:
         env = self.env
         self.net_update(dt)
         paused = self.overlay is not None or self.rest_phase is not None
+        if self.overlay == 'aquarium' and self.aqscene and self.aqscene.panel is None and self.rest_phase is None:
+            paused = False                                 # strolling the aquarium hall: the day goes on
         if self.net.online:
             paused = self.rest_phase in ('out', 'in')     # with friends here the lake never stops
         if self.mode == 'play' and self.net.role == 'guest':
@@ -2407,6 +2421,8 @@ class Game:
             self.cooking.update(dt)
         if self.overlay == 'ice' and self.icescene:
             self.icescene.update(dt)
+        if self.overlay == 'aquarium' and self.aqscene:
+            self.aqscene.update(dt)
         if self.mode == 'play':
             seasons.update(self, dt)
             biscuit.update(self, dt)
@@ -2443,7 +2459,9 @@ class Game:
             if c['z'] <= 0:
                 c['z'] = 1.8
                 self.world.zzz(actors.CAT_X + 6, DECK_Y - 14)
-        if self.place == 'town' and self.cooking is None:
+        if self.overlay == 'aquarium' and self.aqscene:
+            actx = self.aqscene.audio_ctx()
+        elif self.place == 'town' and self.cooking is None:
             actx = self.town.audio_ctx(self)
         else:
             actx = dict(feeder=self.has('feeder'), chimes=self.has('chimes'))
@@ -2574,6 +2592,8 @@ class Game:
         cooking = self.cooking if self.overlay == 'cooking' and self.mode == 'play' else None
         if cooking is None and self.overlay == 'ice' and self.icescene and self.mode == 'play':
             cooking = self.icescene          # drawn and framed just like the kitchen scene
+        if cooking is None and self.overlay == 'aquarium' and self.aqscene and self.mode == 'play':
+            cooking = self.aqscene           # so is the walk round the aquarium
         if cooking:
             cooking.draw_world(self.frame)
         elif self.place == 'town' and self.mode == 'play':
@@ -3453,6 +3473,9 @@ class Game:
         self.audio.play('ui', 0.5)
 
     def close_overlay(self):
+        if self.overlay == 'aquarium' and self.aqscene and self.aqscene.panel:
+            self.aqscene.close_panel()       # a window inside the aquarium: back to the hall
+            return
         self.overlay = None
         self.audio.play('page', 0.5)
 
@@ -5630,9 +5653,8 @@ def run_bot(seconds):
                 elif ov == 'board':
                     for job in g.town_jobs():
                         g.hand_in(job)
-                elif ov == 'museum':
-                    for fid in sorted({b['id'] for b in g.basket}):
-                        g.donate(fid)
+                elif ov == 'aquarium':
+                    did('aquarium')                 # walked in: the tour runs in town_step
                 elif ov == 'hall':
                     for pr in townmod.PROJECTS:
                         if g.coins > pr['cost'] + 300:
@@ -5681,6 +5703,9 @@ def run_bot(seconds):
             tb['plan'] = town_plan()
             tb['visits'] += 1
         ov = g.overlay
+        if ov == 'aquarium' and g.aqscene:
+            g.aqscene.auto(dt, rng)              # a little tour: donate, look, sit, leave
+            return
         if ov == 'ringtoss':
             rt = tn.rt
             if rt['rings'] > 0 and not rt['fly']:

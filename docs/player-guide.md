@@ -148,8 +148,8 @@ in the rain and gather in the square in the evening. Shops keep opening hours.
 - **Notice board**: three odd jobs every morning, such as a certain fish, a big one, any few fish or a piece of
   junk for the clean-up. Hand them in from your basket for coins and friendship
 - **Wishing fountain**: toss in 10 coins once a day for luck, and sometimes a surprise
-- **Fernwick Aquarium**: donate one of each fish to Juniper's museum. She rewards you at 5, 10, 20 and 30 fish,
-  and for the whole collection
+- **Fernwick Aquarium**: walk inside and stroll the hall (see *The aquarium* below). Donate one of each fish at
+  Juniper's desk. She rewards you at 5, 10, 20 and 30 fish, and for the whole collection
 - **Town Hall**: fund Mayor Hazel's projects, Flower Beds, Street Lanterns and a Bandstand. Each one changes
   the street, and the band plays in the square every evening. The biggest project is a Lighthouse on the far
   shore of the lake (6,000 coins): you can see it from the dock, and rare fish come out more at night by its
@@ -166,6 +166,37 @@ in the rain and gather in the square in the evening. Shops keep opening hours.
 
 Fernwick has its own sounds: footsteps on the cobbles, the fountain, neighbours murmuring as you pass and, once
 the Bandstand is built, a squeezebox tune in the evenings that gets louder as you walk up to it.
+
+Every building has its own look: a rusty tin roof with a brass fish weathervane that turns in the wind on Old
+Tom's, a scalloped pink roof and dormer on the bakery, a green copper cupola on the aquarium, slate on the
+library, and a thatched cottage beside a saltbox. Shop signs swing on their brackets in the breeze. The street
+dresses up for each season:
+
+- **Spring**: pastel bunting, tulips on the doorsteps and in the window boxes
+- **Summer**: bright bunting and geraniums
+- **Autumn**: leaf garlands, mums and pumpkins
+- **Winter**: wreaths on the doors, little evergreens, and string lights that glow after dark
+
+Mabel changes her shop window with the seasons too: a pink layer cake in spring, berry tarts and a lemon loaf in
+summer, pumpkin pie in autumn and a gingerbread house in winter.
+
+### The aquarium
+
+Press E at the aquarium door (open 9 AM to 5 PM) to walk inside. Walk the hall with A and D or click, and press E
+to look, sit or talk. Esc leaves. The clock keeps running while you look around, and Juniper sees everyone out
+at closing time.
+
+Every fish you donate swims in one of ten themed exhibits: Lantern Lake, Lily Cove, Willow Creek, The Deep,
+Legends of the Lake (a round brass porthole), Under the Ice, Crab Pot Corner, Spring & Summer, Autumn & Winter,
+and Weather & Wonders. Press E at a tank to see who belongs there, read about them, and donate straight from
+your basket.
+
+- **Finish an exhibit** for a one-time coin reward, from 150 to 600 coins. Finish five for the *Curator* badge. If
+  you filled exhibits before they existed, Juniper pays you the first time you walk in
+- **Benches** sit in front of four of the tanks. Sit a while to read about the fish drifting past (+0.3 luck,
+  once a day)
+- **Visitors**: two neighbours wander in each day and react to your discoveries. Chat with them for a little
+  friendship, once a day each
 
 Talk to anyone (E) once a day to grow your friendship, and give them a fish. Everyone has a favourite, and a
 loved fish counts for a lot. At 3, 6 and 10 hearts they send you a letter with a gift. Finishing a mailbox
@@ -461,7 +492,8 @@ The calendar (K) shows a three-day weather forecast, the moon phase and every ev
   ice auger or on rare nights, and 3 that arrive in year two, plus treasures and 10 bottled letters to collect
 - Aim your casts. Bubbling hotspots on the water give quicker bites and rarer fish
 - Cabin fish tank (8 fish) and a wardrobe with 7 hats and 5 outfits for Biscuit
-- 26 badges with coin rewards (Journal, Badges tab)
+- 27 badges with coin rewards (Journal, Badges tab)
+- A walkable aquarium with ten themed exhibits, benches and visitors
 - A cabin garden with 13 crops, and 19 animals to photograph for the Nature page and frame on your wall
 - Three shoreline restoration projects that change the lake and bring new animals
 - Biscuit's discoveries in Fernwick: Grandma Rosie's diary, her old lures, and a secret

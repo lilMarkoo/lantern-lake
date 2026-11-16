@@ -279,12 +279,362 @@ def _sign(s, cx, y, text, bg, fg, w=None):
     sign_text(s, text, (cx, y + 5), fg)
 
 
+# ---------------------------------------------------------------- 1.9.0: details that make each shop its own
+_SHADOWS = {}
+SHADE = (24, 20, 32)
+
+
+def ground_shadow(s, x, y, w=14, a=72):
+    """A soft oval where someone (or something) meets the ground."""
+    img = _SHADOWS.get((w, a))
+    if img is None:
+        img = pygame.Surface((w + 4, 5), pygame.SRCALPHA)
+        pygame.draw.ellipse(img, (*SHADE, a // 2), img.get_rect())
+        pygame.draw.ellipse(img, (*SHADE, a), (2, 1, w, 3))
+        _SHADOWS[(w, a)] = img
+    s.blit(img, (int(x) - w // 2 - 2, int(y) - 3))
+
+
+def _shade(s, rect, a0, a1):
+    """A vertical gradient of shadow (alpha a0 at the top to a1 at the bottom), blended over what's there."""
+    rect = pygame.Rect(rect)
+    img = pygame.Surface(rect.size, pygame.SRCALPHA)
+    for i in range(rect.h):
+        k = i / max(1, rect.h - 1)
+        img.fill((*SHADE, int(a0 + (a1 - a0) * k)), (0, i, rect.w, 1))
+    s.blit(img, rect)
+
+
+def _grounded(s, x0, x1, eave=None):
+    """Contact shadows for a building: on the pavement in front, where the wall meets it, and under the eaves."""
+    _shade(s, (x0 - 3, GROUND - 4, x1 - x0 + 6, 6), 78, 0)
+    _shade(s, (x0, GROUND - 9, x1 - x0, 5), 0, 46)
+    if eave is not None:
+        _shade(s, (x0, eave, x1 - x0, 6), 70, 0)
+
+
+def _span(xl, xr, peak_x, base_y, h, y):
+    """Left and right edges of a triangular roof at height y."""
+    k = (y - (base_y - h)) / h
+    return peak_x + (xl - peak_x) * k, peak_x + (xr - peak_x) * k
+
+
+def _tin_roof(s, x0, x1, y, h, snow, rng):
+    """Corrugated tin, a bit rusty: Old Tom's roof."""
+    col = (128, 144, 152)
+    xl, xr, px = x0 - 6, x1 + 6, (x0 + x1) // 2
+    pygame.draw.polygon(s, col, [(xl, y), (px, y - h), (xr, y)])
+    for yy in range(y - h + 2, y):
+        a, b = _span(xl, xr, px, y, h, yy)
+        for x in range(int(a) + 1, int(b), 3):
+            s.set_at((x, yy), darken(col, 0.2))
+            if x + 1 < b:
+                s.set_at((x + 1, yy), lighten(col, 0.12))
+    for _ in range(14):                                       # rust streaks
+        yy = rng.randrange(y - h + 8, y - 2)
+        a, b = _span(xl, xr, px, y, h, yy)
+        x = rng.randrange(int(a) + 2, int(b) - 2)
+        s.fill(rng.choice([(168, 104, 70), (150, 92, 64), (180, 120, 80)]), (x, yy, 1, rng.randrange(2, 5)))
+    pygame.draw.lines(s, (86, 98, 108), False, [(xl, y), (px, y - h), (xr, y)], 2)
+    s.fill((96, 108, 116), (xl, y, xr - xl, 2))
+    if snow:
+        pygame.draw.lines(s, (246, 248, 255), False, [(xl, y - 1), (px, y - h - 1), (xr, y - 1)], 3)
+
+
+def _shingles(s, xl, xr, px, y, h, col, step=4, scallop=True):
+    """Rows of shingles (scalloped, or straight with staggered joints) over a triangular roof."""
+    line = darken(col, 0.22)
+    for j, yy in enumerate(range(y - h + step, y, step)):
+        a, b = _span(xl, xr, px, y, h, yy)
+        pygame.draw.line(s, line, (int(a) + 2, yy), (int(b) - 2, yy))
+        off = (j % 2) * 3
+        for x in range(int(a) + 3 + off, int(b) - 3, 6):
+            if scallop:
+                s.set_at((x, yy - 1), line)
+                s.set_at((x + 5, yy - 1), line)
+                s.fill(lighten(col, 0.08), (x + 1, yy - step + 1, 4, 1))
+            else:
+                s.fill(line, (x, yy - step + 1, 1, step - 1))
+
+
+def _thatch(s, x0, x1, y, h, snow, rng):
+    """A thick, round-shouldered straw roof with a combed fringe."""
+    col = (204, 170, 98)
+    xl, xr, px = x0 - 9, x1 + 9, (x0 + x1) // 2
+    pygame.draw.polygon(s, col, [(xl, y), (px - 6, y - h), (px + 6, y - h), (xr, y)])
+    pygame.draw.ellipse(s, col, (px - 12, y - h - 3, 24, 8))
+    for _ in range(120):
+        yy = rng.randrange(y - h + 1, y)
+        a, b = _span(xl, xr, px, y, h, yy)
+        x = rng.randrange(int(a) + 1, max(int(a) + 2, int(b) - 1))
+        s.fill(rng.choice([darken(col, 0.18), lighten(col, 0.1), darken(col, 0.1)]), (x, yy, 1, rng.randrange(2, 5)))
+    for x in range(xl + 1, xr - 1, 2):                        # the combed edge
+        s.fill(darken(col, 0.3), (x, y, 1, rng.randrange(1, 4)))
+    s.fill(darken(col, 0.28), (px - 10, y - h - 1, 20, 2))     # ridge
+    if snow:
+        pygame.draw.ellipse(s, (246, 248, 255), (px - 14, y - h - 4, 28, 7))
+        pygame.draw.lines(s, (246, 248, 255), False, [(xl + 2, y - 2), (px - 8, y - h), (px + 8, y - h), (xr - 2, y - 2)],
+                          2)
+
+
+def _saltbox(s, x0, x1, y, col, edge, snow):
+    """An off-centre roof: short and steep at the front, long at the back."""
+    xl, xr, px, h = x0 - 6, x1 + 6, x0 + (x1 - x0) // 3, 26
+    pygame.draw.polygon(s, col, [(xl, y), (px, y - h), (xr, y)])
+    _shingles(s, xl, xr, px, y, h, col, 4, False)
+    pygame.draw.lines(s, edge, False, [(xl, y), (px, y - h), (xr, y)], 2)
+    if snow:
+        pygame.draw.lines(s, (246, 248, 255), False, [(xl, y - 1), (px, y - h - 1), (xr, y - 1)], 3)
+
+
+def _pot(s, x, season, urn=False, rng=None):
+    """A doorstep planter that changes with the season."""
+    rng = rng or random.Random(x)
+    base = GROUND - 4
+    if urn:                                                   # stone urns for the aquarium steps
+        s.fill((196, 190, 180), (x - 5, base - 7, 10, 7))
+        s.fill((214, 208, 198), (x - 6, base - 8, 12, 2))
+        s.fill((176, 170, 160), (x - 3, base - 2, 6, 2))
+    else:
+        s.fill((178, 100, 70), (x - 4, base - 6, 8, 6))
+        s.fill((150, 82, 58), (x - 5, base - 7, 10, 2))
+        s.fill((140, 76, 54), (x - 4, base - 1, 8, 1))
+    top = base - 8
+    if season == 0:                                           # tulips
+        for i, c in enumerate(((236, 96, 110), (250, 214, 90), (240, 150, 190))):
+            sx = x - 3 + i * 3
+            s.fill((96, 156, 76), (sx, top - 5 - i % 2, 1, 5 + i % 2))
+            s.fill(c, (sx - 1, top - 8 - i % 2, 3, 3))
+        s.fill((110, 170, 84), (x - 4, top - 2, 2, 2))
+        s.fill((110, 170, 84), (x + 3, top - 3, 2, 3))
+    elif season == 1:                                         # a geranium bush in full bloom
+        pygame.draw.ellipse(s, (70, 132, 70), (x - 6, top - 7, 12, 9))
+        pygame.draw.ellipse(s, (96, 156, 80), (x - 4, top - 7, 7, 5))
+        for _ in range(6):
+            s.fill(rng.choice([(226, 62, 72), (250, 110, 120)]), (x - 5 + rng.randrange(10), top - 7 + rng.randrange(6),
+                                                                  2, 2))
+    elif season == 2:                                         # mums, and a pumpkin
+        pygame.draw.ellipse(s, (90, 110, 60), (x - 6, top - 7, 12, 9))
+        for _ in range(8):
+            s.fill(rng.choice([(232, 140, 50), (214, 100, 44), (240, 190, 70)]),
+                   (x - 5 + rng.randrange(10), top - 7 + rng.randrange(6), 2, 2))
+        pumpkin(s, x + (8 if x % 2 else -8), base, rng.randrange(5, 8))
+    else:                                                     # a little evergreen with holly berries and snow
+        pygame.draw.polygon(s, (46, 100, 74), [(x - 5, top + 1), (x, top - 12), (x + 5, top + 1)])
+        pygame.draw.polygon(s, (60, 120, 86), [(x - 3, top - 4), (x, top - 12), (x + 3, top - 4)])
+        s.fill((246, 248, 255), (x - 2, top - 11, 4, 2))
+        s.fill((246, 248, 255), (x - 4, top - 3, 3, 1))
+        for dx, dy in ((-2, -2), (2, -6), (1, 0)):
+            s.set_at((x + dx, top + dy), (210, 40, 50))
+
+
+def pumpkin(s, x, base, r):
+    pygame.draw.ellipse(s, (226, 120, 40), (x - r, base - r, r * 2, r + 1))
+    pygame.draw.line(s, (190, 92, 30), (x, base - r + 1), (x, base - 1))
+    pygame.draw.line(s, (190, 92, 30), (x - r // 2, base - r + 2), (x - r // 2, base - 1))
+    s.fill((96, 110, 50), (x, base - r - 2, 2, 3))
+
+
+def _window_box(s, x, w, y, season, rng):
+    s.fill((120, 84, 58), (x - 1, y, w + 2, 4))
+    s.fill((96, 66, 46), (x - 1, y + 3, w + 2, 1))
+    for i in range(1, w, 3):
+        if season == 3:
+            s.fill((60, 110, 80), (x + i - 1, y - 2, 3, 2))
+            s.fill((246, 248, 255), (x + i - 1, y - 2, 2, 1))
+            continue
+        s.fill((84, 146, 72) if season < 2 else (110, 120, 60), (x + i, y - 2, 2, 2))
+        pal = [[(250, 170, 200), (250, 230, 120), (200, 160, 240)], [(230, 60, 70), (250, 240, 240), (250, 150, 60)],
+               [(230, 130, 50), (200, 80, 50), (240, 190, 70)]][season]
+        s.fill(rng.choice(pal), (x + i, y - 4 + rng.randrange(2), 2, 2))
+
+
+def _festoon(s, x0, x1, y, season, lights, sag=5):
+    """A swag hung under the eaves: bunting in spring and summer, a leaf garland in autumn, lights in winter."""
+    n = max(2, (x1 - x0) // 4)
+    pts = [(x0 + (x1 - x0) * i / n, y + sag * math.sin(math.pi * i / n)) for i in range(n + 1)]
+    rope = [(150, 140, 130), (150, 140, 130), (110, 80, 52), (40, 80, 56)][season]
+    pygame.draw.lines(s, rope, False, [(int(px), int(py)) for px, py in pts], 1 if season < 3 else 2)
+    if season in (0, 1):
+        pal = [[(250, 176, 200), (176, 226, 200), (250, 236, 150), (200, 180, 240)],
+               [(226, 70, 74), (250, 210, 70), (80, 140, 210), (250, 248, 240)]][season]
+        for i, (px, py) in enumerate(pts[1:-1:2]):
+            px, py = int(px), int(py)
+            pygame.draw.polygon(s, pal[i % 4], [(px - 3, py), (px + 3, py), (px, py + 5)])
+    elif season == 2:
+        for i, (px, py) in enumerate(pts[1:-1]):
+            px, py = int(px), int(py)
+            c = [(220, 110, 44), (190, 64, 44), (236, 176, 60), (160, 100, 50)][i % 4]
+            s.fill(c, (px - 1, py + (i % 2), 3, 2))
+            if i % 3 == 0:
+                s.set_at((px, py + 3), (140, 96, 60))           # a dangling acorn
+    else:
+        for i, (px, py) in enumerate(pts[1:-1]):
+            px, py = int(px), int(py)
+            s.fill((50, 96, 66), (px - 1, py - 1, 3, 3))
+            if i % 2 == 0:
+                c = [(250, 90, 80), (250, 210, 90), (110, 190, 250), (140, 230, 140)][(i // 2) % 4]
+                s.fill(c, (px, py + 2, 2, 2))
+                lights.append((px, py + 2, c))
+
+
+def _wreath(s, x, y):
+    pygame.draw.circle(s, (40, 96, 64), (x, y), 5, 3)
+    pygame.draw.circle(s, (60, 120, 80), (x, y), 5, 1)
+    for a in range(0, 360, 72):
+        s.set_at((x + int(math.cos(math.radians(a)) * 4), y + int(math.sin(math.radians(a)) * 4)), (220, 50, 60))
+    s.fill((210, 40, 50), (x - 2, y + 4, 5, 2))
+
+
+def _decorate_door(s, x, w, h, season, rng, urn=False):
+    """Plants either side of a door, and a wreath on it in winter."""
+    _pot(s, x - w // 2 - 7, season, urn, rng)
+    _pot(s, x + w // 2 + 7, season, urn, rng)
+    if season == 3:
+        _wreath(s, x, GROUND - 4 - h + 8)
+
+
+_SIGNS = {}
+# hanging signs: (wall x, side it sticks out to, icon)
+HANGING = ((132, -1, 'fish'), (474, 1, 'cupcake'), (862, -1, 'bowl'), (1594, 1, 'book'), (1108, -1, 'bell'))
+
+
+def _hanging_sign(icon):
+    img = _SIGNS.get(icon)
+    if img is not None:
+        return img
+    img = pygame.Surface((14, 12), pygame.SRCALPHA)
+    bg = {'fish': (230, 216, 186), 'cupcake': (250, 232, 226), 'bowl': (214, 230, 236), 'book': (226, 232, 206),
+          'bell': (236, 226, 206)}[icon]
+    img.fill((96, 66, 46))
+    img.fill(bg, (1, 1, 12, 10))
+    if icon == 'fish':
+        pygame.draw.polygon(img, (70, 120, 150), [(3, 6), (7, 3), (10, 6), (7, 8)])
+        pygame.draw.polygon(img, (70, 120, 150), [(10, 6), (12, 4), (12, 8)])
+        img.set_at((5, 5), (250, 250, 250))
+    elif icon == 'cupcake':
+        img.fill((214, 150, 90), (4, 6, 6, 4))
+        for x in range(4, 10, 2):
+            img.set_at((x, 7), (176, 110, 64))
+        pygame.draw.ellipse(img, (246, 160, 190), (3, 2, 8, 6))
+        img.set_at((7, 2), (220, 40, 60))
+    elif icon == 'bowl':
+        pygame.draw.circle(img, (150, 200, 226), (7, 6), 4)
+        img.fill((214, 230, 236), (2, 2, 10, 2))
+        img.fill((240, 140, 50), (6, 6, 3, 2))
+        img.set_at((9, 6), (240, 140, 50))
+    elif icon == 'book':
+        img.fill((176, 76, 70), (3, 3, 4, 6))
+        img.fill((70, 110, 150), (7, 3, 4, 6))
+        img.fill((250, 244, 230), (4, 4, 2, 4))
+        img.fill((250, 244, 230), (8, 4, 2, 4))
+    elif icon == 'bell':
+        pygame.draw.polygon(img, (214, 170, 70), [(4, 9), (5, 4), (7, 2), (9, 4), (10, 9)])
+        img.set_at((7, 10), (150, 110, 50))
+    _SIGNS[icon] = img
+    return img
+
+
+def draw_hanging_signs(s, sc, t, wind):
+    """Shop signs on iron brackets, swinging a little in the breeze."""
+    iron = (56, 52, 58)
+    for wx, side, icon in HANGING:
+        px = wx + side * 10 - sc
+        if not -20 < px < W + 20:
+            continue
+        ay = GROUND - 66
+        s.fill(iron, (min(wx - sc, wx - sc + side * 14), ay, 15, 1))
+        pygame.draw.line(s, iron, (wx - sc, ay + 7), (wx - sc + side * 8, ay))
+        s.fill(iron, (wx - sc + side * 14, ay - 1, 1, 2))
+        a = math.sin(t * 1.6 + wx) * (0.04 + 0.16 * wind) + math.sin(t * 3.7 + wx * 0.3) * 0.02 * wind
+        ca, sa = math.cos(a), math.sin(a)
+        for dx in (-5, 5):                                    # the chains
+            cx, cy = dx * ca + 3 * sa, -dx * sa + 3 * ca
+            pygame.draw.line(s, iron, (px + dx, ay), (int(px + cx), int(ay + cy)))
+        img = pygame.transform.rotate(_hanging_sign(icon), math.degrees(a))
+        s.blit(img, img.get_rect(center=(int(px + 9 * sa), int(ay + 9 * ca))))
+
+
+def draw_weathervane(s, x, y, t, wind):
+    """A brass fish on Old Tom's roof that swings round to face the wind."""
+    s.fill((70, 64, 60), (x, y - 14, 1, 14))
+    s.fill((150, 120, 60), (x - 4, y - 6, 9, 1))
+    turn = math.cos(t * (0.15 + 0.3 * wind) + math.sin(t * 1.1) * 0.6 * wind)
+    half = max(1, int(6 * abs(turn)))
+    d = 1 if turn >= 0 else -1
+    fy = y - 15
+    col = (214, 170, 70) if abs(turn) > 0.35 else (176, 136, 56)
+    pygame.draw.polygon(s, col, [(x - half * d, fy), (x, fy - 2), (x + half * d, fy), (x, fy + 2)])
+    pygame.draw.polygon(s, col, [(x - half * d, fy), (x - (half + 3) * d, fy - 2), (x - (half + 3) * d, fy + 2)])
+
+
+def _bakery_display(s, season):
+    """Mabel changes her window with the seasons."""
+    s.fill((236, 224, 206), (352, GROUND - 36, 34, 3))      # the shelf
+    s.fill((214, 196, 176), (352, GROUND - 34, 34, 1))
+    base = GROUND - 36
+    if season == 0:                                           # a pink layer cake and buns
+        s.fill((200, 196, 200), (364, base - 2, 10, 2))
+        s.fill((250, 214, 226), (365, base - 9, 8, 7))
+        s.fill((236, 150, 180), (365, base - 6, 8, 1))
+        s.fill((250, 240, 244), (365, base - 10, 8, 2))
+        s.set_at((369, base - 11), (220, 40, 60))
+        for bx in (355, 378):
+            pygame.draw.ellipse(s, (214, 154, 84), (bx, base - 4, 6, 4))
+    elif season == 1:                                         # berry tarts and a lemon loaf
+        for i, bx in enumerate((354, 362, 377)):
+            s.fill((220, 170, 96), (bx, base - 3, 7, 3))
+            c = [(200, 40, 70), (70, 80, 180), (200, 40, 70)][i]
+            for j in range(3):
+                s.fill(c, (bx + 1 + j * 2, base - 4, 1, 1))
+        s.fill((250, 226, 120), (368, base - 6, 8, 6))
+        s.fill((250, 250, 230), (368, base - 7, 8, 2))
+    elif season == 2:                                         # pumpkin pie and apple turnovers
+        pygame.draw.ellipse(s, (196, 140, 80), (362, base - 4, 14, 5))
+        pygame.draw.ellipse(s, (224, 132, 52), (364, base - 4, 10, 3))
+        for bx in (354, 379):
+            pygame.draw.polygon(s, (226, 176, 104), [(bx, base), (bx + 3, base - 4), (bx + 6, base)])
+        pumpkin(s, 383, base, 3)
+    else:                                                     # a gingerbread house and candy canes
+        s.fill((170, 104, 60), (362, base - 7, 12, 7))
+        pygame.draw.polygon(s, (250, 250, 250), [(360, base - 7), (368, base - 13), (376, base - 7)])
+        pygame.draw.polygon(s, (150, 90, 50), [(362, base - 8), (368, base - 12), (374, base - 8)])
+        s.fill((250, 220, 120), (366, base - 4, 3, 4))
+        for bx in (355, 380):
+            s.fill((250, 250, 250), (bx, base - 8, 1, 8))
+            s.fill((250, 250, 250), (bx + 1, base - 9, 2, 1))
+            for yy in range(base - 8, base, 2):
+                s.set_at((bx, yy), (220, 40, 50))
+    # the right-hand window: a tiered stand of buns
+    s.fill((236, 224, 206), (432, GROUND - 36, 26, 3))
+    s.fill((210, 206, 210), (444, GROUND - 48, 2, 12))
+    for ty, tw in ((GROUND - 39, 18), (GROUND - 46, 12)):
+        s.fill((226, 222, 226), (445 - tw // 2, ty, tw, 1))
+        for i in range(tw // 6):
+            pygame.draw.ellipse(s, [(214, 154, 84), (236, 190, 120), (196, 120, 70), (240, 206, 226)][(season + i) % 4],
+                                (445 - tw // 2 + i * 6, ty - 3, 5, 3))
+
+
+def _a_board(s, x):
+    """A chalkboard on the pavement outside the bakery."""
+    pygame.draw.line(s, (120, 86, 60), (x - 6, GROUND - 4), (x - 2, GROUND - 22))
+    pygame.draw.line(s, (120, 86, 60), (x + 6, GROUND - 4), (x + 2, GROUND - 22))
+    s.fill((120, 86, 60), (x - 6, GROUND - 22, 13, 15))
+    s.fill((46, 58, 54), (x - 5, GROUND - 21, 11, 13))
+    s.fill((230, 230, 220), (x - 3, GROUND - 19, 7, 1))
+    s.fill((230, 230, 220), (x - 3, GROUND - 17, 5, 1))
+    pygame.draw.ellipse(s, (240, 190, 210), (x - 2, GROUND - 15, 5, 3))     # a chalk cupcake
+    s.fill((230, 230, 220), (x - 1, GROUND - 12, 3, 2))
+
+
 # ---------------------------------------------------------------- the street, drawn once per season
 def build_street(season, projects):
     s = pygame.Surface((TOWN_W, H), pygame.SRCALPHA)
     wins = []
     snow = season == 3
     lamps = []
+    lights = []                     # winter string lights that glow after dark
+    deco = random.Random(19 + season)
     # pavement and street
     pave = [(198, 190, 176), (204, 196, 180), (190, 186, 178), (210, 214, 222)][season]
     s.fill(pave, (0, GROUND - 4, TOWN_W, 10))
@@ -319,10 +669,14 @@ def build_street(season, projects):
     # --- Old Tom's Tackle: weathered blue planks, a big wooden fish
     x0, x1 = 132, 318
     _planks(s, pygame.Rect(x0, GROUND - 74, x1 - x0, 70), (92, 128, 140), (78, 110, 122))
-    _gable(s, x0, x1, GROUND - 74, 34, (120, 86, 66), (86, 60, 46), snow)
+    _grounded(s, x0, x1, GROUND - 72)
+    _tin_roof(s, x0, x1, GROUND - 74, 34, snow, deco)
     _door(s, 226, 16, 28, (120, 86, 60), (70, 52, 40))
     for wx in (156, 268):
         _window(s, wx, GROUND - 56, 18, 16, (230, 224, 210), wins)
+        _window_box(s, wx, 18, GROUND - 37, season, deco)
+    _festoon(s, x0 + 2, x1 - 2, GROUND - 71, season, lights, 4)
+    _decorate_door(s, 226, 16, 28, season, deco)
     _sign(s, 226, GROUND - 92, "OLD TOM'S TACKLE", (238, 226, 196), (60, 44, 36))
     fish = [(176, GROUND - 66), (200, GROUND - 72), (222, GROUND - 66), (200, GROUND - 60)]
     pygame.draw.polygon(s, (226, 170, 80), [(246, GROUND - 74), (266, GROUND - 80), (284, GROUND - 74), (266, GROUND - 68)])
@@ -340,16 +694,33 @@ def build_street(season, projects):
     s.fill((244, 226, 200), (x0, GROUND - 82, x1 - x0, 78))
     for y in range(GROUND - 80, GROUND - 4, 6):
         pygame.draw.line(s, (232, 210, 182), (x0, y), (x1 - 1, y))
-    s.fill((196, 104, 96), (x0 - 4, GROUND - 90, x1 - x0 + 8, 8))
+    # a mansard roof of rosy scalloped tiles, with a dormer and a tall chimney
+    s.fill((150, 130, 124), (436, GROUND - 120, 12, 18))     # chimney
+    s.fill((126, 108, 104), (434, GROUND - 122, 16, 3))
+    roof = (186, 98, 100)
+    pygame.draw.polygon(s, roof, [(x0 - 5, GROUND - 82), (x0 + 7, GROUND - 106), (x1 - 7, GROUND - 106),
+                                  (x1 + 5, GROUND - 82)])
+    for j, yy in enumerate(range(GROUND - 102, GROUND - 82, 4)):
+        k = (yy - (GROUND - 106)) / 24
+        a, b = x0 + 7 - 12 * k, x1 - 7 + 12 * k
+        for x in range(int(a) + 1 + (j % 2) * 3, int(b) - 5, 6):
+            pygame.draw.arc(s, darken(roof, 0.25), (x, yy - 3, 6, 6), math.pi, 2 * math.pi)
+            s.fill(lighten(roof, 0.1), (x + 2, yy - 2, 2, 1))
+    s.fill(darken(roof, 0.3), (x0 + 5, GROUND - 108, x1 - x0 - 10, 3))
+    s.fill((250, 240, 226), (x0 - 6, GROUND - 84, x1 - x0 + 12, 3))      # cream trim
     if snow:
-        s.fill((246, 248, 255), (x0 - 4, GROUND - 92, x1 - x0 + 8, 3))
-    s.fill((150, 130, 124), (436, GROUND - 106, 12, 16))     # chimney
+        s.fill((246, 248, 255), (x0 + 5, GROUND - 110, x1 - x0 - 10, 3))
+        s.fill((246, 248, 255), (434, GROUND - 124, 16, 2))
+    s.fill((244, 226, 200), (396, GROUND - 102, 20, 16))      # the dormer
+    _window(s, 401, GROUND - 99, 10, 9, (150, 100, 80), wins)
+    _gable(s, 396, 416, GROUND - 102, 7, darken(roof, 0.1), darken(roof, 0.35), snow)
+    _grounded(s, x0, x1, GROUND - 82)
     _window(s, 352, GROUND - 52, 34, 20, (150, 100, 80), wins)
-    for i in range(4):
-        pygame.draw.ellipse(s, (214, 154, 84), (355 + i * 8, GROUND - 40, 7, 5))
-        s.fill((236, 196, 120), (357 + i * 8, GROUND - 40, 3, 1))
     _door(s, 404, 16, 30, (176, 96, 88), (120, 70, 60))
     _window(s, 432, GROUND - 52, 26, 20, (150, 100, 80), wins)
+    _bakery_display(s, season)
+    _decorate_door(s, 404, 16, 30, season, deco)
+    _a_board(s, 466)
     for i in range(0, x1 - x0 + 8, 8):
         c = (226, 104, 110) if (i // 8) % 2 == 0 else (250, 244, 236)
         pygame.draw.polygon(s, c, [(x0 - 4 + i, GROUND - 64), (x0 + 4 + i, GROUND - 64), (x0 + 4 + i, GROUND - 58),
@@ -357,6 +728,10 @@ def build_street(season, projects):
     _sign(s, 406, GROUND - 78, "MABEL'S BAKERY", (250, 236, 220), (160, 70, 70))
     # --- the square: notice board, fountain base, benches
     s.fill(lerp_c(pave, (230, 220, 200), 0.3), (500, GROUND - 4, 340, 6))
+    ground_shadow(s, 548, GROUND - 3, 58, 60)
+    ground_shadow(s, 653, GROUND - 1, 88, 70)
+    for bx in (601, 737):
+        ground_shadow(s, bx, GROUND - 3, 26, 56)
     s.fill((120, 86, 60), (526, GROUND - 40, 3, 36))
     s.fill((120, 86, 60), (567, GROUND - 40, 3, 36))
     s.fill((150, 108, 72), (520, GROUND - 48, 56, 30))
@@ -392,6 +767,26 @@ def build_street(season, projects):
     # --- Fernwick Aquarium: stone, columns, round windows with fish
     x0, x1 = 862, 1084
     _bricks(s, pygame.Rect(x0, GROUND - 90, x1 - x0, 86), (196, 190, 178), (176, 168, 156), 5, 12)
+    _grounded(s, x0, x1, GROUND - 88)
+    # a copper cupola with a fish on top, gone green with age
+    cx = (x0 + x1) // 2
+    dome = (104, 166, 150)
+    pygame.draw.ellipse(s, dome, (cx - 12, GROUND - 144, 24, 26))
+    for dx in (-6, 0, 6):
+        pygame.draw.line(s, darken(dome, 0.2), (cx + dx // 2, GROUND - 143), (cx + dx, GROUND - 131))
+    s.fill(lighten(dome, 0.25), (cx - 7, GROUND - 139, 2, 4))
+    if snow:
+        pygame.draw.arc(s, (246, 248, 255), (cx - 12, GROUND - 144, 24, 26), 0.5, 2.6, 3)
+    s.fill((214, 208, 196), (cx - 11, GROUND - 131, 22, 12))
+    s.fill((176, 168, 156), (cx - 11, GROUND - 131, 22, 1))
+    for dx in (-6, 2):
+        s.fill((60, 100, 130), (cx + dx, GROUND - 128, 4, 7))
+        s.fill((90, 140, 176), (cx + dx, GROUND - 128, 4, 2))
+    s.fill((230, 226, 216), (cx - 13, GROUND - 120, 26, 3))
+    s.fill((200, 160, 70), (cx, GROUND - 152, 1, 8))
+    pygame.draw.polygon(s, (220, 180, 80), [(cx - 4, GROUND - 153), (cx + 2, GROUND - 155), (cx + 4, GROUND - 153),
+                                            (cx + 2, GROUND - 151)])
+    pygame.draw.polygon(s, (220, 180, 80), [(cx - 4, GROUND - 153), (cx - 6, GROUND - 155), (cx - 6, GROUND - 151)])
     pygame.draw.polygon(s, (214, 208, 196), [(x0 - 8, GROUND - 90), ((x0 + x1) // 2, GROUND - 118),
                                              (x1 + 8, GROUND - 90)])
     pygame.draw.polygon(s, (176, 168, 156), [(x0 - 8, GROUND - 90), ((x0 + x1) // 2, GROUND - 118),
@@ -414,10 +809,17 @@ def build_street(season, projects):
     _door(s, 972, 24, 36, (100, 82, 70), (176, 168, 156))
     for i in range(3):
         s.fill((214, 208, 196), (950 - i * 4, GROUND - 4 - (3 - i) * 2, 44 + i * 8, 2))
+    _pot(s, 937, season, True, deco)
+    _pot(s, 1007, season, True, deco)
+    if season == 3:
+        _wreath(s, 972, GROUND - 32)
+    for a, b in ((x0 + 2, 916), (928, 1016), (1028, x1 - 2)):
+        _festoon(s, a, b, GROUND - 87, season, lights, 3)
     _sign(s, 972, GROUND - 78, 'AQUARIUM & MUSEUM', (236, 232, 222), (60, 90, 120))
     # --- Town Hall: brick, a clock tower (the hands are drawn live), a flag
     x0, x1 = 1108, 1276
     _bricks(s, pygame.Rect(x0, GROUND - 80, x1 - x0, 76), (170, 92, 76), (146, 78, 66))
+    _grounded(s, x0, x1, GROUND - 78)
     _gable(s, x0, x1, GROUND - 80, 22, (90, 92, 110), (60, 62, 80), snow)
     s.fill((170, 92, 76), (1174, GROUND - 140, 36, 70))
     _bricks(s, pygame.Rect(1174, GROUND - 140, 36, 60), (170, 92, 76), (146, 78, 66))
@@ -429,10 +831,15 @@ def build_street(season, projects):
     s.fill((90, 70, 60), (1191, GROUND - 190, 2, 26))
     for wx in (1124, 1150, 1222, 1248):
         _window(s, wx, GROUND - 60, 12, 20, (236, 226, 206), wins)
+        _window_box(s, wx, 12, GROUND - 37, season, deco)
     _door(s, 1192, 22, 34, (90, 70, 60), (236, 226, 206))
+    _decorate_door(s, 1192, 22, 34, season, deco)
+    for a, b in ((x0 + 2, 1170), (1214, x1 - 2)):
+        _festoon(s, a, b, GROUND - 77, season, lights, 4)
     _sign(s, 1192, GROUND - 76, 'TOWN HALL', (236, 226, 206), (110, 50, 44))
     # --- Pip's Ring Toss: a striped tent stall with bottles
     x0, x1 = 1300, 1404
+    _shade(s, (x0 + 3, GROUND - 4, x1 - x0 - 6, 5), 70, 0)
     s.fill((214, 170, 110), (x0 + 6, GROUND - 26, x1 - x0 - 12, 22))
     s.fill((180, 140, 90), (x0 + 6, GROUND - 26, x1 - x0 - 12, 3))
     for i in range(6):
@@ -449,11 +856,20 @@ def build_street(season, projects):
     # --- Library: green walls, tall windows, a book sign
     x0, x1 = 1430, 1594
     _planks(s, pygame.Rect(x0, GROUND - 80, x1 - x0, 76), (120, 150, 112), (104, 132, 98), 5)
-    _gable(s, x0, x1, GROUND - 80, 30, (110, 70, 64), (80, 50, 46), snow)
+    _grounded(s, x0, x1, GROUND - 78)
+    slate = (88, 98, 122)
+    _gable(s, x0, x1, GROUND - 80, 30, slate, (60, 66, 86))
+    _shingles(s, x0 - 6, x1 + 6, (x0 + x1) // 2, GROUND - 80, 30, slate, 4, True)
+    if snow:
+        pygame.draw.lines(s, (246, 248, 255), False, [(x0 - 6, GROUND - 81), ((x0 + x1) // 2, GROUND - 111),
+                                                       (x1 + 6, GROUND - 81)], 3)
     for wx in (1446, 1476, 1540, 1570):
         _window(s, wx, GROUND - 66, 12, 26, (240, 232, 214), wins)
     _door(s, 1512, 18, 32, (110, 80, 60), (240, 232, 214))
-    s.fill((140, 150, 150), (1556, GROUND - 120, 10, 14))     # chimney
+    _decorate_door(s, 1512, 18, 32, season, deco)
+    _festoon(s, x0 + 2, x1 - 2, GROUND - 77, season, lights, 5)
+    s.fill((140, 150, 150), (1556, GROUND - 120, 10, 30))     # chimney, down to the slates
+    s.fill((120, 128, 130), (1554, GROUND - 122, 14, 3))
     pygame.draw.rect(s, (176, 76, 70), (1500, GROUND - 106, 24, 16))
     s.fill((250, 244, 230), (1502, GROUND - 104, 9, 12))
     s.fill((250, 244, 230), (1513, GROUND - 104, 9, 12))
@@ -461,10 +877,22 @@ def build_street(season, projects):
     # --- a cottage row and gardens between the library and the lookout
     for i, (hx, col, rc) in enumerate(((1622, (230, 210, 170), (150, 90, 70)), (1700, (200, 214, 230), (90, 110, 140)))):
         s.fill(col, (hx, GROUND - 54, 58, 50))
-        _gable(s, hx, hx + 58, GROUND - 54, 22, rc, darken(rc, 0.3), snow)
+        _grounded(s, hx, hx + 58, GROUND - 52)
+        if i == 0:
+            _thatch(s, hx, hx + 58, GROUND - 54, 24, snow, deco)
+        else:
+            _saltbox(s, hx, hx + 58, GROUND - 54, rc, darken(rc, 0.3), snow)
         _window(s, hx + 8, GROUND - 40, 12, 12, (250, 246, 236), wins, (110, 140, 100))
         _window(s, hx + 38, GROUND - 40, 12, 12, (250, 246, 236), wins, (110, 140, 100))
+        for wx in (hx + 8, hx + 38):
+            _window_box(s, wx, 12, GROUND - 26, season, deco)
         s.fill(darken(col, 0.4), (hx + 25, GROUND - 26, 10, 22))
+        s.fill(darken(col, 0.5), (hx + 25, GROUND - 26, 10, 1))
+        s.set_at((hx + 33, GROUND - 15), (220, 190, 110))
+        _pot(s, hx + 18, season, False, deco)
+        if season == 3:
+            _wreath(s, hx + 30, GROUND - 19)
+        _festoon(s, hx + 2, hx + 56, GROUND - 52, season, lights, 3)
     # --- east end: a grassy lookout over the lake, with a bench
     for x in range(1774, TOWN_W, 3):
         hgt = 8 + int(5 * math.sin(x * 0.27))
@@ -491,12 +919,13 @@ def build_street(season, projects):
     lamp_x = (110, 500, 840, 1416, 1780) if 'lamps' not in projects else \
         (110, 324, 500, 600, 840, 1098, 1288, 1416, 1600, 1780)
     for lx in lamp_x:
+        ground_shadow(s, lx + 1, GROUND - 3, 9, 70)
         s.fill((60, 58, 64), (lx, GROUND - 40, 2, 36))
         s.fill((60, 58, 64), (lx - 2, GROUND - 6, 6, 2))
         s.fill((60, 58, 64), (lx - 3, GROUND - 44, 8, 2))
         s.fill((230, 210, 160), (lx - 2, GROUND - 42, 6, 5))
         lamps.append((lx + 1, GROUND - 40))
-    return s, wins, lamps
+    return s, wins, lamps, lights
 
 
 def build_back(season):
@@ -547,6 +976,7 @@ class Town:
         self.street = None
         self.wins = []
         self.lamps = []
+        self.lights = []
         self.t = 0.0
         self.smoke = []
         self.notes = []
@@ -627,7 +1057,7 @@ class Town:
             return '%s  (opens %s)' % (p['name'], fmt_hour(p['hours'][0]))
         if key == 'lookout' and self.can_stargaze(g):
             return 'Lie back and look at the stars'
-        return {'lake': 'Walk back to the lake', 'board': 'Read the notices', 'fountain': 'Make a wish (10 coins)',
+        return {'lake': 'Walk back to the lake', 'board': 'Read the notices', 'museum': 'Go into the aquarium', 'fountain': 'Make a wish (10 coins)',
                 'lookout': 'Sit and watch the lake'}.get(key, 'Go into %s' % p['name'])
 
     # ------------------------------------------------------------ update
@@ -713,7 +1143,7 @@ class Town:
             f['step'] = 0.0
         # chimney smoke, music notes, coin sparkles
         if random.random() < dt * 2.5:
-            for cx, cy in ((442, GROUND - 106), (1561, GROUND - 120)):
+            for cx, cy in ((442, GROUND - 124), (1561, GROUND - 120)):
                 self.smoke.append([cx + random.uniform(-1, 1), cy, random.uniform(2, 5), 3.0])
         for p in self.smoke:
             p[0] += (4 + g.env.wind * 10) * dt
@@ -792,6 +1222,9 @@ class Town:
         elif pid == 'ringtoss':
             self.rt.update(msg='', won=0, marks=[])
             g.overlay = 'ringtoss'
+        elif pid == 'museum':
+            import aquarium
+            aquarium.enter(g)            # walk in and look around (Juniper's desk is just inside)
         else:
             if pid == 'library':
                 self.lib_page = 0
@@ -1031,7 +1464,7 @@ class Town:
     def ensure_built(self, g):
         key = (g.env.season, tuple(sorted(g.projects)))
         if self.built != key:
-            self.street, self.wins, self.lamps = build_street(g.env.season, g.projects)
+            self.street, self.wins, self.lamps, self.lights = build_street(g.env.season, g.projects)
             self.far, self.mid = build_back(g.env.season)
             self.built = key
 
@@ -1064,6 +1497,12 @@ class Town:
                     frame.fill((int(210 * nf), int(150 * nf), int(70 * nf)), r.move(-sc, 0),
                                special_flags=pygame.BLEND_ADD)
                     add_glow(frame, w.g_mid, (r.centerx - sc, r.centery), nf * 0.55)
+            for i, (lx, ly, c) in enumerate(self.lights):          # winter string lights, twinkling
+                x = lx - sc
+                if -8 < x < W + 8 and (int(self.t * 1.5) + i) % 7:
+                    frame.fill((int(c[0] * nf), int(c[1] * nf), int(c[2] * nf)), (x, ly, 2, 2),
+                               special_flags=pygame.BLEND_ADD)
+                    add_glow(frame, w.g_small, (x + 1, ly + 1), nf * 0.5)
             for (lx, ly) in self.lamps:
                 if -40 < lx - sc < W + 40:
                     fl = 0.9 + 0.1 * math.sin(self.t * 9 + lx)
@@ -1112,6 +1551,10 @@ class Town:
             for i in range(10):
                 yy = GROUND - 190 + int(math.sin(t * 5 - i * 0.6) * (1 + i * 0.12))
                 s.fill((200, 70, 70) if i % 4 < 2 else (240, 230, 200), (cx + 1 + i, yy, 1, 6))
+        wind = getattr(env, 'wind', 0.3)
+        if -20 < 225 - sc < W + 20:
+            draw_weathervane(s, 225 - sc, GROUND - 108, t, wind)
+        draw_hanging_signs(s, sc, t, wind)
         # smoke
         for x, y, v, life in self.smoke:
             a = int(110 * min(1.0, life / 3.0))
@@ -1127,6 +1570,8 @@ class Town:
         m = g.minute
         rain = env.rain > 0.3
         if 'bandstand' in g.projects and 1020 <= m < 1260 and -80 < 790 - sc < W + 80:
+            for bx in (776, 806):
+                ground_shadow(s, bx - sc, GROUND - 10, 12, 60)
             walker(s, 776 - sc, GROUND - 10, 1, 0, (90, 110, 170), (60, 44, 40), 'tophat', season)
             walker(s, 806 - sc, GROUND - 10, -1, 0, (170, 120, 90), (196, 150, 90), 'none', season)
             pygame.draw.line(s, (176, 120, 70), (778 - sc, GROUND - 22), (786 - sc, GROUND - 28), 2)
@@ -1138,6 +1583,7 @@ class Town:
             x = int(f['x'] - sc)
             if -30 < x < W + 30:
                 spec = FOLK[k]
+                ground_shadow(s, x, GROUND, 10 if spec.get('kid') else 13)
                 walker(s, x, GROUND, f['face'], f['step'], spec['shirt'], spec['hair'], spec['hat'], season,
                        spec.get('kid'), spec.get('glasses'), umbrella=(180, 90, 100) if rain else None)
                 if k == 'fen' and abs(f['x'] - 1702) < 40 and not f['goal'] and 480 <= m < 1200:
@@ -1150,16 +1596,20 @@ class Town:
         for pid, v in self.town_peers(g):
             x = int(v['tx'] - sc)
             if -30 < x < W + 30:
+                ground_shadow(s, x, GROUND, 13)
                 walker(s, x, GROUND, v['face'], self.t * 9 + pid if v['walk'] else 0, actors.PEER_COLORS[pid % 4],
                        actors.PEER_HAIR[pid % 4], v['hat'], season, umbrella=(110, 140, 190) if rain else None)
                 if v['em']:
                     actors.draw_bubble(s, x + 1, GROUND - 32, v['em'], t + pid)
         import biscuit
         if biscuit.follows(g):
+            if self.cat.x is not None:
+                ground_shadow(s, self.cat.x - sc, GROUND, 14, 60)
             self.cat.draw(s, g, t, sc, GROUND)
             import discover
             discover.draw_town(s, g, t, sc, GROUND)
         x = int(self.x - sc)
+        ground_shadow(s, x, GROUND, 13)
         walker(s, x, GROUND, self.face, self.step, actors.SHIRT[season], (112, 72, 52), g.hat, season,
                umbrella=(90, 130, 110) if rain else None)
         if g.emote:
