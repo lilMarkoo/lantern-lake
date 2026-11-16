@@ -68,6 +68,17 @@ SPECIES = [
     dict(id='stag', name='The White Stag', spots=('dock', 'deep'), seasons=(3,), hours=((300, 480),),
          need=('fog', 'snow'), w=0.35, where='Said to walk the far shore on snowy or foggy winter dawns.',
          desc='Nobody in Fernwick quite believes in it. It bows its head, then it is gone.'),
+    # these three only come once you've restored the shore by your dock (shore.py)
+    dict(id='warbler', name='Reed Warbler', spots=('dock',), seasons=(0, 1, 2), hours=((300, 1140),),
+         avoid=('rain', 'snow'), w=1.0, shore=True,
+         where='The reed beds past your dock, once they grow back. Spring to autumn, by day.',
+         desc='A small brown bird that clings to a swaying reed and chatters away like it owns the place.'),
+    dict(id='muskrat', name='Muskrat', spots=('dock',), seasons=(0, 1, 2), hours=((300, 600), (960, 1260)),
+         w=0.9, shore=True, where='Swims over from the old landing, mornings and evenings, once it is mended.',
+         desc='Paddles across with a mouthful of reeds, then sits up to wash its whiskers.'),
+    dict(id='bittern', name='Bittern', spots=('dock',), seasons=(0, 1, 2), hours=DAWN_DUSK, avoid=('snow',),
+         w=0.7, shore=True, where='Hidden in the reeds at dawn and dusk. Only shows itself once there is a hide.',
+         desc='Striped like the reeds it stands in. When it booms, it points its beak straight at the sky.'),
 ]
 SPECIES_BY_ID = {s['id']: s for s in SPECIES}
 SPAWNED = [s for s in SPECIES if not s.get('ambient')]
@@ -105,6 +116,9 @@ def eligible(sp, g):
         return False
     if sp['id'] == 'heron' and g.spot == 'dock' and g.festival_live():
         return False
+    if sp.get('shore'):
+        import shore
+        return shore.unlocked(g, sp['id'])
     return True
 
 
@@ -113,7 +127,8 @@ class Critter:
     SIZE = {'heron': (30, 30, 15, 28), 'kingfisher': (16, 16, 8, 12), 'dragonfly': (12, 8, 6, 4),
             'turtle': (16, 10, 8, 8), 'otter': (20, 10, 10, 7), 'deer': (14, 12, 7, 11), 'fox': (16, 12, 8, 10),
             'owl': (14, 16, 7, 15), 'loon': (18, 12, 9, 9), 'beaver': (22, 12, 11, 8), 'swans': (34, 16, 8, 12),
-            'bats': (8, 6, 4, 3), 'moose': (26, 22, 13, 21), 'stag': (16, 18, 8, 17)}
+            'bats': (8, 6, 4, 3), 'moose': (26, 22, 13, 21), 'stag': (16, 18, 8, 17), 'warbler': (10, 9, 5, 8),
+            'muskrat': (16, 8, 8, 5), 'bittern': (14, 22, 7, 21)}
 
     def __init__(self, sp, g, rng):
         self.sp = sp
@@ -442,6 +457,180 @@ class Critter:
             s.set_at((1, 5), (230, 200, 70))
             s.set_at((4, 8), skin)
             s.set_at((11, 8), skin)
+
+    # ------------------------------------------------ reed warbler (on a reed in the restored bed)
+    def init_warbler(self, g):
+        import shore
+        s = self.rng.choice([st for st in shore.STALKS if st['h'] > 26])
+        self.stalk = s
+        self.px, self.py = s['x'], s['base'] - s['h'] + 2
+        self.enter_side(self.py - 40)
+
+    def _tip(self, g):
+        s = self.stalk
+        sway = math.sin(g.world.t * 1.2 + s['ph']) * (1 + g.env.wind * 2)
+        return s['x'] + sway, s['base'] - s['h'] + 2
+
+    def upd_warbler(self, dt, g):
+        s = self.state
+        if s == 'in':
+            tx, ty = self._tip(g)
+            if self.toward(tx, ty, 80, dt):
+                self.go('perch', 'still')
+                self.wait = self.rng.uniform(2.5, 4)
+        elif s in ('perch', 'sing'):
+            self.x, self.y = self._tip(g)
+            if s == 'perch' and self.st > self.wait:
+                if self.life <= 0 or self.n >= 3:
+                    self.face = self.rng.choice((-1, 1))
+                    self.go('out', 'move')
+                else:
+                    self.n += 1
+                    self.go('sing', 'special')
+                    self.sound = ('chime%d' % self.rng.randrange(5), 0.18)
+            elif s == 'sing' and self.st > 2.4:
+                self.go('perch', 'still')
+                self.wait = self.rng.uniform(3, 5)
+        else:
+            self.leave(70, dt, -30)
+
+    def draw_warbler(self, s, t):
+        brown, pale, dark = (150, 116, 76), (226, 206, 168), (90, 70, 50)
+        if self.state in ('in', 'out'):
+            up = int(t * 16) % 2
+            pygame.draw.ellipse(s, brown, (2, 4, 7, 4))
+            s.fill(dark, (3, 2 if up else 6, 4, 2))
+            s.fill((200, 170, 90), (0, 5, 2, 1))
+            return
+        pygame.draw.ellipse(s, brown, (2, 2, 7, 5))
+        s.fill(pale, (3, 5, 5, 2))
+        s.fill(dark, (7, 4, 3, 1))
+        s.set_at((3, 3), (30, 26, 24))
+        s.fill(pale, (2, 2, 2, 1))
+        if self.state == 'sing' and int(t * 10) % 2:
+            s.set_at((0, 2), (200, 170, 90))
+            s.set_at((0, 4), (200, 170, 90))
+            s.set_at((1, 3), (120, 60, 60))
+        else:
+            s.fill((200, 170, 90), (0, 3, 2, 1))
+        s.fill(dark, (5, 7, 1, 2))
+
+    # ------------------------------------------------ muskrat (from the old landing)
+    def init_muskrat(self, g):
+        import shore
+        self.x, self.y = shore.LANDING.centerx + 4, 214.0
+        self.face = 1
+        self.alpha = 0
+        self.tx, self.ty = self.rng.uniform(380, 440), self.rng.uniform(262, 290)
+        self.wake = 0.0
+        self.go('in', 'move')
+
+    def upd_muskrat(self, dt, g):
+        s = self.state
+        self.wake -= dt
+        if s in ('in', 'swim'):
+            self.alpha = min(255, self.alpha + 200 * dt)
+            if self.wake <= 0:
+                self.wake = 0.5
+                g.world.ripple(self.x - self.face * 5, self.y + 1, 4, 6, 90)
+            if self.toward(self.tx, self.ty, 16, dt):
+                self.go('float', 'still')
+                self.wait = self.rng.uniform(3, 5)
+        elif s == 'float':
+            if self.st > self.wait:
+                if self.life <= 0 or self.n >= 2:
+                    self.go('dive', 'move')
+                    g.world.ripple(self.x, self.y + 1, 6, 8, 140)
+                    self.sound = ('plop', 0.3)
+                else:
+                    self.n += 1
+                    self.go('groom', 'special')
+        elif s == 'groom':
+            if self.st > 2.6:
+                self.tx = max(330, min(560, self.x + self.rng.uniform(-60, 60)))
+                self.ty = max(250, min(296, self.y + self.rng.uniform(-14, 14)))
+                self.go('swim', 'move')
+        else:
+            self.alpha = max(0, self.alpha - 300 * dt)
+            if self.alpha <= 0:
+                self.gone = True
+
+    def draw_muskrat(self, s, t):
+        fur, dark, nose = (112, 82, 58), (78, 56, 40), (60, 44, 36)
+        if self.state == 'groom':
+            pygame.draw.ellipse(s, fur, (5, 1, 7, 6))
+            s.fill(dark, (6, 1, 3, 2))
+            paw = int(t * 8) % 2
+            s.fill(nose, (4, 2 + paw, 2, 2))
+            s.set_at((6, 2), (20, 18, 18))
+            s.fill((180, 210, 220), (2, 6, 12, 1))
+            return
+        pygame.draw.ellipse(s, fur, (3, 2, 10, 4))
+        s.fill(dark, (4, 2, 7, 1))
+        s.fill(nose, (2, 3, 2, 2))
+        s.set_at((4, 2), (20, 18, 18))
+        if self.state in ('in', 'swim'):
+            s.fill((96, 140, 70), (0, 3, 3, 1))           # a mouthful of reeds
+            s.set_at((0, 2), (96, 140, 70))
+        s.fill((60, 46, 36), (13, 4, 3, 1))
+        s.fill((190, 216, 226), (2, 6, 13, 1))
+
+    # ------------------------------------------------ bittern (hidden in the reeds; needs the hide)
+    def init_bittern(self, g):
+        import shore
+        self.x = self.rng.uniform(452, 530)
+        self.y = shore.SHALLOWS - 2.0
+        self.alpha = 0
+        self.face = self.rng.choice((-1, 1))
+        self.go('in', 'move')
+
+    def upd_bittern(self, dt, g):
+        s = self.state
+        if s == 'in':
+            self.alpha = min(255, self.alpha + 120 * dt)
+            if self.alpha >= 255:
+                self.go('stand', 'still')
+                self.wait = self.rng.uniform(3, 5)
+        elif s == 'stand':
+            if self.st > self.wait:
+                if self.life <= 0 or self.n >= 2:
+                    self.go('out', 'move')
+                else:
+                    self.n += 1
+                    self.go('boom', 'special')
+                    self.sound = ('hoot', 0.22)
+        elif s == 'boom':
+            if self.st > 2.8:
+                self.go('stand', 'still')
+                self.wait = self.rng.uniform(4, 6)
+        else:
+            self.alpha = max(0, self.alpha - 140 * dt)
+            if self.alpha <= 0:
+                self.gone = True
+
+    def draw_bittern(self, s, t):
+        buff, streak, dark, beak = (196, 160, 104), (130, 96, 58), (70, 52, 36), (200, 180, 90)
+        leg = (150, 160, 90)
+        s.fill(leg, (6, 17, 1, 5))
+        s.fill(leg, (8, 17, 1, 5))
+        pygame.draw.ellipse(s, buff, (3, 9, 9, 10))
+        for y in range(10, 18, 2):
+            s.fill(streak, (5, y, 5, 1))
+        if self.state == 'boom':
+            puff = int(abs(math.sin(t * 3)) * 2)
+            pygame.draw.ellipse(s, lighten(buff, 0.1), (3 - puff // 2, 7, 8 + puff, 7))
+            s.fill(buff, (5, 1, 4, 8))                      # neck stretched, beak at the sky
+            for y in range(2, 8, 2):
+                s.fill(streak, (6, y, 2, 1))
+            s.fill(beak, (6, 0, 2, 2))
+            s.set_at((5, 3), (20, 18, 18))
+            return
+        s.fill(buff, (4, 5, 4, 5))
+        s.fill(dark, (4, 4, 4, 1))
+        s.set_at((4, 6), (20, 18, 18))
+        s.fill(beak, (0, 6, 4, 1))
+        for y in range(6, 10, 2):
+            s.fill(streak, (5, y, 2, 1))
 
     # ------------------------------------------------ otter
     def init_otter(self, g):
@@ -1231,6 +1420,8 @@ def snap(g):
         g.audio.play('jingle3' if new else 'jingle2', 0.5)
     g.snap_card = {'surf': surf, 'name': sp['name'], 'stars': stars, 'new': new, 'better': better and not new,
                    'reward': reward, 't': 3.4}
+    import coop
+    coop.on_photo(g, sp['id'])            # counts for an expedition with friends
     g.check_badges()
     g.save()
     return stars
@@ -1306,7 +1497,8 @@ def portrait(cid, t=0.0):
         c.alpha, c.hidden = 255, False
         c.state = {'heron': 'stand', 'kingfisher': 'perch', 'dragonfly': 'perch', 'turtle': 'bask',
                    'otter': 'float', 'deer': 'look', 'fox': 'listen', 'owl': 'perch', 'loon': 'swim',
-                   'beaver': 'gnaw', 'swans': 'heart', 'bats': 'fly', 'moose': 'lift', 'stag': 'stand'}[cid]
+                   'beaver': 'gnaw', 'swans': 'heart', 'bats': 'fly', 'moose': 'lift', 'stag': 'stand',
+                   'warbler': 'sing', 'muskrat': 'groom', 'bittern': 'boom'}[cid]
         c.st = 1.0
         if cid == 'bats':
             c.bats = [(12, 6), (22, 10), (30, 5)]
@@ -1384,7 +1576,10 @@ def draw_viewfinder(g, s):
 def draw_page(g, s, rect):
     ui = g.ui
     gx, gy = rect.x + 28, rect.y + 90
-    tw, th = 172, 110
+    rows = (len(SPECIES) + 3) // 4
+    tw, th = 172, min(110, (rect.h - 146) // rows - 6)
+    ph_h = th - 38                     # the photo in each tile, 16:9
+    ph_w = ph_h * 16 // 9
     hover = None
     for n, sp in enumerate(SPECIES):
         col, row = n % 4, n // 4
@@ -1396,7 +1591,7 @@ def draw_page(g, s, rect):
         sel = n == g.n_sel
         ui.tile(s, tr, (252, 248, 236) if hov or sel else (240, 230, 210),
                 (240, 190, 60) if rec and rec['stars'] >= 3 else (150, 180, 130) if rec else (186, 170, 150), sel)
-        pr = pygame.Rect(tr.x + 22, tr.y + 8, 128, 72)
+        pr = pygame.Rect(tr.centerx - ph_w // 2, tr.y + 8, ph_w, ph_h)
         if rec:
             ph = photo(g, sp['id']) or _portrait_cached(g, sp['id'])
             s.blit(pygame.transform.scale(ph, pr.size), pr)

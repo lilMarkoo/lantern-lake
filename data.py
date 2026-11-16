@@ -467,6 +467,9 @@ BADGES = [
     dict(id='green', name='Green Thumb', desc='Pick 40 crops from the cabin garden.', reward=250),
     dict(id='spotter', name='Spotter', desc='Photograph 8 different animals.', reward=150),
     dict(id='naturalist', name='Field Guide', desc='Photograph every animal on the Nature page.', reward=600),
+    dict(id='restorer', name='Shorekeeper', desc='Finish all three shoreline projects.', reward=400),
+    dict(id='rosie', name="Rosie's Secret", desc='Follow Biscuit all the way to the hidden bench.', reward=300),
+    dict(id='outing', name='Good Company', desc='Finish an expedition with friends.', reward=200),
 ]
 TANK_SIZE = 8
 

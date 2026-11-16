@@ -42,6 +42,16 @@ CATALOGUE = [
     F('toybox', 'Feather Wand', 80, 'floor', 'A toy for Biscuit. She goes completely wild.'),
     dict(F('lens', 'Lighthouse Lens', 0, 'floor', "Rowan's old lens from Gull Point. It throws rainbows."),
          gift=True),
+    # found with Biscuit (discover.py) and earned on expeditions with friends (coop.py)
+    dict(F('lureboard', "Rosie's Lure Board", 0, 'wall', "Grandma Rosie's old lures, the ones Biscuit found."),
+         gift=True),
+    dict(F('tacklebox', "Rosie's Tackle Box", 0, 'floor', 'A dented green tin from under her bench. Still smells '
+                                                         'of the lake.'), gift=True),
+    dict(F('pennant', 'Expedition Pennant', 0, 'wall', 'From your first expedition with friends.'), gift=True),
+    dict(F('teamphoto', 'Expedition Photo', 0, 'wall', 'Everyone squeezed onto the dock for one picture.'),
+         gift=True),
+    dict(F('explantern', 'Expedition Lantern', 0, 'floor', 'Lit at the feast, and it never quite went out.'),
+         gift=True),
     F('rug_round', 'Braided Rug', 80, 'rug', 'Round and soft, in autumn colours.'),
     F('rug_stripe', 'Striped Rug', 100, 'rug', 'Blue and cream, like a lake cabin should be.'),
     F('rug_fish', 'Fish Rug', 140, 'rug', 'Shaped like a very flat trout.'),
@@ -271,6 +281,8 @@ class Room:
                     _glow(gl, (x, FEET - 10), 50 + math.sin(t * 9) * 2, (255, 160, 90), nf)
                 elif iid == 'lens':
                     _glow(gl, (x, FEET - 30), 60, (220, 230, 255), nf)
+                elif iid == 'explantern':
+                    _glow(gl, (x, FEET - 14), 40, (255, 200, 120), nf)
             _glow(gl, (160, 48), 40, (200, 210, 255) if env.season is not None else (255, 255, 255), nf * 0.4)
             s.blit(gl, (0, 0), special_flags=pygame.BLEND_RGB_ADD)
         return s
@@ -446,6 +458,48 @@ def _wall_item(s, g, iid, pos, t):
         pygame.draw.lines(s, (120, 140, 90), False, pts)
         for i, p in enumerate(pts[1:-1:2]):
             pygame.draw.circle(s, cols[i % 5], (p[0], p[1] + 2), 2)
+    elif iid == 'lureboard':
+        r = pygame.Rect(cx - 18, cy - 12, 36, 24)
+        s.fill((96, 66, 44), r.inflate(2, 2))
+        s.fill((150, 112, 74), r)
+        for y in range(r.y + 3, r.bottom, 5):
+            s.fill((136, 100, 66), (r.x, y, r.w, 1))
+        have = getattr(g, 'finds', None)
+        have = have['lures'] if have else ('spinner', 'feather', 'minnow')
+        for i, lid in enumerate(('spinner', 'feather', 'minnow')):
+            x = r.x + 7 + i * 11
+            s.fill((210, 206, 196), (x, r.y + 3, 1, 1))              # a little hook on the board
+            if lid not in have:
+                continue
+            if lid == 'spinner':
+                pygame.draw.ellipse(s, (210, 70, 60), (x - 2, r.y + 6, 5, 9))
+                s.set_at((x, r.y + 8), (250, 200, 190))
+                s.fill((200, 200, 200), (x, r.y + 4, 1, 2))
+            elif lid == 'feather':
+                pygame.draw.line(s, (80, 130, 200), (x, r.y + 5), (x + 1, r.y + 16))
+                pygame.draw.line(s, (240, 240, 250), (x - 1, r.y + 8), (x - 1, r.y + 12))
+                s.set_at((x + 2, r.y + 9), (40, 50, 90))
+            else:
+                pygame.draw.ellipse(s, (226, 200, 150), (x - 2, r.y + 6, 5, 10))
+                s.set_at((x, r.y + 8), (30, 30, 30))
+                s.fill((120, 160, 120), (x - 1, r.y + 12, 3, 2))
+    elif iid == 'pennant':
+        pygame.draw.line(s, (110, 80, 50), (cx - 18, cy - 9), (cx + 18, cy - 9))
+        pygame.draw.polygon(s, (60, 110, 150), [(cx - 16, cy - 8), (cx + 16, cy - 8), (cx, cy + 12)])
+        pygame.draw.polygon(s, (230, 190, 90), [(cx - 6, cy - 5), (cx + 6, cy - 5), (cx, cy + 3)])
+        s.fill((240, 236, 220), (cx - 12, cy - 7, 24, 1))
+    elif iid == 'teamphoto':
+        r = pygame.Rect(cx - 17, cy - 12, 34, 24)
+        s.fill((90, 64, 44), r.inflate(4, 4))
+        s.fill((246, 240, 226), r)
+        pic = r.inflate(-4, -6)
+        s.fill((150, 190, 210), pic)
+        s.fill((96, 140, 170), (pic.x, pic.y + 9, pic.w, pic.h - 9))
+        s.fill((140, 100, 66), (pic.x, pic.bottom - 4, pic.w, 2))
+        for i, col in enumerate(((210, 90, 80), (90, 130, 200), (230, 190, 80), (120, 170, 110))):
+            px = pic.x + 4 + i * 7
+            s.fill(col, (px, pic.bottom - 9, 3, 5))
+            s.fill((236, 200, 170), (px, pic.bottom - 11, 3, 2))
     elif iid == 'lakemap':
         r = pygame.Rect(cx - 17, cy - 13, 34, 26)
         s.fill((232, 214, 170), r)
@@ -576,6 +630,23 @@ def _floor_item(s, g, iid, x, t, env):
                 ex, ey = x + math.cos(a) * 26, y - 30 + math.sin(a) * 10 - 10
                 s.fill((250, 180, 200), (int(ex), int(ey), 2, 1))
                 s.fill((180, 230, 200), (int(ex) + 2, int(ey), 2, 1))
+    elif iid == 'tacklebox':
+        s.fill((70, 110, 80), (x - 10, y - 9, 20, 9))
+        s.fill((90, 136, 98), (x - 10, y - 11, 20, 3))
+        s.fill((56, 88, 64), (x - 10, y - 8, 20, 1))
+        s.fill((200, 190, 150), (x - 2, y - 7, 4, 2))
+        pygame.draw.arc(s, (60, 70, 70), (x - 4, y - 15, 8, 7), 0, math.pi, 1)
+        s.set_at((x + 6, y - 5), (180, 90, 70))
+    elif iid == 'explantern':
+        s.fill((70, 60, 52), (x - 4, y - 2, 8, 2))
+        lit = env.nf > 0.3
+        s.fill((255, 214, 140) if lit else (230, 200, 150), (x - 3, y - 12, 6, 10))
+        s.fill((70, 60, 52), (x - 4, y - 13, 8, 2))
+        for xx in (x - 4, x + 3):
+            s.fill((70, 60, 52), (xx, y - 12, 1, 10))
+        pygame.draw.arc(s, (70, 60, 52), (x - 3, y - 18, 6, 6), 0, math.pi, 1)
+        if lit:
+            s.fill((255, 246, 200), (x - 1, y - 9, 2, 4))
     elif iid == 'toybox':
         s.fill((150, 110, 160), (x - 8, y - 8, 16, 8))
         s.fill((130, 90, 140), (x - 8, y - 8, 16, 1))
@@ -732,11 +803,13 @@ def icon(g, iid):
     ps = photo_spec(iid)
     # a framed photo's icon changes when you take a better photo
     key = (iid, id(wildlife.photo(g, ps['id']))) if ps else iid
+    if iid == 'lureboard':                  # shows the lures you've found so far
+        key = (iid, tuple(getattr(g, 'finds', {}).get('lures', ())))
     if key in _icons:
         return _icons[key]
     tmp = pygame.Surface((48, 40), pygame.SRCALPHA)
     kind = item_kind(iid)
-    if ps:
+    if ps or iid == 'lureboard':
         _wall_item(tmp, g, iid, (24, 22), 0.0)
     elif sp or kind == 'wall':
         _wall_item(tmp, _IconGame, iid, (24, 20), 0.0)

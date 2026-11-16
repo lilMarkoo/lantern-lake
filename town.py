@@ -595,6 +595,9 @@ class Town:
 
     def nearest(self, g):
         """The closest thing you could talk to or step into: ('folk', id) or ('place', id), or None."""
+        import discover
+        if discover.near_find(g):
+            return ('cat', None)                  # Biscuit is waiting by what she found
         best, bd = None, 9999
         for k, f in self.folk.items():
             if self.folk_here(k, g.minute):
@@ -613,6 +616,8 @@ class Town:
         if not n:
             return None
         kind, key = n
+        if kind == 'cat':
+            return 'See what Biscuit found'
         if kind == 'folk':
             return 'Talk to %s' % FOLK[key]['name']
         p = PLACE_BY_ID[key]
@@ -664,7 +669,8 @@ class Town:
         want = self.x - W / 2
         self.scroll += (max(0.0, min(TOWN_W - W, want)) - self.scroll) * min(1.0, dt * 6)
         import biscuit
-        if biscuit.follows(g):
+        import discover
+        if biscuit.follows(g) and not discover.drive(g, self, dt):
             self.cat.update(dt, self.x, self.face)
         # townsfolk
         m = g.minute
@@ -736,6 +742,9 @@ class Town:
     # ------------------------------------------------------------ input
     def click(self, g, wx, wy):
         tx = wx + self.scroll
+        import discover
+        if discover.click(g, tx, wy, GROUND):
+            return
         for k, f in self.folk.items():
             if self.folk_here(k, g.minute) and abs(f['x'] - tx) < 8 and GROUND - 34 < wy < GROUND + 2:
                 self.walk_to(f['x'] - 12 * (1 if f['x'] > self.x else -1), lambda k=k: self.open_talk(g, k))
@@ -757,7 +766,10 @@ class Town:
         if not n:
             g.toast('Nothing here. Walk up to a door or a neighbour.', (150, 140, 130))
             return
-        if n[0] == 'folk':
+        if n[0] == 'cat':
+            import discover
+            discover.reveal(g)
+        elif n[0] == 'folk':
             self.open_talk(g, n[1])
         else:
             self.use_place(g, n[1])
@@ -1145,6 +1157,8 @@ class Town:
         import biscuit
         if biscuit.follows(g):
             self.cat.draw(s, g, t, sc, GROUND)
+            import discover
+            discover.draw_town(s, g, t, sc, GROUND)
         x = int(self.x - sc)
         walker(s, x, GROUND, self.face, self.step, actors.SHIRT[season], (112, 72, 52), g.hat, season,
                umbrella=(90, 130, 110) if rain else None)

@@ -526,6 +526,9 @@ class World:
             biscuit.draw_gift(near, g, t)
             import garden
             garden.draw_world(near, g, t)
+            if hasattr(g, 'shore'):
+                import shore
+                shore.draw_world(near, g, t)
         wildlife.draw(near, g, t)
         g.draw_actors(near)
         if hasattr(g, 'story'):

@@ -60,6 +60,8 @@ import tutorial
 import coop
 import garden as gardenmod
 import wildlife
+import shore as shoremod
+import discover
 import pad as padmod
 import ui as U
 from art import W, H, DECK_Y
@@ -242,6 +244,11 @@ class Game:
         self.fishing = Fishing(self)
         self.net = netmod.Net(set(pixfont.GLYPHS))
         self.solo = None             # your own calendar, kept safe while you visit a friend's lake
+        self.visit_shore = None      # the host's shore while you visit (shore.py)
+        self.shore_sel = 'reeds'
+        self.coop_tab = 'gifts'
+        self.l_page = 0              # the journal's Letters tab: 0 letters, 1 Rosie's diary
+        self.b_page = 0              # the journal's Badges tab page
         self.host_clock = None       # guest: [host minutes, when heard, minutes per second]
         self.clock_jumps = 0
         self.chat = []               # [name, text, colour, seconds left]
@@ -514,8 +521,12 @@ class Game:
 
     def new_game_state(self):
         self.race = None             # a fishing race with friends online (coop.py)
+        self.exp = None              # an expedition with friends online (coop.py)
         self.gift_to = None
         self.garden = gardenmod.new()   # the cabin garden (garden.py)
+        self.shore = shoremod.new()     # restoring the shore by the dock (shore.py)
+        self.finds = discover.new()     # what Biscuit has found in Fernwick (discover.py)
+        self.disc = None
         self.nature = {}             # animals photographed: id -> {'stars', 'day', 'n', 'at'} (wildlife.py)
         self.photos = {}             # their best photos this session, and drawn stand-ins
         self.critter = None          # the animal visiting right now
@@ -610,7 +621,7 @@ class Game:
                     hunts=self.hunts, pot=self.pot, sky=self.sky, ice_hole=self.ice_hole,
                     cat_bond=self.cat_bond, cat_day=self.cat_day, cat_gift=self.cat_gift,
                     cat_follow=self.cat_follow, home=self.home, tut=self.tut, tut_day=self.tut_day,
-                    garden=self.garden, nature=self.nature)
+                    garden=self.garden, nature=self.nature, shore=self.shore, finds=self.finds)
         if self.solo:
             data.update(self.solo)       # visiting a friend: your own lake keeps its own day and weather
         try:
@@ -719,7 +730,7 @@ class Game:
                   'museum', 'friends', 'friend_gifts', 'buffs', 'jobs', 'tickets', 'projects', 'town_day',
                   'recipes', 'pantry', 'meal', 'upgrades', 'cook_best', 'story', 'heart_seen', 'market', 'hunts', 'pot', 'sky', 'ice_hole',
                   'cat_bond', 'cat_day', 'cat_gift', 'cat_follow', 'home', 'tut', 'tut_day', 'garden',
-                  'nature'):
+                  'nature', 'shore', 'finds'):
             if k in d:
                 setattr(self, k, d[k])
         self.place = 'lake'
@@ -742,6 +753,8 @@ class Game:
         biscuit.clean(self)
         self.home = homemod.clean(self.home)
         self.garden = gardenmod.clean(self.garden)
+        self.shore = shoremod.clean(self.shore)
+        self.finds = discover.clean(self.finds)
         self.nature = {k: {'stars': max(1, min(3, int(v.get('stars', 1)))), 'day': int(v.get('day', 0)),
                            'n': max(1, int(v.get('n', 1))),
                            'at': v.get('at') if v.get('at') in SPOT_BY_ID or v.get('at') == 'town' else None}
@@ -904,6 +917,7 @@ class Game:
             tn.x, tn.face, tn.target, tn.on_arrive, tn.scroll = 60.0, 1, None, None, 0.0
             tn.cat.x = None
             biscuit.on_town(self)
+            discover.on_town(self)
             n = self.stats.get('town_visits', 0)
             self.stats['town_visits'] = n + 1
             if n == 0:
@@ -1286,6 +1300,9 @@ class Game:
             'green': st.get('harvested', 0) >= 40,
             'spotter': len(self.nature) >= 8,
             'naturalist': len(self.nature) >= len(wildlife.SPECIES),
+            'restorer': all(shoremod.done(self, p['id']) for p in shoremod.PROJECTS),
+            'rosie': bool(self.finds.get('secret')),
+            'outing': self.stats.get('expeditions', 0) >= 1,
         }
         for b in BADGES:
             if b['id'] not in self.badges and cond.get(b['id']):
@@ -1416,6 +1433,7 @@ class Game:
         biscuit.morning(self)
         yeartwo.morning(self)
         gardenmod.morning(self)
+        shoremod.morning(self)
         """Morning routine: forecast, the day's letter, birthdays and events."""
         d = self.day
         self.ensure_forecast()
@@ -1727,6 +1745,8 @@ class Game:
             if self.has('pot'):
                 items.append(('Crab pot', lambda: seasons.pot_action(self)))
             items.append(('Mailbox', self.read_request))
+            if self.shore.get('told') and self.visit_shore is None:
+                items.append(('The Shore', lambda: shoremod.open_panel(self)))
             if self.wagon_here():
                 items.append(("Wren's Wagon", lambda: (setattr(self, 'shop_tab', 'wagon'), self.toggle('shop'))))
         if lake and self.has_boat():
@@ -1739,7 +1759,7 @@ class Game:
         items.append(('Music on' if self.settings['music'] <= 0 else 'Music off', key(pygame.K_m)))
         if self.net.online:
             items.append(('Chat', key(pygame.K_RETURN)))
-            items.append(('Friends: gifts and races', lambda: self.toggle('coop')))
+            items.append(('Friends: gifts, races, outings', lambda: self.toggle('coop')))
         return items
 
     def open_quick(self):
@@ -1818,6 +1838,8 @@ class Game:
             return True
         if gardenmod.AREA.collidepoint(wx, wy):
             self.open_cabin_tab('garden')
+            return True
+        if self.overlay is None and shoremod.click(self, wx, wy):
             return True
         if self.wagon_here() and WAGON_RECT.collidepoint(wx, wy):
             self.shop_tab = 'wagon'
@@ -2613,6 +2635,8 @@ class Game:
                 self.draw_cabin(scr)
             elif ov == 'coop':
                 coop.draw_panel(self, scr)
+            elif ov == 'shore':
+                shoremod.draw_panel(self, scr)
             elif ov == 'calendar':
                 almanac.draw(self, scr)
             elif ov == 'map':
@@ -2821,8 +2845,9 @@ class Game:
         return True
 
     def objectives(self):
-        """What the HUD can track: today's festival and the open request. The live festival comes first."""
-        out = []
+        """What the HUD can track: an expedition with friends, today's festival and the open request.
+        A live expedition or festival comes first."""
+        out = ['expedition'] if coop.exp_live(self) else []
         fest = self.festival_today() and not self.festival.get('done')
         req = self.request and not self.request.get('done')
         if fest and self.minute >= self.festival['start']:
@@ -2909,6 +2934,19 @@ class Game:
                 ui.blit_text(s, 'To beat: %s, %s' % (lead_nm, self.fest_score(fest['rule'], lead_sz)),
                              (r6.x + 58, r6.y + 34), 'small', U.SOFT, maxw=tw)
 
+    def _hud_expedition(self, s, y, CW, objs):
+        ui = self.ui
+        r = ui.panel(s, (16, y, CW, 64), fill=(232, 242, 246), border=(90, 130, 160), radius=16)
+        cx, cy = r.x + 30, r.y + 32                  # a little pennant on a pole
+        pygame.draw.line(s, U.BROWN, (cx - 8, cy - 14), (cx - 8, cy + 14), 3)
+        pygame.draw.polygon(s, (60, 110, 150), [(cx - 6, cy - 14), (cx + 14, cy - 7), (cx - 6, cy)])
+        pygame.draw.circle(s, (230, 190, 90), (cx, cy - 7), 3)
+        ui.hotspot(r, lambda: (setattr(self, 'coop_tab', 'exp'), self.toggle('coop')))
+        extra = self._hud_switch(s, r, objs, 'expedition') if len(objs) > 1 else 0
+        title, line = coop.exp_hud(self)
+        ui.blit_text(s, title, (r.x + 58, r.y + 10), 'smallb', U.INK, maxw=CW - 70 - extra)
+        ui.blit_text(s, line, (r.x + 58, r.y + 34), 'small', U.SOFT, maxw=CW - 70 - extra)
+
     def day_lines(self):
         """The day's notes under the objective: where you are, snacks, visitors, sky events..."""
         lines = []
@@ -2942,6 +2980,12 @@ class Game:
         gl = gardenmod.hud_line(self)
         if gl:
             lines.append(('garden', gl))
+        dl = discover.hud_line(self)
+        if dl:
+            lines.append(('paw', dl))
+        sl2 = shoremod.hud_line(self)
+        if sl2:
+            lines.append(('reeds', sl2))
         wl = wildlife.hud_line(self)
         if wl:
             lines.append(('critter', wl))
@@ -3008,6 +3052,9 @@ class Game:
         elif cur == 'festival':
             self._hud_festival(s, y, CW, objs)
             y += 72
+        elif cur == 'expedition':
+            self._hud_expedition(s, y, CW, objs)
+            y += 72
         # today's other notes: they step aside while a cast is out (and always while reeling)
         quiet = (self.hud_tuck > 0.5) if style != 'full' else self.fishing.state in ('fight', 'landing')
         if not quiet:
@@ -3021,6 +3068,9 @@ class Game:
                     elif kind == 'garden':
                         ui.hotspot(pygame.Rect(r7.x, r7.y + 10 + i * 30, r7.w, 30),
                                    lambda: self.open_cabin_tab('garden'))
+                    elif kind == 'reeds':
+                        ui.hotspot(pygame.Rect(r7.x, r7.y + 10 + i * 30, r7.w, 30),
+                                   lambda: shoremod.open_panel(self))
                     elif kind == 'festival' and text.startswith('Legend'):
                         ui.hotspot(pygame.Rect(r7.x, r7.y + 10 + i * 30, r7.w, 30),
                                    lambda: (self.set_lan_tab('legends'), self.open_lanterns()))
@@ -3422,11 +3472,18 @@ class Game:
                           lambda i=i: setattr(self, 'j_page', i), 'tab_on' if self.j_page == i else 'tab',
                           font='smallb')
             fx = rect.x + 352
+        if self.j_tab == 'letters' and self.diary_entries():
+            for i, label in enumerate(('Letters', "Rosie's diary")):
+                ui.button(s, (rect.x + 28 + i * 104, rect.bottom - 52, 98 + 48 * i, 36), label,
+                          lambda i=i: setattr(self, 'l_page', i), 'tab_on' if self.l_page == i else 'tab',
+                          font='smallb')
+            fx = rect.x + 300
         if self.j_tab == 'nature':
             return wildlife.draw_page(self, s, rect)
-        ui.blit_text(s, 'Species  %d / %d      Letters  %d / %d      Fish caught  %d'
-                     % (caught, len(FISH), len(self.letters), len(LETTERS), self.total),
-                     (fx, rect.bottom - 40), 'smallb', U.SOFT)
+        if self.j_tab != 'badges':              # the Badges tab has its own footer and page buttons
+            ui.blit_text(s, 'Species  %d / %d      Letters  %d / %d      Fish caught  %d'
+                         % (caught, len(FISH), len(self.letters), len(LETTERS), self.total),
+                         (fx, rect.bottom - 40), 'smallb', U.SOFT)
         if self.j_tab == 'letters':
             return self.draw_letters_tab(s, rect)
         if self.j_tab == 'badges':
@@ -3515,9 +3572,39 @@ class Game:
                 ui.blit_text(s, line, (dr.x + 18, y + 4), 'small', (90, 120, 150))
                 y += 22
 
+    def diary_entries(self):
+        """The diary pages Biscuit has found, in order, then the letter from the tin under the bench."""
+        out = [discover.page_letter(i) for i in sorted(self.finds['pages'])]
+        if self.finds.get('secret'):
+            out.append(discover.SECRET_LETTER)
+        return out
+
     def draw_letters_tab(self, s, rect):
         ui = self.ui
         y = rect.y + 96
+        diary = self.diary_entries()
+        if self.l_page == 1 and diary:
+            for n, L in enumerate(diary):
+                col, row = n % 2, n // 2
+                r = pygame.Rect(rect.x + 34 + col * 490, y + row * 86, 470, 74)
+                hov = r.collidepoint(ui.mouse)
+                ui.tile(s, r, (252, 246, 228) if hov else (246, 236, 212), (176, 146, 110))
+                pg = pygame.Rect(r.x + 20, r.y + 16, 28, 40)          # a torn diary page
+                pygame.draw.rect(s, (250, 242, 220), pg)
+                pygame.draw.rect(s, (176, 146, 110), pg, 1)
+                for k in range(4):
+                    pygame.draw.line(s, (200, 180, 150), (pg.x + 5, pg.y + 9 + k * 7), (pg.right - 5, pg.y + 9 + k * 7))
+                if L is discover.SECRET_LETTER:
+                    pygame.draw.circle(s, (196, 80, 80), (pg.right - 4, pg.y + 4), 5)
+                ui.blit_text(s, L[0], (r.x + 66, r.y + 12), 'smallb', U.INK, maxw=r.w - 80)
+                ui.blit_text(s, L[2], (r.x + 66, r.y + 40), 'small', U.SOFT)
+                ui.hotspot(r, lambda L=L: self.open_letter(L))
+            left = len(discover.PAGES) - len(self.finds['pages'])
+            if left:
+                ui.blit_text(s, '%d more page%s out there somewhere. Biscuit might know where.'
+                             % (left, '' if left == 1 else 's'), (rect.centerx, rect.bottom - 86), 'small',
+                             U.SOFT, 'center')
+            return
         if not self.letters:
             ui.blit_text(s, 'No letters yet. Bottles sometimes drift in on the current...', (rect.centerx, y + 120),
                          'body', U.SOFT, 'center')
@@ -3533,22 +3620,33 @@ class Game:
             ui.blit_text(s, sign, (r.x + 66, r.y + 40), 'small', U.SOFT)
             ui.hotspot(r, lambda L=LETTERS[idx]: self.open_letter(L))
 
+    BADGES_PER_PAGE = 16
+
     def draw_badges_tab(self, s, rect):
         ui = self.ui
         y0 = rect.y + 88
-        rh = min(48, 496 // ((len(BADGES) + 1) // 2))
-        for n, b in enumerate(BADGES):
+        per = self.BADGES_PER_PAGE
+        pages = (len(BADGES) + per - 1) // per
+        self.b_page = max(0, min(pages - 1, getattr(self, 'b_page', 0)))
+        shown = BADGES[self.b_page * per:(self.b_page + 1) * per]
+        if pages > 1:
+            for i in range(pages):
+                ui.button(s, (rect.x + 28 + i * 104, rect.bottom - 52, 98, 36), 'Page %d' % (i + 1),
+                          lambda i=i: setattr(self, 'b_page', i), 'tab_on' if self.b_page == i else 'tab',
+                          font='smallb')
+        rh = min(60, 496 // ((len(shown) + 1) // 2))
+        for n, b in enumerate(shown):
             col, row = n % 2, n // 2
             r = pygame.Rect(rect.x + 30 + col * 494, y0 + row * rh, 482, rh - 3)
             got = b['id'] in self.badges
             ui.tile(s, r, (252, 244, 222) if got else (240, 232, 216), U.GOLD if got else (196, 182, 162))
             U.medal(s, (r.x + 34, r.centery), got, 13)
-            ui.blit_text(s, b['name'], (r.x + 66, r.y + 2), 'smallb', U.INK if got else U.SOFT)
+            tight = rh < 46
+            ui.blit_text(s, b['name'], (r.x + 66, r.y + (2 if tight else 8)), 'smallb', U.INK if got else U.SOFT)
             desc = b['desc']
             if b['id'] == 'master' and not got:
                 desc += '  (%d / %d)' % yeartwo.master_progress(self)
-            tight = rh < 46
-            ui.blit_text(s, desc, (r.x + 66, r.y + (21 if tight else 23)), 'tiny' if tight else 'small', U.SOFT,
+            ui.blit_text(s, desc, (r.x + 66, r.y + (21 if tight else 30)), 'tiny' if tight else 'small', U.SOFT,
                          maxw=r.w - 66 - 84)
             ui.blit_text(s, 'Earned' if got else '+%d' % b['reward'], (r.right - 16, r.centery), 'smallb',
                          (110, 150, 90) if got else U.SOFT, 'midright')
@@ -4136,6 +4234,7 @@ class Game:
     def end_visit(self):
         self.host_clock = None
         self.mp_ready = False
+        self.visit_shore = None
         sv, self.solo = self.solo, None
         if not sv:
             return
@@ -4161,6 +4260,8 @@ class Game:
         fc = m.get('forecast')
         if isinstance(fc, dict):
             self.forecast = {str(k): v for k, v in list(fc.items())[:10] if str(k).isdigit() and v in WEATHERS}
+        if 'shore' in m:
+            self.visit_shore = shoremod.from_summary(m['shore'])     # draw the host's shore, not yours
         rate = MINUTES_PER_SECOND * _num(m.get('speed'), 1.0, 0.2, 40.0) if m.get('run', True) else 0.0
         self.host_clock = [day * 1440 + minute, self.t, rate]
         if snap:
@@ -4171,7 +4272,8 @@ class Game:
     def world_msg(self):
         return {'t': 'world', 'day': self.day, 'minute': round(self.minute, 2), 'weather': self.weather,
                 'forecast': {k: v for k, v in self.forecast.items() if int(k) >= self.day - 1},
-                'speed': self.day_speed(), 'run': self.rest_phase not in ('out', 'in')}
+                'speed': self.day_speed(), 'run': self.rest_phase not in ('out', 'in'),
+                'shore': shoremod.summary(self)}
 
     def guest_clock(self):
         hc = self.host_clock
@@ -4333,6 +4435,7 @@ class Game:
             self.add_chat('', '%s came to fish.' % ev[2], SYS_C)
             self.audio.play('jingle1', 0.5)
             self.net_world_t = 0
+            coop.on_joined(self)
         elif kind == 'left':
             self.add_chat('', '%s headed home.' % ev[2], SYS_C)
             self.toast('%s headed home. See you soon!' % ev[2], (150, 140, 130))
@@ -4364,6 +4467,8 @@ class Game:
             coop.on_gift(self, ev[1], ev[2])
         elif kind == 'race':
             coop.on_race(self, ev[1], ev[2])
+        elif kind == 'exp':
+            coop.on_exp(self, ev[1], ev[2])
         elif kind == 'world':
             self.on_world(ev[1])
         elif kind == 'sleep':
@@ -5593,6 +5698,11 @@ def run_bot(seconds):
             g.letter = None
             g.queue.clear()
             return
+        if discover.busy(g):                    # Biscuit is onto something: follow her and look
+            if discover.waiting(g) and tn.target is None:
+                did('follow_biscuit')
+                tn.walk_to(g.disc['x'] - 10, lambda: did('find') if discover.reveal(g) else None)
+            return
         if tn.target is not None:
             return
         if not tb['plan']:
@@ -5670,6 +5780,15 @@ def run_bot(seconds):
                 g.key_down(pygame.K_1 + rng.randrange(4))
             if rng.random() < dt / 25:
                 g.net.send({'t': 'chat', 'text': 'bot says hi at %s' % fmt_clock(g.minute)})
+            if g.net.peers and not coop.exp_live(g) and rng.random() < dt / 120:
+                coop.start_exp(g)                   # an outing together
+                did('exp_start')
+            ex = g.exp
+            if coop.exp_live(g) and all(coop.exp_goals(g)[:2]) and g.pantry and rng.random() < dt / 20 and                     coop.bring_dish(g, rng.choice(sorted(g.pantry))):
+                did('exp_dish')
+            if ex and ex.get('done') and not tb.get('exp_seen_%s' % ex.get('eid')):
+                tb['exp_seen_%s' % ex.get('eid')] = True
+                did('exp_feast')
             if (g.net.peers and not g.mp_ready and g.rest_phase is None and f.state == 'idle'
                     and (g.minute >= 1100 or g.minute < 300)):
                 g.try_rest()
@@ -5738,6 +5857,13 @@ def run_bot(seconds):
             for cid, n in list(g.garden['produce'].items()):
                 if n > 4:
                     gardenmod.sell(g, cid)
+            if g.shore['told']:                     # the shoreline projects, a step at a time
+                for p in shoremod.PROJECTS:
+                    if shoremod.can_do(g, p['id']) and g.coins > shoremod.next_step(g, p['id'])[1].get('coins', 0) + 200:
+                        shoremod.do_step(g, p['id'])
+                        did('shore_' + p['id'])
+                shoremod.open_panel(g)
+                g.draw()
             g.overlay = 'cabin'
             for tab in ('home', 'biscuit', 'tank', 'garden'):
                 g.cabin_tab = tab

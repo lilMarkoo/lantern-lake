@@ -29,7 +29,7 @@ NAME_MAX = 14
 CHAT_MAX = 80
 TIMEOUT = 20.0           # seconds of silence before a connection counts as lost
 HELLO_WAIT = 8.0
-RELAY = ('st', 'chat', 'catch', 'gift', 'race')
+RELAY = ('st', 'chat', 'catch', 'gift', 'race', 'exp')
 # guarding a lake that is open to the internet
 MAX_PENDING = 8          # connections that haven't said hello yet
 MAX_PENDING_PER_IP = 3

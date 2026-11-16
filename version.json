@@ -1,8 +1,11 @@
 {
-  "version": "1.7.0",
+  "version": "1.8.0",
   "notes": [
-    "A calmer HUD: the toolbar slides away while you fish, and one tracked objective card (arrow to switch).",
-    "New HUD setting in Options > Gameplay: Calm, Compact (small clock and bait) or Full.",
-    "Frame your wildlife photos and hang them on the cabin wall. Each frame is stamped with the season and place."
+    "Shoreline restoration: clear the litter, replant the reed beds, mend Grandma Rosie's old landing and build a wildlife hide. The lake changes as you go.",
+    "Three new animals to photograph once their homes are back: the Reed Warbler, the Muskrat and the Bittern (19 on the Nature page).",
+    "Biscuit's discoveries: on walks through Fernwick she sometimes runs off and waits by something she found. Follow her for pages of Rosie's diary, Rosie's old lures, and a secret at the end of the street.",
+    "Rosie's diary in the journal (Letters tab), plus a lure board and Rosie's tackle box for the cabin.",
+    "Expeditions with friends: catch three kinds of fish together, photograph an animal, then everyone brings a dish to a lakeside feast. Souvenirs for the cabin: a pennant, a group photo and an expedition lantern.",
+    "Three new badges (26 in all); the Badges tab now has two pages."
   ]
 }

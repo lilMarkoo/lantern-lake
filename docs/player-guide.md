@@ -303,6 +303,13 @@ teaches her a trick: High five, Roll over, Tail chase, Sit pretty and a Backflip
 a trick*) to see one. From two hearts she follows you up to Fernwick (you can switch that off), and some
 mornings she leaves a present by the door: a fish, a few coins, some bait, or a four-leaf clover.
 
+**Biscuit's discoveries.** On a walk through Fernwick, Biscuit sometimes stops, ears up, and trots off on her own
+(the more hearts she has, the more often). Follow her: she waits by what she found, under the bakery steps or
+behind the notice board, until you walk up and press **E** (or click her). Most finds are pages from Grandma
+Rosie's diary, which you can read again in the journal (*Letters*, then *Rosie's diary*). Others are Rosie's old
+handmade lures, which go up on a lure board in your cabin. She finds one thing a day at most. Find everything and
+she leads you somewhere new at the end of the street. After that she still turns up the odd coin or treat.
+
 ## Your cabin
 
 The cabin's **Home** tab shows your room. Click a spot on the wall or floor, then pick something from the
@@ -315,6 +322,23 @@ your best photo of it for 40 coins and hang it in any wall spot. Each frame carr
 season's colour, and the room tells you when and where you took it (*Summer 5, Lily Cove*). Take a better photo
 later and the frame shows the new one. The
 **Tank** tab of the catalogue changes the fish tank: Coral Garden, Mossy Log, Sunken Rowboat or Moonlit Tank.
+
+## The shoreline
+
+From your second day, Juniper writes about the shore by your dock, which has gone a bit wild since Grandma
+Rosie's time. Click the litter in the shallows past the dock (or the far shore across the water) to open
+**The Shore**, which has three projects. Each one changes how the lake looks and brings a new animal to photograph:
+
+- **Reed beds**: clear the litter with 4 lake junk (old boots, cans, driftwood), then plant reed shoots with
+  2 plant food and 50 coins. The reeds grow tall over three days and bring the **Reed Warbler**
+- **The old landing**: clip the brambles on the far shore once a day for three days (free, but it takes a little
+  while), then mend the planks with 3 lake junk and 150 coins. A lantern lights the landing at night, and a
+  **Muskrat** swims over from it mornings and evenings
+- **Wildlife hide**: once the reeds are tall and you have photographed six animals, build a hide for 300 coins.
+  At dawn and dusk a shy **Bittern** stands in the reeds and booms
+
+Finishing all three earns the *Shorekeeper* badge. On a controller, *The Shore* is in the quick menu (View) at
+your dock.
 
 ## The garden
 
@@ -340,7 +364,8 @@ a kingfisher diving from the dock pole, a dragonfly resting on it in summer, pai
 pads, otters cracking clams on their tummies, deer and foxes on the far shore, an owl on the pole at night, loons
 calling at dusk, a beaver slapping its tail, a pair of swans, bats sipping from the lake, a moose wading in the
 creek on grey mornings, and the mallards and frogs who are always about. Some say a white stag walks the far
-shore on snowy winter dawns.
+shore on snowy winter dawns. Restoring the shoreline brings three more: a reed warbler, a muskrat and a bittern
+(see *The shoreline*).
 
 Press **P** for photo mode and **Space** (or click) to take a photo. The camera frames whatever is in view and
 shows how good the shot would be: one star while the animal is on the move, two once it settles, and three if you
@@ -404,6 +429,12 @@ How it works:
 - Press **G** for the Friends window: click a fish in your basket to send it to a friend (it lands in their
   basket), or start a **fishing race**. Everyone gets three minutes, the most fish wins, and the winner gets
   100 coins
+- The Friends window's **Expedition** tab starts a shared outing. Together you catch three different kinds of
+  fish, someone photographs an animal, and then everyone brings a cooked dish from their pantry to a lakeside
+  feast (at least two dishes, or one each for bigger groups). The expedition shows as your tracked objective
+  and progress goes to the chat. At the feast everyone earns a souvenir for the cabin: a pennant, a framed
+  group photo, or an expedition lantern. Once you have all three, it's coins and golden lures instead. Friends
+  who join partway through catch up on the progress. *Call it a day* ends the outing early
 
 ## The calendar
 
@@ -430,11 +461,14 @@ The calendar (K) shows a three-day weather forecast, the moon phase and every ev
   ice auger or on rare nights, and 3 that arrive in year two, plus treasures and 10 bottled letters to collect
 - Aim your casts. Bubbling hotspots on the water give quicker bites and rarer fish
 - Cabin fish tank (8 fish) and a wardrobe with 7 hats and 5 outfits for Biscuit
-- 23 badges with coin rewards (Journal, Badges tab)
-- A cabin garden with 13 crops, and 16 animals to photograph for the Nature page and frame on your wall
+- 26 badges with coin rewards (Journal, Badges tab)
+- A cabin garden with 13 crops, and 19 animals to photograph for the Nature page and frame on your wall
+- Three shoreline restoration projects that change the lake and bring new animals
+- Biscuit's discoveries in Fernwick: Grandma Rosie's diary, her old lures, and a secret
 - A calm HUD that steps aside while you fish, with one tracked objective
 - Four legend hunts, one a season, with tales, clues, crafted lures and three-stage fights
-- Co-op for up to four players: over the internet with a room code, or on your home Wi-Fi
+- Co-op for up to four players: over the internet with a room code, or on your home Wi-Fi, with gifts, races
+  and shared expeditions
 - Shop: rods, bait, a dock lantern and nine dock decorations, including a telescope that brings more and luckier
   shooting stars
 - Daily fish requests from the villagers through the mailbox

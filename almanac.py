@@ -110,6 +110,16 @@ def event_icon(s, kind, center, scale=1.0):
         pygame.draw.circle(s, (200, 220, 236), (x, y + 1), 5)
         pygame.draw.circle(s, (90, 120, 150), (x, y + 1), 3)
         s.fill((250, 230, 150), (x + 5, y - 4, 3, 2))
+    elif kind == 'paw':                        # Biscuit's paw print
+        c = (214, 132, 70)
+        pygame.draw.ellipse(s, c, (x - 6, y - 1, 12, 9))
+        for dx, dy in ((-7, -4), (-3, -8), (3, -8), (7, -4)):
+            pygame.draw.circle(s, c, (x + dx, y + dy), 2)
+    elif kind == 'reeds':                      # a clump of reeds with a cattail
+        for dx, h in ((-6, 12), (-2, 16), (2, 14), (6, 10)):
+            pygame.draw.line(s, (96, 150, 76), (x + dx, y + 8), (x + dx + 1, y + 8 - h), 2)
+        s.fill((120, 80, 52), (x - 2, y - 9, 3, 6))
+        pygame.draw.line(s, (120, 170, 200), (x - 10, y + 9), (x + 10, y + 9), 2)
     elif kind == 'snack':
         pygame.draw.ellipse(s, (214, 150, 80), (x - 11, y - 5, 22, 12))
         pygame.draw.ellipse(s, (236, 190, 110), (x - 8, y - 5, 15, 5))
