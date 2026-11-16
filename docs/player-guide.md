@@ -167,7 +167,8 @@ in the rain and gather in the square in the evening. Shops keep opening hours.
 Fernwick has its own sounds: footsteps on the cobbles, the fountain, neighbours murmuring as you pass and, once
 the Bandstand is built, a squeezebox tune in the evenings that gets louder as you walk up to it.
 
-Every building has its own look: a rusty tin roof with a brass fish weathervane that turns in the wind on Old
+The street has depth: you see the side walls and roofs of the buildings turn as you walk past, and a verge of
+hedges, fences and flower barrels slides by in front. Every building has its own look: a rusty tin roof with a brass fish weathervane that turns in the wind on Old
 Tom's, a scalloped pink roof and dormer on the bakery, a green copper cupola on the aquarium, slate on the
 library, and a thatched cottage beside a saltbox. Shop signs swing on their brackets in the breeze. The street
 dresses up for each season:

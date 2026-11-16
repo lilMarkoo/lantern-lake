@@ -627,6 +627,198 @@ def _a_board(s, x):
     s.fill((230, 230, 220), (x - 1, GROUND - 12, 3, 2))
 
 
+# ---------------------------------------------------------------- depth: buildings with sides and roofs
+# Every building is a front face (drawn once into the street) pushed back into the screen. The back edges head
+# towards a vanishing point above the middle of the screen, so you see a little of each roof from above and the
+# side walls turn as you walk past.
+VP_Y = -100
+DEPTH_K = 1 / 600.0
+SIDE_BIAS = 0.32         # a steady three-quarter view: the shaded right-hand walls always show a little
+SIDE_SWING = 1.5         # and the sides turn as you walk past
+
+
+def _rect(x0, y0, x1, y1):
+    return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+
+
+def _volumes():
+    G = GROUND
+    v = []
+
+    def add(poly, depth, wall, roof, tex='courses'):
+        v.append(dict(poly=poly, depth=depth, wall=wall, roof=roof, tex=tex))
+    # Old Tom's: plank walls, tin roof
+    add(_rect(132, G - 74, 318, G - 4), 30, (92, 128, 140), (128, 144, 152), 'planks')
+    add([(126, G - 74), (225, G - 108), (324, G - 74)], 30, (92, 128, 140), (128, 144, 152), 'ribs')
+    # Mabel's: cream walls, rosy mansard, chimney
+    add(_rect(338, G - 82, 474, G - 4), 24, (244, 226, 200), (186, 98, 100))
+    add([(333, G - 82), (345, G - 106), (467, G - 106), (479, G - 82)], 24, (244, 226, 200), (186, 98, 100), 'tiles')
+    add(_rect(436, G - 120, 448, G - 102), 8, (150, 130, 124), (126, 108, 104), 'bricks')
+    # the aquarium: stone, a lead roof behind the pediment
+    add(_rect(862, G - 90, 1084, G - 4), 34, (196, 190, 178), (150, 152, 160), 'bricks')
+    add([(854, G - 90), (973, G - 118), (1092, G - 90)], 34, (196, 190, 178), (150, 152, 160), 'tiles')
+    # the town hall and its clock tower
+    add(_rect(1108, G - 80, 1276, G - 4), 28, (170, 92, 76), (90, 92, 110), 'bricks')
+    add([(1102, G - 80), (1192, G - 102), (1282, G - 80)], 28, (170, 92, 76), (90, 92, 110), 'tiles')
+    add(_rect(1174, G - 140, 1210, G - 80), 22, (170, 92, 76), (90, 92, 110), 'bricks')
+    add([(1170, G - 140), (1192, G - 166), (1214, G - 140)], 22, (170, 92, 76), (90, 92, 110), 'tiles')
+    # Pip's counter
+    add(_rect(1306, G - 26, 1398, G - 4), 12, (214, 170, 110), (180, 140, 90), 'planks')
+    # the library, slate roof and chimney
+    add(_rect(1430, G - 80, 1594, G - 4), 26, (120, 150, 112), (88, 98, 122), 'planks')
+    add([(1424, G - 80), (1512, G - 110), (1600, G - 80)], 26, (120, 150, 112), (88, 98, 122), 'tiles')
+    add(_rect(1556, G - 120, 1566, G - 90), 8, (140, 150, 150), (120, 128, 130), 'bricks')
+    # the cottages: thatch and a saltbox
+    add(_rect(1622, G - 54, 1680, G - 4), 20, (230, 210, 170), (204, 170, 98))
+    add([(1613, G - 54), (1645, G - 78), (1657, G - 78), (1689, G - 54)], 22, (230, 210, 170), (204, 170, 98),
+        'straw')
+    add(_rect(1700, G - 54, 1758, G - 4), 20, (200, 214, 230), (90, 110, 140))
+    add([(1694, G - 54), (1719, G - 80), (1764, G - 54)], 20, (200, 214, 230), (90, 110, 140), 'tiles')
+    for p in v:
+        pts = p['poly']
+        p['area'] = sum(pts[i][0] * pts[(i + 1) % len(pts)][1] - pts[(i + 1) % len(pts)][0] * pts[i][1]
+                        for i in range(len(pts)))
+        p['x0'], p['x1'] = min(q[0] for q in pts), max(q[0] for q in pts)
+    return v
+
+
+VOLUMES = _volumes()
+PAVE = [(198, 190, 176), (204, 196, 180), (190, 186, 178), (210, 214, 222)]
+SNOWY = (236, 240, 250)
+
+
+def draw_volumes(s, sc, season):
+    """The sides and roofs of every building on screen, behind their fronts."""
+    vx = W / 2
+    for p in VOLUMES:
+        if p['x1'] - sc < -60 or p['x0'] - sc > W + 60:
+            continue
+        k = p['depth'] * DEPTH_K
+        pts = [(x - sc, y) for x, y in p['poly']]
+        bias = p['depth'] * SIDE_BIAS
+        back = [(x + bias + (vx - x) * k * SIDE_SWING, y + (VP_Y - y) * k) for x, y in pts]
+        n = len(pts)
+        cx = sum(q[0] for q in pts) / n
+        cy = sum(q[1] for q in pts) / n
+        shx, shy = bias + (vx - cx) * k * SIDE_SWING, (VP_Y - cy) * k
+        for i in range(n):
+            a, b = pts[i], pts[(i + 1) % n]
+            ba, bb = back[i], back[(i + 1) % n]
+            dx, dy = b[0] - a[0], b[1] - a[1]
+            nx, ny = (dy, -dx) if p['area'] > 0 else (-dy, dx)
+            if nx * shx + ny * shy <= 0.01:
+                continue
+            ln = math.hypot(nx, ny) or 1.0
+            nx, ny = nx / ln, ny / ln
+            quad = [a, b, bb, ba]
+            if abs(ny) < 0.35:                                   # a side wall, in the shade away from the sun
+                col = darken(p['wall'], 0.34 if nx > 0 else 0.18)
+                pygame.draw.polygon(s, col, quad)
+                step = 4 if p['tex'] == 'planks' else 5
+                line = darken(col, 0.12)
+                y0, y1 = min(a[1], b[1]), max(a[1], b[1])
+                for yy in range(int(y0) + step, int(y1), step):
+                    t = (yy - a[1]) / (b[1] - a[1]) if b[1] != a[1] else 0
+                    pygame.draw.line(s, line, (a[0], yy), (ba[0] + (bb[0] - ba[0]) * t, ba[1] + (bb[1] - ba[1]) * t))
+                # a back corner, lit a little, so the wall reads as a solid block
+                pygame.draw.line(s, darken(col, 0.18), ba, bb)
+            elif ny < 0:                                         # a roof (or top) plane, catching the sky
+                col = p['roof'] if season != 3 else lerp_c(p['roof'], SNOWY, 0.75)
+                col = lighten(col, 0.1) if nx < -0.2 else darken(col, 0.08) if nx > 0.2 else col
+                pygame.draw.polygon(s, col, quad)
+                line = darken(col, 0.14)
+                rows = 4 if p['tex'] in ('tiles', 'straw') else 2
+                for j in range(1, rows):
+                    u = j / rows
+                    pygame.draw.line(s, line, (a[0] + (ba[0] - a[0]) * u, a[1] + (ba[1] - a[1]) * u),
+                                     (b[0] + (bb[0] - b[0]) * u, b[1] + (bb[1] - b[1]) * u))
+                if p['tex'] == 'ribs':                           # tin ribs running back
+                    for j in range(1, 12):
+                        u = j / 12
+                        pygame.draw.line(s, line, (a[0] + dx * u, a[1] + dy * u),
+                                         (ba[0] + (bb[0] - ba[0]) * u, ba[1] + (bb[1] - ba[1]) * u))
+                pygame.draw.line(s, darken(col, 0.3), ba, bb)            # the far ridge
+            else:                                                # the underside of an overhang
+                pygame.draw.polygon(s, darken(p['wall'], 0.5), quad)
+
+
+FORE_K = 1.35            # the near verge slides past faster than the street
+FORE_H = 46
+
+
+def build_fore(season):
+    """The near side of the road: a grass verge with hedges, a picket fence and flower barrels."""
+    w = int(TOWN_W * FORE_K) + W
+    s = pygame.Surface((w, FORE_H), pygame.SRCALPHA)
+    rng = random.Random(23)
+    grass = [(76, 128, 70), (70, 120, 58), (140, 104, 58), (214, 220, 232)][season]
+    leaf = [(64, 116, 66), (56, 110, 54), (150, 90, 46), (52, 92, 70)][season]
+    snow = season == 3
+    base = FORE_H - 6
+    s.fill(darken(grass, 0.15), (0, base, w, 6))
+    for x in range(0, w, 2):
+        s.fill(darken(grass, rng.uniform(0.0, 0.3)), (x, base - rng.randrange(1, 4), 1, 3))
+    x = rng.randrange(20, 60)
+    while x < w:
+        kind = rng.choice(['hedge', 'hedge', 'fence', 'barrel', 'post'])
+        if kind == 'hedge':
+            hw = rng.randrange(30, 56)
+            for i in range(6):
+                bx = x + rng.randrange(0, hw - 14)
+                bh = rng.randrange(20, 34)
+                pygame.draw.ellipse(s, darken(leaf, rng.uniform(0.0, 0.2)), (bx, base - bh, 18, bh + 4))
+            for _ in range(10):
+                s.fill(lighten(leaf, 0.15), (x + rng.randrange(hw - 4), base - rng.randrange(6, 20), 2, 2))
+            if season in (0, 1):
+                for _ in range(5):
+                    s.fill(rng.choice([(250, 220, 230), (250, 240, 200)]), (x + rng.randrange(hw - 4),
+                                                                            base - rng.randrange(6, 20), 2, 2))
+            if snow:
+                for i in range(0, hw - 6, 4):
+                    s.fill((246, 248, 255), (x + i + 2, base - rng.randrange(24, 32), 5, 2))
+            x += hw
+        elif kind == 'fence':
+            fw = rng.randrange(40, 90)
+            wood = (236, 228, 214) if season != 2 else (222, 210, 190)
+            s.fill(darken(wood, 0.2), (x, base - 12, fw, 2))
+            s.fill(darken(wood, 0.2), (x, base - 5, fw, 2))
+            for px in range(x, x + fw, 6):
+                s.fill(wood, (px, base - 18, 4, 18))
+                s.set_at((px + 1, base - 19), wood)
+                s.set_at((px + 2, base - 19), wood)
+                s.fill(darken(wood, 0.15), (px + 3, base - 18, 1, 18))
+                if snow:
+                    s.fill((250, 250, 255), (px, base - 20, 4, 2))
+            x += fw
+        elif kind == 'barrel':
+            s.fill((120, 80, 52), (x, base - 14, 16, 14))
+            s.fill((90, 60, 40), (x, base - 11, 16, 1))
+            s.fill((90, 60, 40), (x, base - 4, 16, 1))
+            pygame.draw.ellipse(s, darken(leaf, 0.05) if not snow else (50, 90, 66), (x - 2, base - 22, 20, 11))
+            if season < 3:
+                for _ in range(6):
+                    s.fill(rng.choice([(236, 90, 100), (250, 214, 90), (250, 150, 190), (230, 130, 50)]),
+                           (x + rng.randrange(14), base - 21 + rng.randrange(6), 2, 2))
+            else:
+                s.fill((246, 248, 255), (x, base - 22, 16, 3))
+            x += 16
+        else:
+            s.fill((70, 66, 72), (x, base - 12, 4, 12))
+            s.fill((96, 92, 100), (x, base - 13, 4, 2))
+            x += 4
+        x += rng.randrange(50, 150)
+    return s
+
+
+def draw_paving(s, sc, pave_line):
+    """Paving joints that run back towards the buildings, in the same perspective as their sides."""
+    vx = W / 2
+    top, bot = GROUND - 4, GROUND + 5
+    k = (bot - top) / (bot - VP_Y)
+    for x in range(-(sc % 12), W + 12, 12):
+        pygame.draw.line(s, pave_line, (x, bot), (int(x + 2 + (vx - x) * k * SIDE_SWING), top))
+
+
 # ---------------------------------------------------------------- the street, drawn once per season
 def build_street(season, projects):
     s = pygame.Surface((TOWN_W, H), pygame.SRCALPHA)
@@ -635,20 +827,28 @@ def build_street(season, projects):
     lamps = []
     lights = []                     # winter string lights that glow after dark
     deco = random.Random(19 + season)
-    # pavement and street
-    pave = [(198, 190, 176), (204, 196, 180), (190, 186, 178), (210, 214, 222)][season]
+    # pavement and street, on their own layer (the paving joints are drawn live, in perspective)
+    street = s
+    s = ground = pygame.Surface((TOWN_W, H), pygame.SRCALPHA)
+    pave = PAVE[season]
     s.fill(pave, (0, GROUND - 4, TOWN_W, 10))
-    for x in range(0, TOWN_W, 12):
-        pygame.draw.line(s, darken(pave, 0.12), (x, GROUND - 4), (x, GROUND + 5))
+    s.fill(lighten(pave, 0.08), (0, GROUND - 4, TOWN_W, 1))
     pygame.draw.line(s, darken(pave, 0.25), (0, GROUND + 6), (TOWN_W, GROUND + 6), 2)
+    s.fill(lighten(pave, 0.1), (0, GROUND + 5, TOWN_W, 1))                       # the kerb's lit edge
     road = (128, 120, 116) if not snow else (176, 180, 192)
     s.fill(road, (0, GROUND + 8, TOWN_W, H - GROUND - 8))
+    s.fill(darken(road, 0.25), (0, GROUND + 8, TOWN_W, 2))                       # shade under the kerb
     rng = random.Random(4)
-    for y in range(GROUND + 10, H, 6):
-        off = rng.randrange(0, 10)
-        for x in range(-off, TOWN_W, 10):
+    y = GROUND + 10
+    while y < H:                     # cobbles grow as the road comes towards you
+        d = (y - GROUND) / (H - GROUND)
+        ch, cw = 3 + int(d * 4), 7 + int(d * 8)
+        off = rng.randrange(0, cw)
+        for x in range(-off, TOWN_W, cw + 2):
             c = lerp_c(road, (150, 144, 138) if not snow else (220, 224, 236), rng.uniform(0.1, 0.5))
-            pygame.draw.rect(s, c, (x + 1, y, 8, 4), border_radius=1)
+            pygame.draw.rect(s, c, (x + 1, y, cw, ch), border_radius=1)
+            s.fill(lighten(c, 0.12), (x + 2, y, cw - 2, 1))
+        y += ch + 2
     if snow:
         for _ in range(500):
             x, y = rng.randrange(TOWN_W), rng.randrange(GROUND + 8, H)
@@ -657,6 +857,8 @@ def build_street(season, projects):
         for _ in range(260):
             x, y = rng.randrange(TOWN_W), rng.randrange(GROUND - 3, H)
             s.fill(rng.choice([(214, 110, 50), (230, 170, 60), (180, 70, 50)]), (x, y, 2, 1))
+    s.fill(lerp_c(pave, (230, 220, 200), 0.3), (500, GROUND - 4, 340, 6))       # the square's paving
+    s = street
     # --- west end: the path down to the lake
     for x in range(0, 110, 3):
         hgt = 10 + int(6 * math.sin(x * 0.3))
@@ -727,7 +929,6 @@ def build_street(season, projects):
                                    (x0 + i, GROUND - 55), (x0 - 4 + i, GROUND - 58)])
     _sign(s, 406, GROUND - 78, "MABEL'S BAKERY", (250, 236, 220), (160, 70, 70))
     # --- the square: notice board, fountain base, benches
-    s.fill(lerp_c(pave, (230, 220, 200), 0.3), (500, GROUND - 4, 340, 6))
     ground_shadow(s, 548, GROUND - 3, 58, 60)
     ground_shadow(s, 653, GROUND - 1, 88, 70)
     for bx in (601, 737):
@@ -925,7 +1126,7 @@ def build_street(season, projects):
         s.fill((60, 58, 64), (lx - 3, GROUND - 44, 8, 2))
         s.fill((230, 210, 160), (lx - 2, GROUND - 42, 6, 5))
         lamps.append((lx + 1, GROUND - 40))
-    return s, wins, lamps, lights
+    return s, wins, lamps, lights, ground
 
 
 def build_back(season):
@@ -1464,8 +1665,9 @@ class Town:
     def ensure_built(self, g):
         key = (g.env.season, tuple(sorted(g.projects)))
         if self.built != key:
-            self.street, self.wins, self.lamps, self.lights = build_street(g.env.season, g.projects)
+            self.street, self.wins, self.lamps, self.lights, self.ground = build_street(g.env.season, g.projects)
             self.far, self.mid = build_back(g.env.season)
+            self.fore = build_fore(g.env.season)
             self.built = key
 
     def draw(self, frame, env, g):
@@ -1485,8 +1687,12 @@ class Town:
         frame.blit(mid, (0, 0))
         near = self.near
         near.fill((0, 0, 0, 0))
+        near.blit(self.ground, (0, 0), (sc, 0, W, H))
+        draw_paving(near, sc, darken(PAVE[env.season], 0.12))
+        draw_volumes(near, sc, env.season)
         near.blit(self.street, (0, 0), (sc, 0, W, H))
         self._draw_live(near, env, g, sc)
+        near.blit(self.fore, (0, H - FORE_H), (int(sc * FORE_K), 0, W, FORE_H))
         na = env.near_amb
         near.fill((na[0], na[1], na[2], 255), special_flags=pygame.BLEND_RGBA_MULT)
         frame.blit(near, (0, 0))
