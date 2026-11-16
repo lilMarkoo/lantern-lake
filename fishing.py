@@ -8,6 +8,7 @@ import art
 from art import W, H, HORIZON, DECK_Y, lerp_c, add_glow
 from data import FISH, JUNK, RARITY_WEIGHT, SPOT_FISH
 from minigame import ReelGame, LegendGame
+import coast
 import legends
 import seasons
 
@@ -38,11 +39,13 @@ def spot_depth(spot, d):
         return 0.45 + d * 0.55
     if spot == 'creek':
         return 0.15 + d * 0.7
+    if spot == 'rocks':
+        return 0.1 + d * 0.9          # the water drops away fast off the rocks
     return d
 
 
 # how long bites take at each spot, and how fast the creek carries the bobber (pixels per second)
-SPOT_WAIT = {'dock': 1.0, 'cove': 0.8, 'deep': 1.35, 'creek': 0.9}
+SPOT_WAIT = {'dock': 1.0, 'cove': 0.8, 'deep': 1.35, 'creek': 0.9, 'pier': 0.9, 'rocks': 1.1}
 CREEK_DRIFT = 6.0
 
 
@@ -151,6 +154,7 @@ class Fishing:
             base *= 0.6 if g.bait == 'storm' else 0.85
         base += spec['rarity'] * 0.6
         base *= SPOT_WAIT.get(getattr(g, 'spot', 'dock'), 1.0)
+        base *= coast.bite_mult(g)        # ragworm and the bow lamp, down at the sea
         base *= g.boost('bite')           # bakery tea and cooked meals
         base *= 1 - 0.06 * getattr(self, 'fly_q', 0)
         if self.hot:
@@ -186,6 +190,8 @@ class Fishing:
                 continue
             if f['rarity'] == 5 and not legends.can_bite(g, f['id']):
                 continue                   # legends only ever bite on their own lure...
+            if f.get('tide') and not coast.fish_ok(g, f):
+                continue                   # at the sea, some fish come and go with the tide
             if f.get('year') and seasons.year(g) < f['year']:
                 continue                   # new arrivals in year two
             fw = seasons.fly_weight(self, f)
@@ -245,6 +251,7 @@ class Fishing:
             if spot == 'creek' and season == 2 and f['id'] in ('salmon', 'riverking'):
                 w *= 3
             w *= fw
+            w *= coast.weight_mult(g, f)   # squid strips, harbour chowder and the lighthouse
             q = getattr(self, 'fly_q', 0)
             if q and r >= 2:
                 w *= 1 + 0.1 * q           # a lovely fly cast brings up the better fish
@@ -260,6 +267,8 @@ class Fishing:
                 w *= 2.5 if j['id'] == 'clam' else 0.4
             elif spot == 'creek' and j['id'] == 'driftwood':
                 w *= 2
+            elif spot in ('pier', 'rocks'):
+                w *= {'clam': 1.6, 'can': 0.5, 'driftwood': 1.4}.get(j['id'], 1.0)
             cands.append((j, w))
         if legend:
             cands.append((legend, sum(w for _, w in cands)))     # in its time and place, a coin flip
@@ -304,7 +313,7 @@ class Fishing:
         self.fish_pos = list(self.bob)
         lo, hi = spec['size']
         size_k = (self.catch['size'] - lo) / max(0.01, hi - lo)
-        if spec['rarity'] == 5 and legends.HUNT_BY_FISH.get(spec['id']):
+        if spec['rarity'] == 5 and (legends.HUNT_BY_FISH.get(spec['id']) or spec['id'] == 'mariner'):
             self.mg = LegendGame(spec, g.rod_spec(), g.assist(), self.rng, size_k, legends.fight_lines(spec['id']))
             g.audio.play('warn', 0.8)
         else:

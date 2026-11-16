@@ -160,7 +160,12 @@ class World:
         creek_reeds = [dict(x=x, h=rng.randint(12, 24), ph=rng.random() * 6, cat=rng.random() < 0.3)
                        for x in list(range(124, 152, 4))]
         self.spot_sets = {'dock': (self.lilies, self.reeds), 'cove': (cove_lilies, cove_reeds),
-                          'deep': ([], []), 'creek': ([], creek_reeds)}
+                          'deep': ([], []), 'creek': ([], creek_reeds), 'pier': ([], []), 'rocks': ([], [])}
+        # the sea at Saltmarsh: rocks that the tide covers and uncovers, kelp, and gulls overhead
+        self.sea_rocks = [(330, 226, 5), (452, 246, 9), (586, 290, 14), (250, 318, 8)]
+        self.gulls = [dict(x=rng.uniform(0, W), y=rng.uniform(40, 150), vx=rng.choice((-1, 1)) * rng.uniform(10, 22),
+                           ph=rng.uniform(0, 6)) for _ in range(4)]
+        self.seal = dict(t=rng.uniform(8, 20), x=0.0, y=0.0, up=0.0)
         self.frogs = [dict(i=i, puff=0.0, cd=rng.uniform(2, 8)) for i in (3, 11, 19)]
         self.current = [dict(x=rng.uniform(0, W), y=rng.uniform(HORIZON + 6, H - 4), ln=rng.uniform(3, 9),
                              spd=rng.uniform(0.7, 1.3)) for _ in range(34)]
@@ -281,6 +286,21 @@ class World:
                 if c['x'] > W + 10:
                     c['x'] = rng.uniform(-30, -5)
                     c['y'] = rng.uniform(HORIZON + 6, H - 4)
+        elif spot in art.COAST_LAMP:
+            for gl in self.gulls:
+                gl['x'] += gl['vx'] * dt
+                if gl['x'] < -30 or gl['x'] > W + 30:
+                    gl['vx'] = -gl['vx']
+            se = self.seal
+            if se['up'] > 0:
+                se['up'] -= dt * 0.5
+                if se['up'] <= 0:
+                    se['t'] = rng.uniform(15, 40)
+            else:
+                se['t'] -= dt
+                if se['t'] <= 0:
+                    se['up'] = 4.0
+                    se['x'], se['y'] = rng.uniform(300, 600), rng.uniform(220, 300)
         elif spot == 'cove':
             for fr in self.frogs:
                 fr['cd'] -= dt
@@ -504,7 +524,10 @@ class World:
         import seasons
         seasons.draw_aurora(frame, env, self, g)
         self._far(frame, env)
-        if 'lighthouse' in getattr(g, 'projects', ()):
+        if self.spot in art.COAST_LAMP:
+            import coast
+            art.draw_coast_lighthouse(frame, self.spot, lerp_c(env.amb, env.sky[2], 0.3), coast.lit(g), env.nf)
+        elif 'lighthouse' in getattr(g, 'projects', ()):
             self._lighthouse(frame, env)
         import story
         if hasattr(g, 'story'):
@@ -662,6 +685,17 @@ class World:
         if env.fog > 0.01:
             far = lerp_c(far, env.fog_color, env.fog * 0.75)
             near = lerp_c(near, env.fog_color, env.fog * 0.55)
+        if self.spot in art.COAST_LAMP:                  # the open sea: no mountains, just the far side of the bay
+            pygame.draw.polygon(frame, far, [(-8, HORIZON), (-8, HORIZON - 34), (90, HORIZON - 40), (200, HORIZON - 22),
+                                             (300, HORIZON - 8), (360, HORIZON)])
+            tl = self.treeline.copy()
+            tl.fill((*env.amb, 255), special_flags=pygame.BLEND_RGBA_MULT)
+            frame.blit(tl, (0, HORIZON - 64))
+            if env.fog > 0.01:
+                fogl = pygame.Surface((W, 40), pygame.SRCALPHA)
+                fogl.fill((*env.fog_color, int(env.fog * 150)))
+                frame.blit(fogl, (0, HORIZON - 40))
+            return
         pygame.draw.polygon(frame, far, [(-8, HORIZON)] + self.mtn_far + [(W + 16, HORIZON)])
         if env.season == 3:
             cap = lighten(far, 0.35)
@@ -887,6 +921,9 @@ class World:
         """Little touches that belong to each rowboat spot."""
         t = self.t
         spot = self.spot
+        if spot in art.COAST_LAMP:
+            self._sea_things(near, env, g)
+            return
         if spot == 'creek':
             # current lines drifting downstream
             hl = (226, 240, 248)
@@ -937,6 +974,63 @@ class World:
             near.fill((90, 80, 70), (bx, int(by) - 11, 1, 4))
             if env.nf > 0.3 and int(t * 1.5) % 3 == 0:
                 near.fill((255, 230, 150), (bx - 1, int(by) - 12, 3, 2))
+
+    def _sea_things(self, near, env, g):
+        """The coast: a long swell, rocks the tide covers and uncovers, a buoy, a curious seal and the gulls."""
+        import coast
+        t = self.t
+        lv = coast.tide_level(g)
+        hl = (226, 240, 248)
+        for i, c in enumerate(self.current):                       # the swell rolling in
+            persp = 0.5 + (c['y'] - HORIZON) / 170
+            ln = int(c['ln'] * 1.6 * persp)
+            x = int((c['x'] + math.sin(t * 0.6 + i) * 6) % W)
+            y = int(c['y'] + math.sin(t * 1.1 + c['x'] * 0.02) * 1.5 * persp)
+            a = int(50 + 50 * math.sin(t * 1.3 + i))
+            pygame.draw.line(near, (*hl, max(0, a)), (x, y), (x + ln, y))
+        if self.spot == 'rocks':
+            for x, y, r in self.sea_rocks:
+                persp = 0.5 + (y - HORIZON) / 170
+                rr = max(2, int(r * persp))
+                show = 1.25 - lv                                       # more rock shows at low water
+                hh = max(1, int(rr * show))
+                pygame.draw.ellipse(near, (84, 82, 80), (x - rr, y - hh, rr * 2, hh + 2))
+                pygame.draw.ellipse(near, (120, 116, 110), (x - rr + 1, y - hh, rr * 2 - 3, max(1, hh // 2)))
+                if show > 0.6:
+                    near.fill((88, 104, 56), (x - rr, y, rr * 2, 1))   # weed showing at low tide
+                for i in range(6):
+                    a = i / 6 * math.pi * 2 + t * 0.7
+                    fx = x + math.cos(a) * (rr + 2 + math.sin(t * 2 + i) * 1.2)
+                    near.set_at((int(fx), int(y + 1 + math.sin(a) * 1.2)), (240, 248, 255, 200))
+            for i in range(7):                                       # kelp fronds swaying near the rocks
+                bx = 150 + i * 9
+                by = 300 + i * 6
+                sw = math.sin(t * 0.9 + i) * 3
+                pygame.draw.lines(near, (70, 96, 50, 200), False, [(bx, by), (bx + sw, by - 6), (bx + sw * 1.4, by - 12)], 2)
+        else:
+            bx, by = 470, 236 + math.sin(t * 1.3) * 1.4              # a red can buoy with a bell
+            pygame.draw.ellipse(near, (40, 60, 80, 110), (bx - 7, int(by) + 4, 15, 3))
+            near.fill((200, 60, 56), (bx - 4, int(by) - 6, 9, 10))
+            near.fill((150, 40, 40), (bx + 2, int(by) - 6, 3, 10))
+            near.fill((60, 60, 66), (bx - 1, int(by) - 14, 3, 8))
+            near.fill((220, 190, 90), (bx - 2, int(by) - 12, 5, 3))
+        # a seal pops up now and then, has a look at you, and goes again
+        se = self.seal
+        if se['up'] > 0:
+            x, y = int(se['x']), int(se['y'])
+            k = min(1.0, se['up'], 4.0 - se['up'] if se['up'] < 4.0 else 1.0)
+            hh = int(6 * min(1.0, k * 2))
+            if hh > 0:
+                pygame.draw.ellipse(near, (96, 92, 96), (x - 4, y - hh, 9, hh + 2))
+                near.fill((30, 30, 34), (x + 1, y - hh + 2, 1, 1))
+                near.fill((30, 30, 34), (x + 3, y - hh + 2, 1, 1))
+                pygame.draw.line(near, (230, 240, 250, 160), (x - 7, y + 1), (x + 8, y + 1))
+        # gulls wheeling overhead
+        for gl in self.gulls:
+            x = int(gl['x'])
+            y = int(gl['y'] + math.sin(t * 0.7 + gl['ph']) * 8)
+            flap = math.sin(t * 6 + gl['ph']) * 2
+            pygame.draw.lines(near, (240, 240, 244), False, [(x - 5, y - flap), (x, y), (x + 5, y - flap)], 2)
 
     def _wagon(self, near, env):
         t = self.t
@@ -1071,6 +1165,23 @@ class World:
                 for (dx, dy) in ((0, 0), (1, 0), (2, 0), (1, 1), (0, 2), (1, 2), (2, 2)):
                     surf.set_at((x + dx, y + dy), col)
 
+    def _sea_lights(self, frame, env, g):
+        """Windows across the harbour, and the lighthouse beam once Sol has it burning again."""
+        import coast
+        nf = env.nf
+        for (x, y) in art.COAST_WINS.get((env.season, self.spot), ()):
+            frame.fill((int(220 * nf), int(160 * nf), int(80 * nf)), (x - 1, y - 1, 2, 3), special_flags=pygame.BLEND_ADD)
+            add_glow(frame, self.g_small, (x, y), nf * 0.5)
+        if not coast.lit(g):
+            return
+        lx, ly, th = art.COAST_LAMP[self.spot]
+        top = ly + 8 - 5
+        add_glow(frame, self.g_big, (lx, top), nf * 0.9)
+        sweep = math.cos(self.t * 0.9)
+        if abs(sweep) > 0.12:
+            end = (lx + sweep * 380, top - 4 * abs(sweep))
+            art.draw_beam(frame, (lx, top), end, 18 * abs(sweep), 0.32 * nf * min(1.0, abs(sweep) * 1.5))
+
     def _lights(self, frame, env, g):
         nf = env.nf
         t = self.t
@@ -1081,6 +1192,8 @@ class World:
             win = art.CABIN_WINDOW
             add_glow(frame, self.g_mid, win.center, nf * 0.8)
         far = {'dock': 472, 'deep': 62}.get(self.spot)
+        if self.spot in art.COAST_LAMP:
+            self._sea_lights(frame, env, g)
         if far:
             add_glow(frame, self.g_small, (far, HORIZON - 5), nf * 0.7)
             frame.fill((int(200 * nf), int(150 * nf), int(80 * nf)), (far, HORIZON - 5, 2, 2),

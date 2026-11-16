@@ -25,14 +25,15 @@ def phase_of(minute):
 def F(id, name, rarity, price, size, shape='normal', c1=(150, 150, 150), c2=(220, 220, 210), c3=None,
       pattern=None, pc=None, phases=None, seasons=None, weather=None, depth=(0.0, 1.0), strength=0.3,
       agility=0.3, glow=None, needs=None, desc='', hint='', behavior=None, event=None, spot=None, method=None,
-      year=0):
+      year=0, tide=None):
     if behavior is None:
         behavior = ('darter' if shape == 'small' else 'zigzag' if shape in ('eel', 'spirit') else
                     'calm' if shape in ('round', 'catfish', 'sturgeon', 'axolotl') else 'runner')
     return dict(id=id, name=name, rarity=rarity, price=price, size=size, shape=shape, c1=c1, c2=c2,
                 c3=c3 or c1, pattern=pattern, pc=pc, phases=phases, seasons=seasons, weather=weather,
                 depth=depth, strength=strength, agility=agility, glow=glow, needs=needs, desc=desc,
-                hint=hint, junk=False, behavior=behavior, event=event, spot=spot, method=method, year=year)
+                hint=hint, junk=False, behavior=behavior, event=event, spot=spot, method=method, year=year,
+                tide=tide)
 
 
 FISH = [
@@ -236,7 +237,85 @@ FISH += [
     F('ghostcarp', 'Ghost Carp', 3, 90, (40, 80), 'round', (222, 228, 232), (250, 252, 255), pattern='scales',
       weather={'fog'}, depth=(0.3, 1.0), strength=.6, agility=.3, year=1, method='year2',
       desc='Pale as fog. Old Tom says it was white when he was a boy too.', hint='Year two, on a foggy day.'),
+
 ]
+
+# ---- 2.0: the sea at Saltmarsh, down the river. Sea fish have method='sea' (so they never turn up in lake
+# requests, jobs or run days) and spot 'pier' or 'rocks'. tide= limits a fish to high or low water.
+SEA = dict(method='sea')
+FISH += [
+    F('sprat', 'Harbour Sprat', 1, 6, (5, 12), 'small', (110, 146, 170), (230, 238, 244), pattern='scales',
+      depth=(0, 0.7), strength=.12, agility=.5, spot='pier', **SEA,
+      desc='Shoals of them flash under the pier like dropped coins.', hint='Saltmarsh Pier, any time.'),
+    F('mackerel', 'Tiger Mackerel', 1, 10, (20, 35), 'normal', (54, 112, 120), (226, 236, 232), c3=(34, 76, 92),
+      pattern='stripes', pc=(30, 60, 70), strength=.3, agility=.5, spot='pier', phases=('dawn', 'day', 'dusk'),
+      **SEA, desc='Green and black stripes, and it never, ever stops swimming.', hint='Saltmarsh Pier, by day.'),
+    F('flounder', 'Sand Flounder', 1, 12, (15, 35), 'round', (170, 150, 112), (226, 214, 184), pattern='spots',
+      pc=(140, 120, 90), depth=(0.4, 1.0), strength=.25, agility=.15, spot='pier', tide={'low'}, **SEA,
+      desc='Both eyes on one side, and both of them looking at you.', hint='Saltmarsh Pier at low tide, cast far.'),
+    F('pollock', 'Pier Pollock', 2, 24, (25, 50), 'normal', (100, 120, 92), (220, 222, 200), c3=(80, 96, 70),
+      strength=.4, agility=.3, spot='pier', **SEA,
+      desc='Olive-backed and hungry. It lives in the shadow of the pier posts.', hint='Saltmarsh Pier, any time.'),
+    F('mullet', 'Grey Mullet', 2, 22, (25, 45), 'normal', (140, 148, 156), (228, 232, 236), pattern='stripes',
+      pc=(120, 128, 136), depth=(0, 0.6), strength=.4, agility=.35, spot='pier', tide={'high'}, **SEA,
+      desc='Cruises in with the high water to graze the harbour wall.',
+      hint='Saltmarsh Pier at high tide, close in.'),
+    F('seabream', 'Pink Sea Bream', 2, 30, (18, 35), 'round', (220, 150, 150), (250, 226, 222), c3=(200, 120, 130),
+      pattern='scales', seasons=(0, 1), strength=.35, agility=.35, spot='pier', **SEA,
+      desc='Rosy as a sunset, with a big surprised eye.', hint='Saltmarsh Pier in spring and summer.'),
+    F('garfish', 'Needle Garfish', 2, 34, (40, 70), 'gar', (70, 140, 130), (220, 240, 230), c3=(50, 110, 120),
+      seasons=(1,), phases=('dawn', 'day'), depth=(0, 0.5), strength=.35, agility=.6, spot='pier', **SEA,
+      desc='All beak and green bones. It leaps like a skipping stone.', hint='Saltmarsh Pier on summer days.'),
+    F('seabass', 'Silver Sea Bass', 3, 90, (35, 70), 'normal', (150, 166, 180), (236, 242, 246), c3=(120, 136, 152),
+      pattern='scales', phases=('dusk', 'night'), tide={'high'}, strength=.6, agility=.5, spot='pier', **SEA,
+      desc='Hunts the turning tide in the dark, bright as a knife.',
+      hint='Saltmarsh Pier, a high tide after dusk.'),
+    F('conger', 'Conger Eel', 3, 100, (80, 160), 'eel', (70, 72, 80), (150, 150, 160), c3=(110, 112, 124),
+      phases=('night',), depth=(0.5, 1.0), strength=.7, agility=.4, spot='pier', **SEA,
+      desc='Lives in a crack under the harbour wall and has opinions about it.',
+      hint='Saltmarsh Pier, deep water, at night.'),
+    F('gurnard', 'Ruby Gurnard', 3, 85, (20, 40), 'normal', (200, 70, 64), (246, 190, 170), c3=(230, 110, 90),
+      seasons=(2, 3), depth=(0.4, 1.0), strength=.45, agility=.4, spot='pier', **SEA,
+      desc='It walks along the seabed on its fins and grunts when you lift it.',
+      hint='Saltmarsh Pier in autumn and winter.'),
+    F('halibut', 'Old Halibut', 4, 260, (80, 180), 'round', (110, 96, 80), (220, 206, 180), c3=(90, 78, 64),
+      pattern='spots', pc=(84, 70, 56), seasons=(2, 3), depth=(0.6, 1.0), tide={'high'}, strength=.8, agility=.2,
+      spot='pier', **SEA,
+      desc='As wide as a door. Fishermen tell stories about the ones that got away.',
+      hint='Saltmarsh Pier, cast far at high tide in autumn and winter.'),
+    F('bluefin', 'Bluefin Runner', 4, 280, (90, 160), 'long', (40, 70, 120), (200, 220, 236), c3=(250, 210, 80),
+      seasons=(1,), phases=('dawn', 'day'), tide={'high'}, strength=.85, agility=.7, spot='pier', **SEA,
+      desc='Comes in from the open sea on summer mornings and takes your line with it.',
+      hint='Saltmarsh Pier, summer mornings at high tide.'),
+    F('goby', 'Rock Goby', 1, 7, (5, 10), 'small', (120, 110, 90), (210, 200, 170), pattern='spots',
+      pc=(90, 80, 64), tide={'low'}, depth=(0, 0.6), strength=.12, agility=.4, spot='rocks', **SEA,
+      desc='Sits in the rock pools and pretends to be a pebble.', hint='Kelp Rocks at low tide.'),
+    F('shorecrab', 'Shore Crab', 1, 9, (6, 12), 'crab', (90, 110, 70), (170, 180, 110), tide={'low'},
+      depth=(0, 0.7), strength=.2, agility=.2, spot='rocks', **SEA,
+      desc='Waves its claws at the whole world. Sideways.', hint='Kelp Rocks at low tide.'),
+    F('wrasse', 'Kelp Wrasse', 2, 26, (15, 30), 'normal', (80, 130, 80), (240, 170, 90), c3=(200, 120, 60),
+      pattern='spots', pc=(220, 110, 60), strength=.4, agility=.4, spot='rocks', **SEA,
+      desc='Lives in the kelp forest and changes colour when it is cross.', hint='Kelp Rocks, any time.'),
+    F('cuckoo', 'Cuckoo Wrasse', 3, 80, (20, 35), 'normal', (80, 120, 200), (250, 170, 80), c3=(250, 130, 60),
+      pattern='stripes', pc=(60, 100, 200), seasons=(0, 1), strength=.45, agility=.55, spot='rocks', **SEA,
+      desc='Electric blue and orange, as if someone painted it for a festival.',
+      hint='Kelp Rocks in spring and summer.'),
+    F('wolffish', 'Wolf Fish', 3, 95, (50, 100), 'long', (100, 108, 120), (190, 196, 204), c3=(80, 88, 100),
+      pattern='spots', pc=(70, 76, 90), seasons=(2, 3), depth=(0.5, 1.0), strength=.75, agility=.3,
+      spot='rocks', **SEA,
+      desc='A face only a mother could love, and teeth for cracking crabs.',
+      hint='Kelp Rocks, deep water, autumn and winter.'),
+    F('lobster', 'Blue Lobster', 4, 240, (20, 40), 'crayfish', (60, 100, 190), (140, 180, 240), tide={'low'},
+      phases=('dusk', 'night'), depth=(0.3, 1.0), strength=.6, agility=.3, spot='rocks', **SEA,
+      desc='One in a few million is born blue. Sol says this one is older than the lighthouse.',
+      hint='Kelp Rocks, low tide after dark.'),
+    F('mariner', 'The Grey Mariner', 5, 1400, (150, 250), 'normal', (110, 120, 130), (210, 214, 220),
+      c3=(80, 90, 100), pattern='scales', glow=(200, 230, 255), phases=('night',), tide={'high'},
+      depth=(0.5, 1.0), strength=1.0, agility=.6, spot='rocks', **SEA,
+      desc='Barnacled and enormous, with an eye like the lighthouse lamp. It came home when the light did.',
+      hint='Once the lighthouse shines again: Kelp Rocks, a high tide at night.'),
+]
+SEA_FISH = [f for f in FISH if f.get('method') == 'sea']
 FISH_BY_ID = {f['id']: f for f in FISH}
 
 # the four places you can fish. The dock is home; the rest need a rowboat
@@ -250,7 +329,15 @@ SPOTS = [
               'old and rare.'),
     dict(id='creek', name='Willow Creek',
          desc='Where the river runs in under the willows. The current carries your bobber along.'),
+    # 2.0: the coast, a long row down the river
+    dict(id='pier', name='Saltmarsh Pier', region='coast',
+         desc='Tie up under the harbour pier. Sea fish come and go with the tide, and the village is up the steps.'),
+    dict(id='rocks', name='Kelp Rocks', region='coast',
+         desc='Weedy rocks below the lighthouse. Rock pools at low tide, and big fish nose in when the water is high.'),
 ]
+LAKE_SPOTS = [s for s in SPOTS if s.get('region') != 'coast']
+COAST_SPOTS = [s for s in SPOTS if s.get('region') == 'coast']
+COAST_IDS = ('pier', 'rocks')
 SPOT_BY_ID = {s['id']: s for s in SPOTS}
 # lake fish that also swim at each rowboat spot (each spot's own fish have spot=...)
 SPOT_FISH = {
@@ -259,6 +346,8 @@ SPOT_FISH = {
     'deep': {'carp', 'trout', 'char', 'catfish', 'salmon', 'pike', 'eel', 'gar', 'aurora', 'sturgeon',
              'whiskers', 'spirit', 'shiner', 'thunderfin', 'lightfish', 'moonbass', 'ghostcarp'},
     'creek': {'minnow', 'loach', 'dace', 'trout', 'char', 'salmon', 'smelt', 'pike', 'goldfish', 'shiner'},
+    'pier': {'goby', 'wrasse'},
+    'rocks': {'mackerel', 'pollock', 'seabream', 'conger', 'sprat'},
 }
 
 
@@ -266,8 +355,8 @@ def fish_at(spot):
     """Every species that can bite at a spot, in journal order."""
     if spot == 'dock':
         return [f for f in FISH if not f['spot']]
-    return [f for f in FISH if (f['spot'] == spot or f['id'] in SPOT_FISH.get(spot, ())) and f['spot'] in
-            (None, 'cove', 'deep', 'creek')]
+    region = COAST_IDS if spot in COAST_IDS else (None, 'cove', 'deep', 'creek')
+    return [f for f in FISH if (f['spot'] == spot or f['id'] in SPOT_FISH.get(spot, ())) and f['spot'] in region]
 
 
 def regular(f):
@@ -471,6 +560,8 @@ BADGES = [
     dict(id='rosie', name="Rosie's Secret", desc='Follow Biscuit all the way to the hidden bench.', reward=300),
     dict(id='outing', name='Good Company', desc='Finish an expedition with friends.', reward=200),
     dict(id='curator', name='Curator', desc='Complete five exhibits at the aquarium.', reward=400),
+    dict(id='sealegs', name='Sea Legs', desc='Catch 10 kinds of sea fish at Saltmarsh.', reward=300),
+    dict(id='keeper', name='Keeper of the Light', desc='Light the Saltmarsh lighthouse again.', reward=500),
 ]
 TANK_SIZE = 8
 

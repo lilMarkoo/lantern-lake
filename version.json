@@ -1,12 +1,11 @@
 {
-  "version": "1.9.0",
+  "version": "2.0.0",
   "notes": [
-    "A walkable aquarium: step inside Fernwick Aquarium and stroll a hall of ten themed exhibits, from Lily Cove and The Deep to a round brass porthole for the Legends of the Lake. Every fish you donate swims in its tank.",
-    "Finish an exhibit for a one-time coin reward (150 to 600). Exhibits you filled before this update pay out on your first visit.",
-    "Benches in front of the tanks (sit a while for a little luck), and two neighbours drop in each day to marvel at your discoveries.",
-    "New badge: Curator, for completing five exhibits (27 in all).",
-    "Fernwick has depth now: buildings have side walls and roof planes that turn as you walk past, the road recedes, and a hedge-lined verge slides by in the foreground. Each shop has its own roof (tin with a fish weathervane, scalloped tiles with a dormer, a copper cupola, thatch), plus swinging signs, doorstep plants and soft shadows.",
-    "The street dresses up for each season: bunting in spring and summer, leaf garlands and pumpkins in autumn, wreaths and twinkling string lights in winter. Mabel's window display changes too.",
-    "Fixed the library chimney floating above its roof."
+    "Saltmarsh, a whole new region down the river. Once you own a rowboat, Harbourmaster Morwen writes that the old channel is open: open the map and row about an hour downstream to the sea.",
+    "Two new places to fish, Saltmarsh Pier and Kelp Rocks, and 19 sea fish (70 fish in all), from Harbour Sprats and Rock Gobies to the Old Halibut, the Blue Lobster and something enormous that only comes home with the light.",
+    "Tides: the sea rises and falls twice a day, a little later each day. Some fish only bite at high water, some only at low. The HUD shows the tide and the harbour board has a tide table.",
+    "A harbour village to walk around, with five new neighbours to befriend: Morwen's daily orders, Nell's fish stall (with a double-price catch of the day and two sea baits), chowder at the Gull & Lantern, Ossian's boatyard (a sail and a bow lamp for your boat) and Kit's shell collection on the beach.",
+    "Light the old lighthouse: bring Sol sea glass from the beach, a Silver Sea Bass and lamp oil, and its beam sweeps the sky every night after.",
+    "Two new aquarium exhibits (Harbour Waters and the Kelp Forest), a Coast page in the journal, a coast map, and two new badges: Sea Legs and Keeper of the Light (29 in all)."
   ]
 }

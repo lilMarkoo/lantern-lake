@@ -159,6 +159,8 @@ TREE_SPOT = {  # seed, tree height factor, gap in the front row (for a house or 
 
 
 def make_treeline(season, spot='dock'):
+    if spot in COAST_LAMP:
+        return _coast_skyline(season, spot)
     seed, hf, gap, house = TREE_SPOT[spot]
     rng = random.Random(seed)
     h = 64
@@ -273,6 +275,10 @@ def bank_top(x):
 
 
 def make_foreground(season, spot='dock'):
+    if spot == 'pier':
+        return _pier_fg(season)
+    if spot == 'rocks':
+        return _rocks_fg(season)
     rng = random.Random(3)
     s = pygame.Surface((W, H), pygame.SRCALPHA)
     if spot == 'deep':
@@ -531,6 +537,217 @@ def _right_bank(s, season, rng):
         y = rng.randint(330, 356)
         c = rng.choice([(126, 124, 120), (146, 142, 136), (110, 106, 104)])
         pygame.draw.ellipse(s, c, (x, y, rng.randint(6, 11), rng.randint(3, 5)))
+
+
+# ---------------------------------------------------------------- 2.0: the coast at Saltmarsh
+# where the Saltmarsh lighthouse lamp sits, seen from each coast spot: (x, lamp y, tower height)
+COAST_LAMP = {'pier': (508, HORIZON - 48, 34), 'rocks': (548, HORIZON - 92, 58)}
+COAST_WINS = {}            # lit windows in the harbour skyline, filled in when it is drawn
+
+
+def _coast_skyline(season, spot):
+    """The far side of the water at the coast: Saltmarsh's houses and hill from the pier, a headland from the rocks."""
+    h = 64
+    s = pygame.Surface((W, h), pygame.SRCALPHA)
+    rng = random.Random(61 if spot == 'pier' else 67)
+    pal = TREE_PAL[season]
+    hill = darken(GROUND[season], 0.1) if season != 3 else (214, 222, 234)
+    wins = []
+    if spot == 'pier':
+        pts = [(0, 18), (60, 12), (130, 16), (210, 26), (300, 34), (380, 44), (440, 56), (460, h)]
+        pygame.draw.polygon(s, hill, [(0, h)] + pts)
+        for _ in range(30):                                  # trees and hedges on the hill
+            x = rng.randrange(0, 420)
+            y = 20 + int(x * 0.07) + rng.randrange(0, 12)
+            pygame.draw.circle(s, darken(pal['round'][0] if season != 3 else (190, 200, 210), 0.15), (x, y), 3)
+        x = 6
+        cols = [(236, 226, 206), (200, 214, 230), (240, 214, 190), (214, 230, 214), (236, 236, 236), (230, 196, 196)]
+        while x < 420:
+            w = rng.randrange(14, 24)
+            hh = rng.randrange(14, 26)
+            col = cols[rng.randrange(len(cols))]
+            base = h - 5
+            s.fill(col, (x, base - hh, w, hh))
+            s.fill(darken(col, 0.18), (x + w - 3, base - hh, 3, hh))
+            roof = rng.choice([(90, 96, 116), (150, 86, 76), (70, 70, 80)])
+            pygame.draw.polygon(s, roof, [(x - 1, base - hh), (x + w // 2, base - hh - 7), (x + w + 1, base - hh)])
+            if season == 3:
+                pygame.draw.line(s, (246, 248, 255), (x, base - hh - 1), (x + w // 2, base - hh - 7))
+            for wx in range(x + 3, x + w - 3, 6):
+                for wy in (base - hh + 4, base - hh + 11):
+                    if wy < base - 3:
+                        s.fill((70, 80, 96), (wx, wy, 2, 3))
+                        wins.append((wx + 1, HORIZON - h + wy + 1))
+            x += w + rng.randrange(1, 5)
+        s.fill((150, 144, 136), (0, h - 5, 440, 5))         # the quay wall
+        s.fill((120, 114, 108), (0, h - 2, 440, 2))
+        for mx in (64, 138, 236, 318):                        # masts in the harbour
+            pygame.draw.line(s, (120, 100, 80), (mx, h - 4), (mx, h - 26))
+            pygame.draw.line(s, (150, 130, 110), (mx, h - 24), (mx + 7, h - 8))
+        lx = COAST_LAMP['pier'][0]
+        for rx, rw in ((lx - 26, 22), (lx - 10, 26), (lx + 10, 18)):
+            pygame.draw.ellipse(s, (120, 114, 108), (rx, h - 10, rw, 14))
+    else:                                                    # the headland runs out to the lighthouse, right
+        pts = [(W, 6), (W - 40, 8), (W - 90, 18), (W - 150, 24), (W - 200, 40), (W - 240, 54), (W - 260, h)]
+        pygame.draw.polygon(s, hill, [(W, h)] + pts)
+        rock = (110, 106, 102)
+        pygame.draw.polygon(s, rock, [(W - 250, h), (W - 214, 44), (W - 150, 30), (W - 70, 30), (W - 40, 46),
+                                      (W - 20, h)])
+        for _ in range(40):
+            x, y = rng.randrange(W - 240, W - 30), rng.randrange(34, h)
+            s.fill(lighten(rock, rng.uniform(0.05, 0.2)), (x, y, rng.randrange(2, 6), 1))
+        grass = GRASS[season]
+        for x in range(W - 200, W, 2):
+            y = int(6 + (W - x) * 0.12 + 2 * math.sin(x * 0.2))
+            s.fill(grass, (x, y, 2, 3))
+        pygame.draw.ellipse(s, darken(hill, 0.2), (150, h - 9, 70, 10))      # a far island with a cottage
+        s.fill((236, 230, 214), (178, h - 15, 8, 6))
+        pygame.draw.polygon(s, (150, 86, 76), [(177, h - 15), (182, h - 19), (187, h - 15)])
+    COAST_WINS[(season, spot)] = wins
+    return s
+
+
+def draw_beam(frame, src, end, spread, k):
+    """A soft lighthouse beam, added onto the frame: brightest along the middle, fading at the edges."""
+    if k <= 0.01:
+        return
+    x0, y0 = src
+    x1, y1 = end
+    bx, by = int(min(x0, x1)) - 2, int(min(y0, y1) - spread) - 2
+    bw, bh = int(abs(x1 - x0)) + 4, int(abs(y1 - y0) + spread * 2) + 4
+    if bw < 2 or bh < 2:
+        return
+    img = pygame.Surface((bw, bh))
+    for w, a in ((1.0, 0.25), (0.62, 0.5), (0.3, 0.8)):
+        c = (int(255 * k * a), int(236 * k * a), int(180 * k * a))
+        pygame.draw.polygon(img, c, [(x0 - bx, y0 - by - 1), (x0 - bx, y0 - by + 1),
+                                     (x1 - bx, y1 - by + spread * w), (x1 - bx, y1 - by - spread * w)])
+    frame.blit(img, (bx, by), special_flags=pygame.BLEND_ADD)
+
+
+def draw_coast_lighthouse(frame, spot, amb, lit, nf):
+    """The Saltmarsh lighthouse on its rocks, seen across the water (lamp dark until Sol lights it)."""
+    x, ly, th = COAST_LAMP[spot]
+    base = ly + th + 8
+
+    def c(col):
+        return mul_c(col, amb)
+    half_b = 7 if spot == 'pier' else 10
+    for i in range(th):
+        y = base - i
+        half = half_b - (half_b * 0.35) * i / th
+        col = (200, 70, 64) if (i // max(4, th // 7)) % 2 else (240, 236, 226)
+        frame.fill(c(col), (int(x - half), y, int(half * 2) + 1, 1))
+        frame.fill(c(darken(col, 0.2)), (x + 1, y, int(half), 1))
+    top = base - th
+    frame.fill(c((60, 60, 70)), (x - 6, top - 1, 13, 2))
+    frame.fill(c((40, 44, 52)), (x - 4, top - 8, 9, 7))
+    pygame.draw.polygon(frame, c((60, 60, 70)), [(x - 6, top - 8), (x, top - 13), (x + 6, top - 8)])
+    if lit:
+        k = max(0.45, nf)
+        frame.fill((int(255 * k), int(236 * k), int(160 * k)), (x - 3, top - 7, 7, 5))
+
+
+def _pier_fg(season):
+    """Saltmarsh Pier: the wooden pier comes out from the quay on the left, on tall barnacled legs."""
+    rng = random.Random(71)
+    s = pygame.Surface((W, H), pygame.SRCALPHA)
+    wood, wood_d, wood_dd = (150, 112, 80), (120, 88, 62), (84, 62, 46)
+    deck = 226
+    # the quay wall at the far left
+    wall = (140, 134, 126)
+    s.fill(wall, (0, deck - 18, 36, H - deck + 18))
+    for j, y in enumerate(range(deck - 18, H, 7)):
+        s.fill(darken(wall, 0.2), (0, y, 36, 1))
+        for x in range((j % 2) * 8, 36, 16):
+            s.fill(darken(wall, 0.2), (x, y, 1, 7))
+    s.fill((96, 110, 70), (0, 296, 36, 10))                   # weed at the tide line
+    # legs, with weed and barnacles where the tide reaches
+    for px in (46, 84, 122, 160):
+        s.fill(wood_dd, (px, deck + 4, 6, 70))
+        s.fill(darken(wood_dd, 0.2), (px + 4, deck + 4, 2, 70))
+        s.fill((80, 100, 64), (px, deck + 62, 6, 10))
+        for _ in range(5):
+            s.set_at((px + rng.randrange(6), deck + 50 + rng.randrange(20)), (210, 206, 196))
+        sub = pygame.Surface((6, 60), pygame.SRCALPHA)
+        sub.fill((40, 50, 50, 110))
+        s.blit(sub, (px, deck + 74))
+    for px0, px1 in ((46, 84), (84, 122), (122, 160)):       # cross braces
+        pygame.draw.line(s, wood_d, (px0 + 3, deck + 8), (px1 + 3, deck + 44), 2)
+    # the deck and its railing
+    s.fill(wood, (0, deck, 176, 6))
+    for x in range(0, 176, 6):
+        s.fill(wood_d, (x, deck, 1, 6))
+    s.fill(lighten(wood, 0.2), (0, deck, 176, 1))
+    s.fill(wood_dd, (0, deck + 6, 176, 2))
+    for x in range(4, 176, 22):
+        s.fill(wood_d, (x, deck - 16, 3, 16))
+    s.fill(wood, (0, deck - 17, 176, 3))
+    if season == 3:
+        s.fill((240, 244, 250), (0, deck - 1, 176, 2))
+        s.fill((240, 244, 250), (0, deck - 18, 176, 1))
+    # a ladder down to your boat
+    lx = 168
+    for xx in (lx, lx + 10):
+        s.fill(wood_dd, (xx, deck + 6, 2, 56))
+    for y in range(deck + 12, deck + 60, 7):
+        s.fill(wood_d, (lx, y, 12, 2))
+    # things on the pier: a lamp post, a coil of rope, a lobster pot and a gull on a post
+    s.fill((50, 50, 56), (96, deck - 46, 3, 46))
+    s.fill((50, 50, 56), (93, deck - 52, 9, 6))
+    s.fill((236, 220, 170), (94, deck - 51, 7, 4))
+    pygame.draw.ellipse(s, (190, 170, 120), (20, deck - 6, 18, 6))
+    pygame.draw.ellipse(s, (160, 140, 100), (24, deck - 5, 10, 3))
+    s.fill((150, 100, 70), (128, deck - 12, 18, 12))
+    for xx in range(128, 146, 3):
+        s.fill((110, 70, 50), (xx, deck - 12, 1, 12))
+    gx, gy = 158, deck - 18
+    s.fill((240, 240, 244), (gx - 3, gy - 6, 8, 5))
+    s.fill((150, 156, 166), (gx - 2, gy - 6, 6, 2))
+    s.fill((240, 240, 244), (gx + 3, gy - 9, 3, 3))
+    s.set_at((gx + 6, gy - 8), (240, 180, 60))
+    return s
+
+
+def _rocks_fg(season):
+    """Kelp Rocks: big weedy rocks on the left, and a few more breaking the water to the right."""
+    rng = random.Random(73)
+    s = pygame.Surface((W, H), pygame.SRCALPHA)
+    rock, rock_l, rock_d = (104, 100, 98), (136, 132, 126), (74, 70, 70)
+    pts = [(0, 196), (30, 192), (62, 204), (92, 222), (120, 250), (138, 284), (150, 320), (156, 360), (0, 360)]
+    pygame.draw.polygon(s, rock, pts)
+    for _ in range(26):
+        x = rng.randrange(0, 140)
+        y = rng.randrange(206, 356)
+        if s.get_at((x, y))[3]:
+            pygame.draw.ellipse(s, rng.choice([rock_l, rock_d, darken(rock, 0.1)]), (x, y, rng.randrange(8, 22),
+                                                                                       rng.randrange(4, 9)))
+    for (x0, y0), (x1, y1) in zip(pts[:-2], pts[1:-1]):
+        pygame.draw.line(s, rock_l, (x0, y0), (x1, y1), 2)
+    pygame.draw.ellipse(s, (70, 120, 140), (22, 200, 30, 7))         # a rock pool, with a starfish
+    pygame.draw.ellipse(s, (110, 160, 176), (26, 201, 22, 4))
+    s.fill((240, 140, 80), (38, 202, 3, 1))
+    s.fill((240, 140, 80), (39, 201, 1, 3))
+    weed = (88, 104, 56) if season != 3 else (96, 106, 80)
+    for i in range(40):                                               # bladderwrack down at the waterline
+        x = 70 + i * 2 + rng.randrange(-2, 3)
+        y = 230 + int((x - 70) * 1.1) + rng.randrange(-4, 4)
+        if y < 356:
+            pygame.draw.line(s, weed if i % 2 else darken(weed, 0.2), (x, y), (x + rng.randrange(-3, 4), y + 8), 2)
+    for _ in range(30):
+        x = rng.randrange(0, 120)
+        y = rng.randrange(208, 300)
+        if s.get_at((x, y))[3]:
+            s.set_at((x, y), (220, 216, 206))                           # barnacles
+    if season == 3:
+        for (x0, y0), (x1, y1) in zip(pts[:4], pts[1:5]):
+            pygame.draw.line(s, (240, 244, 250), (x0, y0 - 1), (x1, y1 - 1), 2)
+    for gx, gy in ((34, 192),):
+        s.fill((240, 240, 244), (gx - 3, gy - 6, 8, 5))
+        s.fill((150, 156, 166), (gx - 2, gy - 6, 6, 2))
+        s.fill((240, 240, 244), (gx + 3, gy - 9, 3, 3))
+        s.set_at((gx + 6, gy - 8), (240, 180, 60))
+    return s
 
 
 def make_map(season):

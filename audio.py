@@ -319,7 +319,7 @@ class Audio:
         winter = env.season == 3
         town = ctx.get('town')
         targets = {
-            'water': 0.08 if town else 0.45,
+            'water': 0.32 if ctx.get('sea') else 0.08 if town else 0.45,
             'fountain': ctx.get('fountain', 0.0) * 0.35,
             'rain': rain * 0.75,
             'crickets': night * (0 if winter else 1) * (1 - rain) * 0.32,

@@ -48,6 +48,10 @@ EXHIBITS = [
          blurb='Fish of the cold months, among fallen leaves and bare twigs.'),
     dict(id='wonders', name='Weather & Wonders', w=130, style='wonders', reward=400,
          blurb='Storm fish, festival fish, and fish that fell with the stars.'),
+    dict(id='harbour', name='Harbour Waters', w=140, style='harbour', reward=350, bench=True,
+         blurb='Sea fish from under Saltmarsh Pier, in a tank of real salt water. Nell brings it up in buckets.'),
+    dict(id='kelp', name='Kelp Forest', w=120, style='kelp', reward=350,
+         blurb='Tall kelp and rock pools from Kelp Rocks, and everything that hides in them.'),
 ]
 EX_BY_ID = {e['id']: e for e in EXHIBITS}
 CURATOR = 5                  # exhibits to finish for the Curator badge
@@ -64,7 +68,8 @@ WATER = {'lake': ((74, 136, 150), (28, 70, 86)), 'cove': ((84, 146, 112), (34, 8
          'creek': ((116, 176, 192), (48, 100, 120)), 'deep': ((26, 44, 76), (6, 12, 28)),
          'legend': ((64, 112, 152), (14, 30, 58)), 'ice': ((172, 210, 230), (66, 116, 148)),
          'pots': ((96, 126, 124), (50, 70, 70)), 'warm': ((116, 176, 152), (48, 108, 88)),
-         'cold': ((96, 124, 154), (40, 58, 90)), 'wonders': ((44, 42, 96), (10, 10, 40))}
+         'cold': ((96, 124, 154), (40, 58, 90)), 'wonders': ((44, 42, 96), (10, 10, 40)),
+         'harbour': ((70, 130, 160), (20, 56, 86)), 'kelp': ((80, 140, 130), (24, 60, 60))}
 LINES = ["{fish}! I didn't know they got that big.", 'Look at the {fish}. Did you really catch it yourself?',
          'I could watch the {fish} all day.', 'The {fish} keeps looking at me. I think it likes me.',
          "Juniper says the {fish} came from you. Well done!"]
@@ -78,6 +83,8 @@ def exhibit_of(f):
     """Which exhibit a fish belongs in (every fish has exactly one)."""
     if f['rarity'] == 5:
         return 'legends'
+    if f.get('method') == 'sea':
+        return 'harbour' if f.get('spot') == 'pier' else 'kelp'
     if f.get('event') or f.get('method') in ('storm', 'aurora'):
         return 'wonders'
     sp = f.get('spot')
@@ -225,6 +232,21 @@ def _tank_back(s, e, rng):
         for i in range(3):
             x = r.x + 18 + i * 34
             pygame.draw.circle(s, (240, 220, 120), (x, r.y + 14), 3)
+    elif st == 'harbour':                  # an old pier leg with barnacles, and a sunken lobster pot
+        px = r.x + r.w - 34
+        s.fill((84, 62, 46), (px, r.y, 10, r.h - 8))
+        s.fill((70, 96, 64), (px, r.y + 30, 10, 8))
+        for i in range(8):
+            s.set_at((px + 1 + i % 8, r.y + 44 + (i * 7) % 40), (210, 206, 196))
+        s.fill((150, 100, 70), (r.x + 12, r.bottom - 24, 22, 16))
+        for x in range(r.x + 12, r.x + 34, 4):
+            s.fill((110, 70, 50), (x, r.bottom - 24, 1, 16))
+    elif st == 'kelp':                     # rocks along the bottom (the kelp itself sways, drawn live)
+        for i in range(5):
+            x = r.x + 4 + i * (r.w - 8) // 4
+            pygame.draw.ellipse(s, lerp_c((90, 90, 96), (70, 70, 76), i % 2), (x - 12, r.bottom - 24, 26, 20))
+        s.fill((240, 140, 80), (r.x + 40, r.bottom - 16, 5, 1))
+        s.fill((240, 140, 80), (r.x + 42, r.bottom - 18, 1, 5))
     elif st == 'cold':
         for i in range(9):
             x, y = rng.randrange(r.x + 4, r.right - 4), rng.randrange(r.bottom - 10, r.bottom - 3)
@@ -811,11 +833,12 @@ class AquariumScene:
         clip = frame.get_clip()
         frame.set_clip(r)
         # weeds swaying
-        if st in ('lake', 'cove', 'creek', 'warm', 'legend'):
-            col = {'warm': (90, 160, 90), 'creek': (80, 140, 90)}.get(st, (60, 120, 80))
+        if st in ('lake', 'cove', 'creek', 'warm', 'legend', 'kelp', 'harbour'):
+            col = {'warm': (90, 160, 90), 'creek': (80, 140, 90), 'kelp': (100, 110, 50),
+                   'harbour': (70, 110, 70)}.get(st, (60, 120, 80))
             for i in range(5 if st != 'legend' else 4):
                 bx = r.x + 10 + rng.randrange(max(1, r.w - 20))
-                h = rng.randrange(18, 40)
+                h = rng.randrange(18, 40) if st != 'kelp' else rng.randrange(60, r.h - 14)
                 sw = math.sin(t * 1.1 + i) * 3 + (math.sin(t * 3) * 2 if st == 'creek' else 0)
                 base = r.bottom - 6 if st != 'legend' else r.bottom - 22
                 pygame.draw.lines(frame, col, False, [(bx, base), (bx + sw * 0.5, base - h / 2), (bx + sw, base - h)], 2)

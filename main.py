@@ -63,6 +63,8 @@ import wildlife
 import shore as shoremod
 import discover
 import aquarium as aqmod
+import coast
+import harbour as hbmod
 import pad as padmod
 import ui as U
 from art import W, H, DECK_Y
@@ -70,9 +72,10 @@ from audio import Audio
 from data import (FISH, FISH_BY_ID, ALL_BY_ID, LETTERS, VILLAGERS, REQUEST_REASONS, RODS, ROD_BY_ID, BAITS,
                   BAIT_BY_ID, DECOR, GEAR, SEASONS, DAYS_PER_SEASON, MINUTES_PER_SECOND, RARITY_NAMES,
                   RARITY_COLORS, BADGES, TANK_SIZE, WEEKDAYS, HATS, HAT_BY_ID, CAT_ITEMS, CAT_BY_ID, GIFT_DECOR,
-                  FESTIVALS, WAGON_DAYS, FROST_POINTS, METEOR_DAY, FESTIVAL_DAY, FISH_RUN_DAY, SPOTS, SPOT_BY_ID,
+                  FESTIVALS, WAGON_DAYS, FROST_POINTS, METEOR_DAY, FESTIVAL_DAY, FISH_RUN_DAY, SPOT_BY_ID,
                   fish_at, spots_of, BOAT)
 import tank as tankmod
+from data import LAKE_SPOTS, COAST_SPOTS, COAST_IDS, SEA_FISH
 from fishing import Fishing, PLAYER_X, cast_point, aim_for, clamp, spot_depth
 from world import World, Env, WAGON_RECT
 
@@ -588,7 +591,9 @@ class Game:
         self.ice_hole = 0            # the day you last drilled through the ice
         self.icescene = None         # ice fishing (icefish.py), under overlay 'ice'
         aqmod.HEADLESS, aqmod.fmt_clock = HEADLESS, fmt_clock
-        self.aqscene = None
+        hbmod.HEADLESS, hbmod.fmt_clock = HEADLESS, fmt_clock
+        self.aqscene = None          # also Saltmarsh harbour (harbour.py), under overlay 'harbour'
+        self.coast = coast.new()     # Saltmarsh, down the river (coast.py)
         self.cat_bond = 0            # Biscuit (biscuit.py): bond points, today's little things, a present
         self.cat_day = {}
         self.cat_gift = None
@@ -625,7 +630,8 @@ class Game:
                     hunts=self.hunts, pot=self.pot, sky=self.sky, ice_hole=self.ice_hole,
                     cat_bond=self.cat_bond, cat_day=self.cat_day, cat_gift=self.cat_gift,
                     cat_follow=self.cat_follow, home=self.home, tut=self.tut, tut_day=self.tut_day,
-                    garden=self.garden, nature=self.nature, shore=self.shore, finds=self.finds)
+                    garden=self.garden, nature=self.nature, shore=self.shore, finds=self.finds,
+                    coast=self.coast)
         if self.solo:
             data.update(self.solo)       # visiting a friend: your own lake keeps its own day and weather
         try:
@@ -734,7 +740,7 @@ class Game:
                   'museum', 'friends', 'friend_gifts', 'buffs', 'jobs', 'tickets', 'projects', 'town_day',
                   'recipes', 'pantry', 'meal', 'upgrades', 'cook_best', 'story', 'heart_seen', 'market', 'hunts', 'pot', 'sky', 'ice_hole',
                   'cat_bond', 'cat_day', 'cat_gift', 'cat_follow', 'home', 'tut', 'tut_day', 'garden',
-                  'nature', 'shore', 'finds'):
+                  'nature', 'shore', 'finds', 'coast'):
             if k in d:
                 setattr(self, k, d[k])
         self.place = 'lake'
@@ -759,6 +765,7 @@ class Game:
         self.garden = gardenmod.clean(self.garden)
         self.shore = shoremod.clean(self.shore)
         self.finds = discover.clean(self.finds)
+        self.coast = coast.clean(self.coast)
         self.nature = {k: {'stars': max(1, min(3, int(v.get('stars', 1)))), 'day': int(v.get('day', 0)),
                            'n': max(1, int(v.get('n', 1))),
                            'at': v.get('at') if v.get('at') in SPOT_BY_ID or v.get('at') == 'town' else None}
@@ -860,6 +867,10 @@ class Game:
     def has_boat(self):
         return self.has('boat') or self.has('rowboat')
 
+    def walk_scene(self):
+        """The scene you are walking around right now (the aquarium hall or Saltmarsh harbour), if any."""
+        return self.aqscene if self.overlay in ('aquarium', 'harbour') and self.aqscene else None
+
     # ------------------------------------------------------------ the rowboat
     def open_map(self):
         if self.place != 'lake':
@@ -870,7 +881,7 @@ class Game:
             return
         if self.overlay != 'map':
             self.map_sel = self.spot if self.spot != 'dock' else (
-                next((sp['id'] for sp in SPOTS[1:] if sp['id'] not in self.visited), 'cove'))
+                next((sp['id'] for sp in LAKE_SPOTS[1:] if sp['id'] not in self.visited), 'cove'))
         self.toggle('map')
 
     def travel(self, spot):
@@ -885,11 +896,23 @@ class Game:
 
     def arrive(self):
         spot = self.travel_to or 'dock'
+        river = coast.region(spot) != coast.region(self.spot)
         self.spot = spot
         self.travel_to = None
         self.cam = [1.0, W / 2, H / 2]
+        if river:                                 # the long row down the river (or back up it) takes a while
+            mins = coast.river_minutes(self)
+            self.advance_time(mins)
+            self.stats['river'] = self.stats.get('river', 0) + 1
         if spot == 'dock':
-            self.toast('Home again. Biscuit hops out onto the dock first.', (200, 150, 80))
+            self.toast('Home again, up the river. Biscuit hops out onto the dock first.' if river else
+                       'Home again. Biscuit hops out onto the dock first.', (200, 150, 80))
+        elif river:
+            first = spot not in self.visited
+            if first:
+                self.visited.append(spot)
+            self.toast('Down the river and out to the sea: %s.%s  (%d minutes)'
+                       % (SPOT_BY_ID[spot]['name'], '  Smell that salt air!' if first else '', mins), (90, 140, 180))
         else:
             first = spot not in self.visited
             if first:
@@ -900,6 +923,16 @@ class Game:
 
     def go_place(self, where):
         if where == self.place or self.rest_phase is not None or self.mode != 'play':
+            return
+        if where == 'town' and coast.at_coast(self):
+            if self.spot != 'pier':
+                self.toast('Row round to Saltmarsh Pier to go ashore at the harbour.', (90, 140, 180))
+                return
+            if self.fishing.state not in ('idle', 'waiting', 'charging'):
+                self.toast('Finish what is on the line first.')
+                return
+            self.overlay = None
+            hbmod.enter(self)
             return
         if self.fishing.state not in ('idle', 'waiting', 'charging'):
             self.toast('Finish what is on the line first.')
@@ -982,7 +1015,7 @@ class Game:
         """What one fish fetches. nth is how many of its kind went to market earlier today."""
         if ALL_BY_ID[b['id']].get('junk'):
             return b['price']
-        return int(round(b['price'] * self.boost('sell') * market_mult(nth)))
+        return int(round(b['price'] * self.boost('sell') * market_mult(nth) * coast.price_mult(self, b['id'])))
 
     def todays_market(self):
         m = self.market
@@ -1298,7 +1331,7 @@ class Game:
             'birthday': st.get('birthdays', 0) >= 1,
             'stargazer': 'shiner' in self.journal,
             'stylish': len([h for h in self.hats if h != 'straw']) >= 4,
-            'explorer': all(sp['id'] in st.get('spots', []) for sp in SPOTS),
+            'explorer': all(sp['id'] in st.get('spots', []) for sp in LAKE_SPOTS),
             'muskie': 'muskie' in self.journal,
             'bestcat': biscuit.level(self) >= 5,
             'master': yeartwo.master_progress(self)[0] >= yeartwo.master_progress(self)[1],
@@ -1309,6 +1342,8 @@ class Game:
             'rosie': bool(self.finds.get('secret')),
             'outing': self.stats.get('expeditions', 0) >= 1,
             'curator': len(self.stats.get('exhibits', [])) >= aqmod.CURATOR,
+            'sealegs': coast.sea_known(self) >= 10,
+            'keeper': coast.lit(self),
         }
         for b in BADGES:
             if b['id'] not in self.badges and cond.get(b['id']):
@@ -1440,6 +1475,7 @@ class Game:
         yeartwo.morning(self)
         gardenmod.morning(self)
         shoremod.morning(self)
+        coast.morning(self)
         """Morning routine: forecast, the day's letter, birthdays and events."""
         d = self.day
         self.ensure_forecast()
@@ -1759,7 +1795,8 @@ class Game:
             items.append(('Lake map', key(pygame.K_b)))
         if self.story.get('started'):
             items.append(('Lanterns & Legends', key(pygame.K_l)))
-        items.append(('Walk to Fernwick' if lake else 'Back to the lake', key(pygame.K_t)))
+        items.append(('Go ashore at Saltmarsh' if coast.at_coast(self) else 'Walk to Fernwick' if lake else
+                      'Back to the lake', key(pygame.K_t)))
         items.append(('Rest until morning', key(pygame.K_z)))
         items.append(('Photo mode', key(pygame.K_p)))
         items.append(('Music on' if self.settings['music'] <= 0 else 'Music off', key(pygame.K_m)))
@@ -1931,6 +1968,9 @@ class Game:
         self.minute = 360.0
         self.spot = 'dock'                 # you row home to sleep
         self.place = 'lake'                # ...or walk home from the village
+        if self.overlay in ('aquarium', 'harbour'):
+            self.overlay = None
+        self.aqscene = None
         self.mp_ready = False
         self.net_world_t = 0               # host: tell everyone it is morning right away
         self.luck = max(0.0, self.luck - 0.5)
@@ -2048,7 +2088,7 @@ class Game:
         if self.overlay == 'ice' and self.icescene:
             self.icescene.press('mouse')
             return
-        if self.overlay == 'aquarium' and self.aqscene:
+        if self.walk_scene():
             self.aqscene.press('mouse')
             return
         if self.overlay == 'scene' and self.scene:
@@ -2235,7 +2275,7 @@ class Game:
         if ov == 'ice' and self.icescene:
             self.icescene.key(k)
             return
-        if ov == 'aquarium' and self.aqscene:
+        if self.walk_scene():
             self.aqscene.key(k)
             return
         if ov == 'scene' and self.scene:
@@ -2401,8 +2441,8 @@ class Game:
         env = self.env
         self.net_update(dt)
         paused = self.overlay is not None or self.rest_phase is not None
-        if self.overlay == 'aquarium' and self.aqscene and self.aqscene.panel is None and self.rest_phase is None:
-            paused = False                                 # strolling the aquarium hall: the day goes on
+        if self.walk_scene() and self.aqscene.panel is None and self.rest_phase is None:
+            paused = False                                 # strolling the aquarium or the quay: the day goes on
         if self.net.online:
             paused = self.rest_phase in ('out', 'in')     # with friends here the lake never stops
         if self.mode == 'play' and self.net.role == 'guest':
@@ -2421,7 +2461,7 @@ class Game:
             self.cooking.update(dt)
         if self.overlay == 'ice' and self.icescene:
             self.icescene.update(dt)
-        if self.overlay == 'aquarium' and self.aqscene:
+        if self.walk_scene():
             self.aqscene.update(dt)
         if self.mode == 'play':
             seasons.update(self, dt)
@@ -2459,7 +2499,7 @@ class Game:
             if c['z'] <= 0:
                 c['z'] = 1.8
                 self.world.zzz(actors.CAT_X + 6, DECK_Y - 14)
-        if self.overlay == 'aquarium' and self.aqscene:
+        if self.walk_scene():
             actx = self.aqscene.audio_ctx()
         elif self.place == 'town' and self.cooking is None:
             actx = self.town.audio_ctx(self)
@@ -2592,8 +2632,8 @@ class Game:
         cooking = self.cooking if self.overlay == 'cooking' and self.mode == 'play' else None
         if cooking is None and self.overlay == 'ice' and self.icescene and self.mode == 'play':
             cooking = self.icescene          # drawn and framed just like the kitchen scene
-        if cooking is None and self.overlay == 'aquarium' and self.aqscene and self.mode == 'play':
-            cooking = self.aqscene           # so is the walk round the aquarium
+        if cooking is None and self.walk_scene() and self.mode == 'play':
+            cooking = self.aqscene           # so is the walk round the aquarium, or the harbour
         if cooking:
             cooking.draw_world(self.frame)
         elif self.place == 'town' and self.mode == 'play':
@@ -2680,8 +2720,13 @@ class Game:
             if self.rest_phase in ('out', 'in'):
                 ui.blit_text(cv, 'z z z', (SW // 2, SH // 2), 'h1', (200, 200, 230), 'center')
             elif self.rest_phase in ('row_out', 'row_in'):
-                where = SPOT_BY_ID[self.travel_to or self.spot]['name']
-                ui.blit_text(cv, 'Rowing to %s...' % where, (SW // 2, SH // 2), 'h2', (220, 226, 240), 'center',
+                to = self.travel_to or self.spot
+                where = SPOT_BY_ID[to]['name']
+                text = 'Rowing to %s...' % where
+                if self.rest_phase == 'row_out' and coast.region(to) != coast.region(self.spot):
+                    text = ('Rowing down the river to Saltmarsh...' if to in COAST_IDS else
+                            'Rowing back up the river to Lantern Lake...')
+                ui.blit_text(cv, text, (SW // 2, SH // 2), 'h2', (220, 226, 240), 'center',
                              alpha=int(255 * self.fade))
             elif self.rest_phase in ('walk_out', 'walk_in'):
                 to = self.place_to or self.place
@@ -2975,6 +3020,7 @@ class Game:
             lines.append(('town', 'In Fernwick Village'))
         elif self.spot != 'dock':
             lines.append(('spot', 'Fishing at %s' % SPOT_BY_ID[self.spot]['name']))
+            lines += coast.day_lines(self)
         for sn in townmod.SNACKS + townmod.NIGHT_SNACKS:
             if self.buff(sn['id']):
                 lines.append(('snack', {'bun': 'Honey Bun: a little luck', 'tea': 'Lakeside Tea: quick bites',
@@ -3139,7 +3185,7 @@ class Game:
                      ('Shop', 'S', lambda: self.toggle('shop')),
                      ('Cabin', 'C', lambda: self.toggle('cabin')),
                      ('Calendar', 'K', lambda: self.toggle('calendar')),
-                     ('Town', 'T', lambda: self.go_place('town')),
+                     ('Harbour' if coast.at_coast(self) else 'Town', 'T', lambda: self.go_place('town')),
                      ('Rest', 'Z', self.try_rest)]
             if self.has_boat():
                 slots.insert(5, ('Boat', 'B', self.open_map))
@@ -3167,7 +3213,7 @@ class Game:
                     U.calendar_icon(s, c)
                 elif label == 'Boat':
                     U.rowboat(s, (c[0], c[1] + 2), 1.0)
-                elif label in ('Town', 'Lake'):
+                elif label in ('Town', 'Lake', 'Harbour'):
                     townmod.signpost_icon(s, c, label == 'Lake')
                 else:
                     U.moon_icon(s, c, U.CREAM)
@@ -3402,16 +3448,24 @@ class Game:
 
     def draw_map(self, s):
         ui = self.ui
-        rect = self.big_panel(s, 'Lake Map')
+        at_sea = self.spot in COAST_IDS
+        rect = self.big_panel(s, 'Saltmarsh Coast' if at_sea else 'Lake Map')
         sea = self.env.season
-        mp = self._mapcache.get(sea)
+        mp = self._mapcache.get((at_sea, sea))
         if mp is None:
-            mp = self._mapcache[sea] = pygame.transform.scale(art.make_map(sea), (600, 440))
+            src = coast.make_map(sea) if at_sea else art.make_map(sea)
+            mp = self._mapcache[(at_sea, sea)] = pygame.transform.scale(src, (600, 440))
         mr = U.snap_rect(pygame.Rect(rect.x + 28, rect.y + 92, 600, 440))
         s.blit(ui._frame(mr.w + 16, mr.h + 16, (120, 86, 60), (84, 58, 42), 2), mr.inflate(16, 16))
         s.blit(mp, mr)
-        for sp in SPOTS:
-            ax, ay = self.MAP_PINS[sp['id']]
+        spots = COAST_SPOTS if at_sea else LAKE_SPOTS
+        pins = coast.COAST_PINS if at_sea else self.MAP_PINS
+        if at_sea:                                  # the river back up to the lake
+            ax, ay = pins['dock']
+            ui.blit_text(s, 'To Lantern Lake', (mr.x + ax * 2 + 14, mr.y + ay * 2 + 4), 'smallb', (255, 250, 236),
+                         'topleft', outline=(50, 36, 30))
+        for sp in spots:
+            ax, ay = pins[sp['id']]
             px, py = mr.x + ax * 2, mr.y + ay * 2
             sel = sp['id'] == self.map_sel
             here = sp['id'] == self.spot
@@ -3429,22 +3483,35 @@ class Game:
         # the spot list and details
         x0 = mr.right + 28
         w = rect.right - 28 - x0
-        for i, sp in enumerate(SPOTS):
-            label = sp['name'] + ('  (here)' if sp['id'] == self.spot else '')
-            ui.button(s, (x0, rect.y + 86 + i * 52, w, 44), label, lambda k=sp['id']: self.map_pick(k),
-                      'tab_on' if sp['id'] == self.map_sel else 'tab', nav=True, font='bodyb')
+        entries = [(sp['id'], sp['name'] + ('  (here)' if sp['id'] == self.spot else '')) for sp in spots]
+        if at_sea:
+            entries.append(('dock', 'Row home, up the river'))
+        elif coast.is_open(self):
+            entries.append(('pier', 'Saltmarsh, down the river'))
+        step = 52 if len(entries) <= 4 else 46
+        if self.map_sel not in [e[0] for e in entries]:
+            self.map_sel = entries[0][0]
+        for i, (sid, label) in enumerate(entries):
+            ui.button(s, (x0, rect.y + 86 + i * step, w, step - 8), label, lambda k=sid: self.map_pick(k),
+                      'tab_on' if sid == self.map_sel else 'tab', nav=True, font='bodyb')
         sel = self.map_sel
         spec = SPOT_BY_ID[sel]
-        y = rect.y + 86 + 4 * 52 + 8
-        for line in ui.wrap(spec['desc'], 'small', w)[:4]:
+        river = coast.region(sel) != coast.region(self.spot)
+        desc = spec['desc']
+        if river:
+            desc = ('About %d minutes back up the river to your own dock, and Biscuit.' % coast.river_minutes(self)
+                    if sel == 'dock' else 'About %d minutes down the river to the sea: a harbour, a dark old '
+                    'lighthouse and fish that follow the tide.' % coast.river_minutes(self))
+        y = rect.y + 86 + len(entries) * step + 8
+        for line in ui.wrap(desc, 'small', w)[:4 if len(entries) <= 4 else 3]:
             ui.blit_text(s, line, (x0, y), 'small', U.SOFT)
             y += 22
         y += 8
-        here = fish_at(sel)
+        here = SEA_FISH if river and sel != 'dock' else fish_at(sel)
         known = sum(1 for f in here if f['id'] in self.journal)
         ui.blit_text(s, 'Species here:  %d / %d' % (known, len(here)), (x0, y), 'smallb', U.INK)
         y += 28
-        locals_ = [f for f in FISH if f['spot'] == sel]
+        locals_ = [f for f in FISH if f['spot'] == sel and f['rarity'] < 5]
         if not locals_:
             ui.blit_text(s, 'Every lake fish swims past', (x0, y + 6), 'small', U.SOFT)
             ui.blit_text(s, 'the dock sooner or later.', (x0, y + 28), 'small', U.SOFT)
@@ -3465,16 +3532,16 @@ class Game:
         if sel == self.spot:
             ui.button(s, (x0, by, w, 54), 'You are here', None, enabled=False, font='h3')
         else:
-            ui.button(s, (x0, by, w, 54), 'Row home' if sel == 'dock' else 'Row there',
-                      lambda: self.travel(self.map_sel), 'primary', font='h3', nav=True)
+            ui.button(s, (x0, by, w, 54), 'Row home' if sel == 'dock' else 'Row down the river' if river else
+                      'Row there', lambda: self.travel(self.map_sel), 'primary', font='h3', nav=True)
 
     def map_pick(self, spot):
         self.map_sel = spot
         self.audio.play('ui', 0.5)
 
     def close_overlay(self):
-        if self.overlay == 'aquarium' and self.aqscene and self.aqscene.panel:
-            self.aqscene.close_panel()       # a window inside the aquarium: back to the hall
+        if self.walk_scene() and self.aqscene.panel:
+            self.aqscene.close_panel()       # a window inside the aquarium or the harbour: back to walking
             return
         self.overlay = None
         self.audio.play('page', 0.5)
@@ -3490,11 +3557,11 @@ class Game:
         caught = sum(1 for f in FISH if f['id'] in self.journal)
         fx = rect.x + 34
         if self.j_tab == 'fish':
-            for i, label in enumerate(('Lake', 'Rowboat', 'Seasonal')):
+            for i, label in enumerate(('Lake', 'Rowboat', 'Seasonal', 'Coast')):
                 ui.button(s, (rect.x + 28 + i * 104, rect.bottom - 52, 98, 36), label,
                           lambda i=i: setattr(self, 'j_page', i), 'tab_on' if self.j_page == i else 'tab',
                           font='smallb')
-            fx = rect.x + 352
+            fx = rect.x + 456
         if self.j_tab == 'letters' and self.diary_entries():
             for i, label in enumerate(('Letters', "Rosie's diary")):
                 ui.button(s, (rect.x + 28 + i * 104, rect.bottom - 52, 98 + 48 * i, 36), label,
@@ -3516,10 +3583,14 @@ class Game:
         hover_i = None
         page = ([f for f in fish_at('dock') if not f.get('method')] if self.j_page == 0 else
                 [f for f in FISH if f['spot'] in ('cove', 'deep', 'creek') and not f.get('method')]
-                if self.j_page == 1 else [f for f in FISH if f.get('method')])
+                if self.j_page == 1 else [f for f in FISH if f.get('method') and f['method'] != 'sea']
+                if self.j_page == 2 else SEA_FISH)
         if self.j_page == 1 and not self.has_boat() and not any(f['id'] in self.journal for f in page):
             ui.blit_text(s, 'Fish from the far corners of the lake.', (gx + 6, gy + 250), 'small', U.SOFT)
             ui.blit_text(s, 'A rowboat would take you there.', (gx + 6, gy + 272), 'small', U.SOFT)
+        if self.j_page == 3 and not coast.is_open(self) and not any(f['id'] in self.journal for f in page):
+            ui.blit_text(s, 'Fish from the sea at Saltmarsh, down the river.', (gx + 6, gy + 380), 'small', U.SOFT)
+            ui.blit_text(s, 'With a rowboat, the river will take you there.', (gx + 6, gy + 402), 'small', U.SOFT)
         if page and FISH[self.j_sel] not in page:
             self.j_sel = FISH.index(page[0])      # keep the detail card on this page
         for n, f in enumerate(page):
@@ -5746,6 +5817,11 @@ def run_bot(seconds):
             g.scene.auto(dt)
         elif in_town:
             town_step()
+        elif g.overlay == 'harbour' and g.aqscene:
+            if tb.get('hb_seen') is not g.aqscene:
+                tb['hb_seen'] = g.aqscene
+                did('harbour')
+            g.aqscene.auto(dt, rng)              # a stroll round the quay: orders, Nell, chowder, Sol, the beach
         elif g.overlay == 'ice' and g.icescene:
             sc = g.icescene                       # ice fishing: jig, reel, and now and then get up and go
             sc.auto(dt, rng, rng.uniform(0.6, 1.0))
@@ -5899,10 +5975,14 @@ def run_bot(seconds):
             tb['day'] = g.day
             tb['need_plan'] = True
             g.go_place('town')
+        elif (g.rest_phase is None and f.state == 'idle' and g.overlay is None and g.spot == 'pier'
+              and tb.get('hb_day') != g.day and 420 <= g.minute < 1140):
+            tb['hb_day'] = g.day
+            g.go_place('town')                    # up the steps into Saltmarsh
         elif g.rest_phase is None and f.state == 'idle' and g.overlay is None and rng.random() < 0.05:
-            g.travel(rng.choice([sp['id'] for sp in SPOTS if sp['id'] != g.spot]))
+            g.travel(rng.choice([sid for sid in coast.reachable(g) if sid != g.spot]))
             stats['trips'] = stats.get('trips', 0) + 1
-        if g.rest_phase is not None or g.mp_ready or in_town or g.overlay == 'ice':
+        if g.rest_phase is not None or g.mp_ready or in_town or g.overlay in ('ice', 'harbour'):
             pass
         elif f.state == 'idle':
             stats['casts'] += 1
@@ -5968,6 +6048,11 @@ def run_bot(seconds):
           'snaps', len(tb.get('snaps', [])), flush=True)
     print('legends:', {k: (v['stage'], v.get('clues'), v.get('day')) for k, v in g.hunts.items()},
           'lures made', g.stats.get('lures', 0), flush=True)
+    cs = g.coast
+    print('coast: open', cs['open'], 'river trips', g.stats.get('river', 0), 'harbour visits', cs['visits'],
+          'orders', g.stats.get('coast_orders', 0), 'combed', g.stats.get('combed', 0), 'shells', len(cs['shells']),
+          'glass', cs['glass'], 'light', cs['light'], cs['tasks'], 'ups', cs['ups'], 'chowder', cs['chowder'],
+          'sea fish', coast.sea_known(g), 'friends', cs['friends'], flush=True)
     print('story: lit', g.story['lit'], 'festival', g.story['festival'], 'heart scenes', g.heart_seen,
           'scenes played', tb['scenes'], flush=True)
     print('cook scenes', len(tb['stars']), 'stars', {k: tb['stars'].count(k) for k in (-1, 0, 1, 2, 3)},

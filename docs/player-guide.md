@@ -134,6 +134,56 @@ automatically when you rest for the night.
 Each spot also has some of the lake's own fish. The map shows how many species you've found at each spot, and
 the journal has a second page (Rowboat) for the new fish.
 
+## Saltmarsh, down the river
+
+The morning after you get a rowboat, Harbourmaster Morwen writes to say the old river channel is open again.
+Open the map (B) and pick **Saltmarsh, down the river**. The row takes about an hour of game time each way (20
+minutes once Ossian fits a sail). At the coast the map shows the coast instead, with *Row home, up the river* at
+the bottom. Resting for the night still rows you home.
+
+There are two places to fish at the coast:
+
+- **Saltmarsh Pier**: under the harbour pier, with the village up the steps. Sprats, mackerel, pollock and
+  bream, Silver Sea Bass after dusk, Conger Eels at night, and the big Halibut and Bluefin Runner on a high tide
+- **Kelp Rocks**: weedy rocks below the lighthouse. Gobies and Shore Crabs in the rock pools at low tide, Kelp
+  Wrasse any time, Wolf Fish in the cold months and the Blue Lobster after dark at low water
+
+The journal has a Coast page for the sea fish, and the aquarium has two new exhibits for them.
+
+### Tides
+
+The sea rises and falls twice a day, and each day the high tide comes about 50 minutes later. The HUD says what
+the tide is doing, and the harbour board has a tide table for the next day. Some fish only come in at high water
+and some only at low water (their journal hints say which). You can watch the tide climb the quay wall in the
+harbour, and cover the rocks at Kelp Rocks.
+
+### The harbour
+
+At Saltmarsh Pier, press T (or the *Harbour* button) to climb the steps into the village. Walk with A and D or
+click, press E at a door or a neighbour, and press Esc to go back down to your boat. The clock keeps running.
+The harbour folk keep 7 AM to 8 PM, and each of them grows a friendship with you. Talk once a day for a little,
+and at five hearts they give you a present.
+
+- **The harbour board** (Harbourmaster Morwen): three orders a day for sea fish, paid at about two and a half
+  times the fish's price, and the tide table
+- **Nell's Fish Stall**: the *catch of the day* sells for double (anywhere, all day). Nell sells two sea baits,
+  *Ragworm* (sea fish bite much sooner) and *Squid Strips* (rare sea fish come twice as often), and buys your sea
+  fish
+- **The Gull & Lantern**: *Harbour Chowder* (45 coins, once a day) makes rare sea fish bite more often. Listen
+  at the bar for a tip about a sea fish you haven't caught yet
+- **Ossian's Boatyard**: a *Little Sail* (the river in 20 minutes) and a *Bow Lamp* (sea fish bite sooner at
+  night)
+- **The beach**: new shells and sea glass wash up every morning. Find all eight kinds of shell for Kit's
+  collection and a 600-coin prize
+
+### The lighthouse
+
+The Saltmarsh lighthouse has been dark for years. Sol, the old keeper, needs three things to light it again: six
+pieces of sea glass to mend the lens, a Silver Sea Bass for supper, and 600 coins for oil and a wick. Bring them
+to Sol at the lighthouse, then press *Light the lamp*. You earn the *Keeper of the Light* badge, the beam sweeps
+the sky every night, rare sea fish bite a little more often after dusk, and Sol writes about something he saw
+off Kelp Rocks.
+
 ## Fernwick village
 
 Press T (or the Town button) to walk up the lane to Fernwick, a little village street three screens long.
@@ -187,14 +237,14 @@ Press E at the aquarium door (open 9 AM to 5 PM) to walk inside. Walk the hall w
 to look, sit or talk. Esc leaves. The clock keeps running while you look around, and Juniper sees everyone out
 at closing time.
 
-Every fish you donate swims in one of ten themed exhibits: Lantern Lake, Lily Cove, Willow Creek, The Deep,
+Every fish you donate swims in one of twelve themed exhibits: Lantern Lake, Lily Cove, Willow Creek, The Deep,
 Legends of the Lake (a round brass porthole), Under the Ice, Crab Pot Corner, Spring & Summer, Autumn & Winter,
-and Weather & Wonders. Press E at a tank to see who belongs there, read about them, and donate straight from
+Weather & Wonders, and two for the sea, Harbour Waters and the Kelp Forest. Press E at a tank to see who belongs there, read about them, and donate straight from
 your basket.
 
 - **Finish an exhibit** for a one-time coin reward, from 150 to 600 coins. Finish five for the *Curator* badge. If
   you filled exhibits before they existed, Juniper pays you the first time you walk in
-- **Benches** sit in front of four of the tanks. Sit a while to read about the fish drifting past (+0.3 luck,
+- **Benches** sit in front of five of the tanks. Sit a while to read about the fish drifting past (+0.3 luck,
   once a day)
 - **Visitors**: two neighbours wander in each day and react to your discoveries. Chat with them for a little
   friendship, once a day each
@@ -489,12 +539,15 @@ The calendar (K) shows a three-day weather forecast, the moon phase and every ev
 
 - Day and night cycle (one day is 12 real minutes), four seven-day seasons, and weather: clear, cloudy, rain with
   thunder, fog and snow
-- 51 fish, including event fish, 9 that only live at the rowboat spots, 15 caught with the crab pot, fly rod,
-  ice auger or on rare nights, and 3 that arrive in year two, plus treasures and 10 bottled letters to collect
+- 70 fish, including event fish, 9 that only live at the rowboat spots, 19 from the sea at Saltmarsh, 15 caught
+  with the crab pot, fly rod, ice auger or on rare nights, and 3 that arrive in year two, plus treasures and 10
+  bottled letters to collect
+- Saltmarsh, a second region down the river: a harbour village with five new neighbours, tides that change what
+  bites, daily orders, beachcombing, a boatyard and a lighthouse to light again
 - Aim your casts. Bubbling hotspots on the water give quicker bites and rarer fish
 - Cabin fish tank (8 fish) and a wardrobe with 7 hats and 5 outfits for Biscuit
-- 27 badges with coin rewards (Journal, Badges tab)
-- A walkable aquarium with ten themed exhibits, benches and visitors
+- 29 badges with coin rewards (Journal, Badges tab)
+- A walkable aquarium with twelve themed exhibits, benches and visitors
 - A cabin garden with 13 crops, and 19 animals to photograph for the Nature page and frame on your wall
 - Three shoreline restoration projects that change the lake and bring new animals
 - Biscuit's discoveries in Fernwick: Grandma Rosie's diary, her old lures, and a secret

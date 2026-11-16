@@ -343,7 +343,8 @@ def can_bite(g, fid):
     """Legends only bite on their own lure, and not again on a day they got away."""
     h = HUNT_BY_FISH.get(fid)
     if not h:
-        return False
+        import coast
+        return coast.legend_can_bite(g, fid)     # the Grey Mariner comes home with the light
     st = g.hunts.get(h['id'])
     if not st or st['stage'] not in ('hunt', 'done'):
         return False
@@ -352,13 +353,17 @@ def can_bite(g, fid):
 
 def fight_lines(fid):
     h = HUNT_BY_FISH.get(fid)
+    if not h and fid == 'mariner':
+        import coast
+        return coast.MARINER_LINES
     return h['fight'] if h else ('It fights!', 'It fights harder!', 'Last stand!')
 
 
 def on_escape(g, fid):
     h = HUNT_BY_FISH.get(fid)
     if not h:
-        return None
+        import coast
+        return coast.on_escape(g, fid)
     st = g.hunts.get(h['id'])
     if st:
         st['rest'] = g.day

@@ -674,6 +674,11 @@ def _volumes():
         'straw')
     add(_rect(1700, G - 54, 1758, G - 4), 20, (200, 214, 230), (90, 110, 140))
     add([(1694, G - 54), (1719, G - 80), (1764, G - 54)], 20, (200, 214, 230), (90, 110, 140), 'tiles')
+    return finish_volumes(v)
+
+
+def finish_volumes(v):
+    """Work out each volume's winding and extent (so other streets, like Saltmarsh's quay, can use them too)."""
     for p in v:
         pts = p['poly']
         p['area'] = sum(pts[i][0] * pts[(i + 1) % len(pts)][1] - pts[(i + 1) % len(pts)][0] * pts[i][1]
@@ -687,10 +692,10 @@ PAVE = [(198, 190, 176), (204, 196, 180), (190, 186, 178), (210, 214, 222)]
 SNOWY = (236, 240, 250)
 
 
-def draw_volumes(s, sc, season):
+def draw_volumes(s, sc, season, vols=None):
     """The sides and roofs of every building on screen, behind their fronts."""
     vx = W / 2
-    for p in VOLUMES:
+    for p in (VOLUMES if vols is None else vols):
         if p['x1'] - sc < -60 or p['x0'] - sc > W + 60:
             continue
         k = p['depth'] * DEPTH_K
