@@ -41,7 +41,7 @@ jobs:
       - name: Point the release tool at this repository
         shell: bash
         run: |
-          printf '{"github": "%s", "min_launcher": "1.0.0", "install": "unused"}\n' "${{ github.repository }}" > release.json
+          printf '{"github": "%s", "min_launcher": "1.0.1", "install": "unused"}\n' "${{ github.repository }}" > release.json
 
       - name: Start the game headless (smoke test)
         shell: bash

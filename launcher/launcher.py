@@ -31,7 +31,7 @@ import urllib.request
 import zipfile
 
 os.environ.setdefault('PYGAME_HIDE_SUPPORT_PROMPT', '1')
-LAUNCHER_VERSION = '1.0.0'
+LAUNCHER_VERSION = '1.0.1'
 UA = 'LanternLakeLauncher/' + LAUNCHER_VERSION
 FROZEN = getattr(sys, 'frozen', False)
 W, H = 960, 540
