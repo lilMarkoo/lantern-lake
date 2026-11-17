@@ -31,7 +31,7 @@ import urllib.request
 import zipfile
 
 os.environ.setdefault('PYGAME_HIDE_SUPPORT_PROMPT', '1')
-LAUNCHER_VERSION = '1.0.1'
+LAUNCHER_VERSION = '1.0.2'
 UA = 'LanternLakeLauncher/' + LAUNCHER_VERSION
 FROZEN = getattr(sys, 'frozen', False)
 W, H = 960, 540
@@ -350,7 +350,9 @@ class Updater:
                 self.state = 'noconfig'
                 return
             man = fetch_manifest(self.src)
-            if parse_version(man['version']) <= parse_version(self.local_version()):
+            # the published release is the one to have: a different number is an update even when it is lower
+            # (the game's numbering went from 2.0.x back to 0.2.x)
+            if parse_version(man['version']) == parse_version(self.local_version()):
                 self.man = man
                 self.state = 'uptodate'
             elif parse_version(man.get('min_launcher')) > parse_version(LAUNCHER_VERSION):
