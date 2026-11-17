@@ -907,8 +907,19 @@ class Launcher:
             lines.append(('gap', ''))
         while lines and lines[-1][0] == 'gap':
             lines.pop()
-        ph = 70 + sum(8 if k == 'gap' else 22 for k, _ in lines) + (44 if bar is not None else 0) + \
-            (64 if btns else 18)
+        # keep the panel (and its buttons) on screen: long release notes get trimmed to fit
+        extra = (44 if bar is not None else 0) + (64 if btns else 18)
+        room = H - 24 - 70 - extra - 22
+
+        def lh(ls):
+            return sum(8 if k == 'gap' else 22 for k, _ in ls)
+        if lh(lines) > room + 22:
+            while lines and lh(lines) > room:
+                lines.pop()
+            while lines and lines[-1][0] == 'gap':
+                lines.pop()
+            lines.append(('body', '...and more, see the release page.'))
+        ph = 70 + lh(lines) + extra
         r = pg.Rect(0, 0, pw, ph)
         r.center = (W // 2, H // 2)
         self.panel(s, r, CREAM, BROWN, radius=16)
