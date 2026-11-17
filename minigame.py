@@ -5,6 +5,10 @@ while the fish is inside the arc the line comes in, outside it the fish gets awa
 reels faster but builds line strain, and the line snaps if you hold through a lunge. Fish warn you
 before they lunge, leap out of the water for a timing challenge, and golden glimmers on the ring
 are worth a few coins if you can swing over to them.
+
+Fish fight in different styles: calm cruisers, darters, zigzaggers, runners, circlers that race round and
+suddenly turn back, divers that vanish into the deep (follow the bubbles), and sulkers that stop dead and
+have to be pumped in (hold, let go, hold). Big fish get a second wind near the end.
 """
 import math
 import random
@@ -19,6 +23,9 @@ CX, CY, R = 196, 424, 104          # ring position on the 1280x720 interface lay
 TARGET = 40                        # leap timing: the radius the shrinking ring has to meet
 PERFECT, NICE = 9, 22              # leap timing windows in pixels
 LEAPS = {1: 0, 2: 1, 3: 2, 4: 2, 5: 3}
+STYLE_NAMES = {'calm': 'A cruiser', 'darter': 'A darter', 'zigzag': 'A zigzagger', 'runner': 'A runner',
+               'circler': 'A circler', 'diver': 'A diver', 'sulker': 'A sulker'}
+SECOND_WIND = 0.7                  # where a big fish finds its second wind
 
 
 def angdiff(a, b):
@@ -79,6 +86,16 @@ class ReelGame:
         self.perfects = 0
         self.lunges = 0
         self.tired = False
+        self.style = self.behavior         # what it started as (a second wind changes behavior)
+        self.dive = 0.0                    # diving: hidden on the ring, only bubbles show where it is
+        self.sulk = 0.0                    # sulking: dead weight, only pumping brings it in
+        self.tell = 0.0                    # a circler about to turn back
+        self.cdir = rng.choice((-1, 1))
+        self.told = set()                  # first-time hints already shown this fight
+        self.bubbles = []                  # [angle, age] trail while it dives
+        big = self.r >= 4 or (spec['strength'] >= 0.8 and self.r >= 2)
+        self.wind_at = SECOND_WIND if big else None
+        self.winded = False
 
     # ------------------------------------------------------------ input
     def press(self):
@@ -111,7 +128,12 @@ class ReelGame:
         self._fish(dt)
         s = self.s
         self.in_arc = abs(angdiff(self.fa, self.pa)) <= self.arc / 2
-        if self.in_arc:
+        if self.in_arc and self.sulk > 0:
+            # dead weight: only a pull moves it, and the pull is hard on the line (pump: hold, let go, hold)
+            gain = self.rate * 2.0 if holding else 0.0
+            self.progress += gain * dt
+            self.spin += gain * dt * 60
+        elif self.in_arc:
             gain = self.rate * (1.7 if holding else 1.0)
             self.progress += gain * dt
             self.spin += gain * dt * 60
@@ -121,10 +143,14 @@ class ReelGame:
         if holding:
             if self.lunge > 0:
                 k = 1.5
+            elif self.sulk > 0:
+                k = 0.75 * (0.6 + s)
             elif self.in_arc:
                 k = 0.2 * (0.6 + s)
             else:
                 k = 0.45 * (0.6 + s)
+            if self.dive > 0:
+                k *= 1.6                   # it pulls down hard while it dives
             self.strain += k * dt
             self.click_t -= dt
             if self.click_t <= 0 and self.in_arc:
@@ -145,6 +171,8 @@ class ReelGame:
         else:
             self.over_t = max(0.0, self.over_t - dt * 2)
         self._glimmer(dt)
+        if self.wind_at is not None and not self.winded and self.progress >= self.wind_at and not self.leap:
+            self._second_wind()
         if self.leap_marks and self.progress >= self.leap_marks[0]:
             self.leap_marks.pop(0)
             self._start_leap()
@@ -180,7 +208,8 @@ class ReelGame:
                 self.lunges += 1
                 self.events.append(('lunge',))
         else:
-            self.lunge_cd -= dt
+            if self.dive <= 0 and self.sulk <= 0:
+                self.lunge_cd -= dt
             if self.lunge_cd <= 0:
                 self.warn = 0.9 if self.assist else 0.6
                 self.lunge_cd = max(1.8, rng.uniform(2.4, 5.6 - 2.4 * self.s) + (2.0 if self.s < 0.2 else 0))
@@ -189,6 +218,30 @@ class ReelGame:
             self._behave(dt)
             self.fv += (self.tv - self.fv) * min(1.0, dt * self.acc)
         self.fa = (self.fa + self.fv * dt) % 360
+        for bb in self.bubbles:
+            bb[1] += dt
+        self.bubbles = [bb for bb in self.bubbles if bb[1] < 0.9]
+        if self.dive > 0 and (not self.bubbles or self.bubbles[-1][1] > 0.09):
+            self.bubbles.append([self.fa + rng.uniform(-3, 3), 0.0])
+
+    def _hint(self, key, text, col):
+        if key not in self.told:
+            self.told.add(key)
+            self.popups.append([text, col, 0.0])
+
+    def _second_wind(self):
+        """A big fish near the end finds its strength again and changes how it fights."""
+        self.winded = True
+        others = [b for b in ('runner', 'zigzag', 'darter', 'circler', 'diver') if b != self.behavior]
+        self.behavior = self.rng.choice(others)
+        self.dive = self.sulk = self.tell = 0.0
+        self.mode_t = 0.0
+        self.base *= 1.15
+        self.warn, self.lunge = 0.0, 0.0
+        self.lunge_cd = 0.4                          # and it comes at you straight away
+        self.strain = max(0.0, self.strain - 0.25)
+        self.popups.append(['Second wind!', (255, 190, 120), 0.0])
+        self.events.append(('second',))
 
     def _behave(self, dt):
         rng, b = self.rng, self.base * self.tire()
@@ -212,6 +265,56 @@ class ReelGame:
             self.acc = 6.0
             self.zig += dt * (1.4 + self.a * 1.5)
             self.tv = math.sin(self.zig) * 1.5 * b + math.sin(self.zig * 0.31) * 0.4 * b
+        elif beh == 'circler':
+            # races round one way, faster and faster, then gives a little shiver and turns back
+            self.acc = 5.0
+            if self.tell > 0:
+                self.tell -= dt
+                self.tv = 0.15 * self.cdir * b
+                if self.tell <= 0:
+                    self.cdir = -self.cdir
+                    self.mode_t = rng.uniform(2.4, 4.2)
+                    self.fv = self.cdir * 1.7 * b          # the turn is sudden
+                    self.events.append(('turn',))
+            else:
+                if self.mode_t <= 0:
+                    self.tell = 0.7 if self.assist else 0.45
+                    self._hint('turn', 'It circles... watch for the turn!', (200, 226, 250))
+                self.tv = self.cdir * b * (1.0 + 0.6 * clamp(1 - self.mode_t / 3.5))
+        elif beh == 'diver':
+            self.acc = 3.0
+            if self.dive > 0:
+                self.dive -= dt
+                if self.dive <= 0:
+                    self.mode_t = rng.uniform(2.0, 3.6)
+                    self.events.append(('surface',))
+            elif self.mode_t <= 0 and self.t > 1.2:
+                self.dive = rng.uniform(1.3, 2.0) * (1.25 if self.assist else 1.0)
+                self.tv = rng.choice((-1, 1)) * rng.uniform(0.7, 1.1) * b
+                self.events.append(('dive',))
+                self._hint('dive', 'It dived! Follow the bubbles', (180, 220, 250))
+            elif self.mode_t <= 0:
+                self.mode_t = 0.5
+            if self.dive <= 0 and (self.tv == 0 or rng.random() < dt * 0.8):
+                self.tv = rng.choice((-1, 1)) * rng.uniform(0.6, 1.2) * b
+        elif beh == 'sulker':
+            # cruises, then stops dead on the bottom and sulks
+            self.acc = 3.0
+            if self.sulk > 0:
+                self.sulk -= dt
+                self.tv = 0.0
+                self.acc = 10.0
+                if self.sulk <= 0:
+                    self.mode_t = rng.uniform(1.6, 3.0)
+                    self.tv = rng.choice((-1, 1)) * rng.uniform(0.6, 1.0) * b
+                    self.events.append(('unsulk',))
+            elif self.mode_t <= 0 and self.t > 1.0:
+                self.sulk = rng.uniform(1.6, 2.6)
+                self.events.append(('sulk',))
+                self._hint('sulk', 'It sulks! Pump it: hold, let go, hold', (250, 220, 170))
+            elif self.mode_t <= 0:
+                self.mode_t = 0.4
+                self.tv = rng.choice((-1, 1)) * rng.uniform(0.5, 0.9) * b
         else:                                         # runner
             self.acc = 3.5
             if self.mode_t <= 0:
@@ -304,6 +407,7 @@ class LegendGame(ReelGame):
         self.leap_marks = [0.45, 0.68, 0.9]                  # one leap in every stage
         self.all_marks = list(self.leap_marks)
         self.banner = [self.lines[0], 0.0]
+        self.wind_at = None              # legends have stages instead of a second wind
         self.rate *= 0.8                 # a long fight, even for a perfect angler
 
     def tire(self):
@@ -345,6 +449,7 @@ class LegendGame(ReelGame):
         self.st = 0.0
         self.stage_tired = False
         self.behavior = self.STYLES[self.stage - 1]
+        self.dive = self.sulk = self.tell = 0.0
         self.base *= 1.12
         self.s = min(1.2, self.s + 0.05)
         self.warn, self.lunge = 0.0, 0.0
@@ -476,9 +581,16 @@ def draw(s, ui, mg, t, title):
         pygame.draw.line(s, (72, 46, 32), p0, p1, 4)
         pygame.draw.line(s, (72, 46, 32), p1, _pt(a + 6 * d, R + 22), 4)
         pygame.draw.line(s, (72, 46, 32), p0, _pt(a + 6 * d, R - 22), 4)
+    # bubbles where a diving fish is (it is out of sight)
+    for a, age in getattr(mg, 'bubbles', ()):
+        bx, by = _pt(a, R + math.sin(age * 9 + a) * 4)
+        rr = max(1, int(2 + age * 4))
+        col = (210, 236, 250) if age < 0.6 else (150, 190, 214)
+        pygame.draw.circle(s, col, (int(bx), int(by - age * 10)), rr, 1)
     # the fish
     fx, fy = _pt(mg.fa, R)
-    if mg.warn > 0:
+    diving = getattr(mg, 'dive', 0) > 0
+    if mg.warn > 0 or getattr(mg, 'tell', 0) > 0:
         fx += math.sin(t * 70) * 3
     rc = RARITY_COLORS[spec['rarity']] if spec['rarity'] else (200, 200, 200)
     halo = _cache.get(('halo', rc))
@@ -487,7 +599,8 @@ def draw(s, ui, mg, t, title):
         for i in range(8, 0, -1):
             pygame.draw.circle(halo, (*rc, 16 + (8 - i) * 10), (32, 32), i * 4)
         _cache[('halo', rc)] = halo
-    s.blit(halo, (int(fx) - 32, int(fy) - 32))
+    if not diving:
+        s.blit(halo, (int(fx) - 32, int(fy) - 32))
     cw = mg.fv >= 0
     heading = mg.fa + (90 if cw else -90)              # direction of travel on screen
     key = ('fm', spec['id'], int(round(heading / 15)) % 24)
@@ -500,7 +613,21 @@ def draw(s, ui, mg, t, title):
             base = pygame.transform.flip(base, False, True)
         spr = pygame.transform.rotate(base, -h)
         _cache[key] = spr
-    s.blit(spr, spr.get_rect(center=(int(fx), int(fy))))
+    if diving:
+        # deep down: only a faint shape, mostly gone
+        if int(t * 6) % 3 == 0:
+            ghost = spr.copy()
+            ghost.set_alpha(50)
+            s.blit(ghost, ghost.get_rect(center=(int(fx), int(fy))))
+    else:
+        s.blit(spr, spr.get_rect(center=(int(fx), int(fy))))
+    if getattr(mg, 'sulk', 0) > 0:
+        # sulking: a heavy little weight sign over it
+        bx, by = int(fx), int(fy) - 32
+        pygame.draw.circle(s, (70, 64, 70), (bx, by + 3), 10)
+        pygame.draw.rect(s, (70, 64, 70), (bx - 4, by - 9, 8, 5))
+        pygame.draw.circle(s, (150, 140, 140), (bx - 3, by + 1), 3)
+        ui.blit_text(s, 'pump!', (bx, by + 22), 'smallb', (250, 230, 190), 'center', (30, 20, 30))
     if mg.lunge > 0:
         for i in range(1, 5):
             tx, ty = _pt(mg.fa - mg.lunge_dir * i * 7, R)
@@ -568,5 +695,9 @@ def draw(s, ui, mg, t, title):
         lines = ('Steer with the left stick', 'Hold %s to reel faster, let go when it lunges' % ui.pad_label('A'))
     else:
         lines = ('Steer with the mouse or A / D', 'Hold to reel faster, let go when it lunges')
+    if getattr(mg, 'sulk', 0) > 0:
+        lines = (lines[0], 'It sulks: pump it in. Hold, let go, hold')
+    elif getattr(mg, 'dive', 0) > 0:
+        lines = (lines[0], 'It dived deep: follow the bubbles')
     for i, line in enumerate(lines):
         ui.blit_text(s, line, (CX, by + bh + 12 + i * 20), 'small', (240, 232, 220), 'midtop', (30, 20, 30))

@@ -27,8 +27,12 @@ def F(id, name, rarity, price, size, shape='normal', c1=(150, 150, 150), c2=(220
       agility=0.3, glow=None, needs=None, desc='', hint='', behavior=None, event=None, spot=None, method=None,
       year=0, tide=None):
     if behavior is None:
+        # how it fights on the reel (see minigame.py): bottom-dwellers sulk, deep fish dive, quick ones circle
         behavior = ('darter' if shape == 'small' else 'zigzag' if shape in ('eel', 'spirit') else
-                    'calm' if shape in ('round', 'catfish', 'sturgeon', 'axolotl') else 'runner')
+                    'sulker' if shape in ('catfish', 'sturgeon') else
+                    'calm' if shape in ('round', 'axolotl') else
+                    'diver' if depth[0] >= 0.5 else
+                    'circler' if agility >= 0.6 else 'runner')
     return dict(id=id, name=name, rarity=rarity, price=price, size=size, shape=shape, c1=c1, c2=c2,
                 c3=c3 or c1, pattern=pattern, pc=pc, phases=phases, seasons=seasons, weather=weather,
                 depth=depth, strength=strength, agility=agility, glow=glow, needs=needs, desc=desc,

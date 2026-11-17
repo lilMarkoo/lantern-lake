@@ -76,7 +76,7 @@ from data import (FISH, FISH_BY_ID, ALL_BY_ID, LETTERS, VILLAGERS, REQUEST_REASO
                   fish_at, spots_of, BOAT)
 import tank as tankmod
 from data import LAKE_SPOTS, COAST_SPOTS, COAST_IDS, SEA_FISH
-from fishing import Fishing, PLAYER_X, cast_point, aim_for, clamp, spot_depth
+from fishing import Fishing, PLAYER_X, HAND, cast_point, aim_for, clamp, spot_depth
 from world import World, Env, WAGON_RECT
 
 SW, SH = 1280, 720
@@ -1625,6 +1625,7 @@ class Game:
         entry = self.journal.get(spec['id'])
         new = entry is None and not spec.get('junk')
         record = entry is not None and size > entry.get('best', 0) and not spec.get('junk')
+        old_best = entry.get('best', 0) if entry else 0
         if entry is None:
             entry = {'count': 0, 'best': 0}
             self.journal[spec['id']] = entry
@@ -1654,7 +1655,10 @@ class Game:
                     self.toast('%s: %s%s' % (f['name'], self.fest_score(rule, f['best']),
                                              '  - you are in the lead!' if f['best'] > lead else ''), (200, 120, 160))
         legends.on_catch(self, spec, size)
-        self.card = dict(spec=spec, size=size, price=price, new=new, record=record, t=0)
+        # before the card: a moment holding it up for everyone to see (any key or click moves on)
+        show = 0.0 if spec.get('junk') else 1.0 + 0.2 * spec['rarity'] + (0.4 if new or record else 0.0)
+        self.card = dict(spec=spec, size=size, price=price, new=new, record=record, old=old_best, t=-show,
+                         show=show)
         self.overlay = 'catch'
         self.release_holds()
         r = spec['rarity']
@@ -2081,6 +2085,9 @@ class Game:
     def mouse_down(self, pos):
         self.ui.mouse = pos
         self.ui.mouse_down = True
+        if self.overlay == 'catch' and self.card and self.card['t'] < 0:
+            self.card['t'] = 0.0
+            return
         if self.typing:
             self.typing = None        # clicking elsewhere ends typing (a text field click starts it again)
         act = self.ui.click(pos)
@@ -2316,6 +2323,10 @@ class Game:
                 self.release_holds()
             return
         if ov == 'catch':
+            if self.card['t'] < 0:
+                if k in (pygame.K_SPACE, pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_k, pygame.K_e):
+                    self.card['t'] = 0.0             # on to the card
+                return
             if self.card['t'] < 0.4:
                 return
             if k in (pygame.K_SPACE, pygame.K_RETURN, pygame.K_k):
@@ -2682,12 +2693,17 @@ class Game:
             self.draw_hud(scr)
             tutorial.draw(self, scr)
             ov = self.overlay
-            if ov:
+            showoff = ov == 'catch' and self.card and self.card['t'] < 0
+            if ov and not showoff:
                 ui.hot = []          # the HUD underneath is not clickable while a window is open
                 ui.nav = []
                 scr = ui.stage()
                 self.dim(scr)
-            if ov == 'catch':
+            if showoff:
+                ui.hot = []
+                ui.nav = []
+                self.draw_showoff(scr)
+            elif ov == 'catch':
                 self.draw_card(scr)
             elif ov == 'journal':
                 self.draw_journal(scr)
@@ -3257,7 +3273,10 @@ class Game:
                                                                     'hungry fish'],
             'charging': self.hint(['Aim with the mouse or', ('key', 'A'), ('key', 'D'), 'then let go to cast!'],
                                   ['Aim with', ('pad', 'STICK'), 'then let go of', ('pad', 'A'), 'to cast!']),
-            'waiting': ['Wait for a real bite, not a nibble.   ', ('key', 'Click'), 'reels back in'],
+            'waiting': self.hint([('key', 'Tap'), 'to twitch the bobber (try it on a nibble!)  ', ('key', 'Hold'),
+                                  'reels in'],
+                                 [('pad', 'A'), 'twitches the bobber (try it on a nibble!)  Hold', ('pad', 'A'),
+                                  'to reel in']),
             'fly': self.hint(['Fly casting: tap', ('key', 'Space'), 'or', ('key', 'Click'), 'on each beat'],
                              ['Fly casting: tap', ('pad', 'A'), 'on each beat']),
         }.get(st)
@@ -3271,7 +3290,7 @@ class Game:
             room = SW - 16 - (0 if self.hud_tuck > 0.5 else 20 + self._dock_n * 72) - 16 - 16
             if w > room:
                 hint = {'idle': [('key', 'Hold Click'), 'or', ('key', 'Space'), 'to wind up a cast'],
-                        'waiting': ['Wait for a real bite', ('key', 'Click'), 'reels in']}.get(st, hint)
+                        'waiting': [('key', 'Tap'), 'to twitch,', ('key', 'Hold'), 'to reel in']}.get(st, hint)
                 w = ui.rich(s, hint, (0, 0), measure=True) + 40
             r = ui.glass(s, (16, SH - 16 - 46, w, 46), 150, 23)
             ui.rich(s, hint, (r.x + 20, r.centery))
@@ -3315,6 +3334,8 @@ class Game:
                     'Something strong!' if sv < 0.85 else 'Something HUGE!!')
             if getattr(f.mg, 'stage', 0):
                 what = f.mg.spec['name'] + '!'
+            elif f.mg.t < 2.5:
+                what = '%s... %s!' % (what.rstrip('!'), minigame.STYLE_NAMES.get(f.mg.style, 'a fighter').lower())
             minigame.draw(s, ui, f.mg, self.t, what)
 
     def draw_toasts(self, s):
@@ -3339,6 +3360,55 @@ class Game:
             y += step
 
     # ---------------- catch card
+    def draw_showoff(self, s):
+        """The angler holds the catch up: light behind it, its name and size, then the card."""
+        ui = self.ui
+        c = self.card
+        spec = c['spec']
+        r = spec['rarity']
+        el = c['show'] + c['t']                       # seconds since it landed in your hands
+        hx, hy = self.w2s(HAND[0] + 2, HAND[1] - 22)
+        rc = RARITY_COLORS[r] if r >= 2 else (255, 236, 180)
+        # rays of light turning slowly behind the fish
+        grow = min(1.0, el / 0.35)
+        rad = max(8, int((90 + 30 * r) * grow))
+        rays = pygame.Surface((rad * 2, rad * 2))
+        n = 10 + r * 2
+        bright = 0.06 + 0.025 * r
+        col = tuple(int(v * bright) for v in rc)
+        inner = 34                                    # keep the angler and the fish clear
+        for i in range(n):
+            a = self.t * 0.6 + i * 2 * math.pi / n
+            pts = [(rad + math.cos(a + d) * rr, rad + math.sin(a + d) * rr)
+                   for d, rr in ((-0.05, inner), (-0.11, rad), (0.11, rad), (0.05, inner))]
+            pygame.draw.polygon(rays, col, pts)
+        s.blit(rays, (hx - rad, hy - rad), special_flags=pygame.BLEND_RGB_ADD)
+        if r >= 3 and int(self.t * 20) % 3 == 0:
+            self.world.sparkles(HAND[0] + 10, HAND[1] - 26, 1, rc, 14)
+        # the banner over the angler
+        k = min(1.0, el / 0.3)
+        e = 1 - (1 - k) ** 3
+        bw = max(300, ui.fonts['h2'].size(spec['name'])[0] + 70)
+        bx, by = hx - bw // 2, hy - 190 + int((1 - e) * 24)
+        bx = max(16, min(SW - 16 - bw, bx))
+        rect = pygame.Rect(bx, by, bw, 104)
+        ui.panel(s, rect, radius=18)
+        tag = 'NEW!' if c['new'] else 'Record!' if c['record'] else (RARITY_NAMES[r] if r else '')
+        if tag:
+            tc = U.ROSE if c['new'] else U.GOLD if c['record'] else rc
+            pw = ui.fonts['smallb'].size(tag)[0] + 26
+            pill = pygame.Rect(0, 0, pw, 28)
+            pill.midtop = (rect.centerx, rect.y - 14)
+            pygame.draw.rect(s, tc, pill, border_radius=14)
+            ui.blit_text(s, tag, pill.center, 'smallb', (90, 60, 30) if c['record'] and not c['new'] else
+                         (255, 255, 250), 'center')
+        ui.blit_text(s, spec['name'], (rect.centerx, rect.y + 34), 'h2', U.INK, 'center')
+        grow_k = min(1.0, max(0.0, (el - 0.15) / 0.7))
+        grow_k = 1 - (1 - grow_k) ** 2
+        ui.blit_text(s, '%.1f cm' % (c['size'] * grow_k), (rect.centerx, rect.y + 72), 'bodyb', U.SOFT, 'center')
+        ui.blit_text(s, 'Click or Space to look closer', (rect.centerx, rect.bottom + 22), 'small',
+                     (250, 244, 232), 'center', (30, 20, 30))
+
     def draw_card(self, s):
         ui = self.ui
         c = self.card
@@ -3387,9 +3457,17 @@ class Game:
         y += 36
         if r >= 1:
             for i in range(5):
-                U.star(s, (rect.centerx - 52 + i * 26, y), 10, U.GOLD if i < r else (220, 210, 190), True)
+                # the earned stars pop in one after another
+                pk = min(1.0, max(0.0, (c['t'] - 0.25 - i * 0.09) / 0.14)) if i < r else 1.0
+                size = int(10 * (pk + 0.35 * math.sin(math.pi * pk))) if i < r else 10
+                if size > 0:
+                    U.star(s, (rect.centerx - 52 + i * 26, y), size, U.GOLD if i < r else (220, 210, 190), True)
             y += 26
-        info = '%.1f cm' % c['size']
+        tick = min(1.0, max(0.0, c['t'] / 0.6))
+        tick = 1 - (1 - tick) ** 2
+        info = '%.1f cm' % (c['size'] * tick)
+        if c['record'] and c.get('old') and tick >= 1:
+            info += '  (best was %.1f)' % c['old']
         surf = ui.text(info, 'bodyb', U.SOFT)
         vs = ui.text('%d' % c['price'], 'bodyb', U.INK)
         total = surf.get_width() + 40 + vs.get_width() + 26
@@ -6028,6 +6106,10 @@ def run_bot(seconds):
                     and rng.random() < 0.5:
                 f.press()
                 did('fly_tap')
+        elif f.state == 'waiting' and rng.random() < dt / 5:
+            f.press()                                 # a tap: twitch the bobber
+            f.release()
+            stats['twitch'] = stats.get('twitch', 0) + 1
         elif f.state == 'bite' and f.t > 0.3:
             f.press()
         elif f.state == 'fight':

@@ -205,6 +205,8 @@ class World:
         self.feeder_birds = []
         self.spots = []                 # bubbling hotspots: cast into them for quicker, rarer bites
         self.spot_cd = 8.0
+        self.schools = []               # feeding schools dimpling the surface: cast into one for quick bites
+        self.school_cd = 14.0
         self.streaks = []               # extra meteors during a meteor shower
         self.rockets = []
         self.fw_cd = 1.0
@@ -262,6 +264,16 @@ class World:
                 return True
         return False
 
+    def take_school(self, x, y, persp):
+        """True if a bobber landed in a feeding school (each school gives a couple of quick bites)."""
+        for sc in self.schools:
+            if sc['left'] > 0 and math.hypot(x - sc['x'], (y - sc['y']) * 2.2) < 12 + 12 * persp:
+                sc['left'] -= 1
+                if sc['left'] <= 0:
+                    sc['life'] = min(sc['life'], 2.0)       # they've had enough: the school drifts off
+                return True
+        return False
+
     def steam(self, x, y):
         self.particles.append(dict(x=x, y=y, vx=self.rng.uniform(-1, 1), vy=-self.rng.uniform(5, 9), g=0,
                                    life=2.0, max=2.0, col=(240, 240, 245), kind='smoke', r=1))
@@ -278,6 +290,7 @@ class World:
             self.lilies, self.reeds = self.spot_sets[spot]
             self.spot = spot
             self.spots = []
+            self.schools = []
             self.ripples = []
         if spot == 'creek':
             for c in self.current:
@@ -398,6 +411,37 @@ class World:
                 persp = 0.5 + (sp['y'] - HORIZON) / 170
                 self.ripple(sp['x'] + rng.uniform(-3, 3) * persp, sp['y'], 4 + 5 * persp, 8, 150)
         self.spots = [sp for sp in self.spots if sp['life'] > 0]
+        # feeding schools: little fins and dimples drifting slowly across the water
+        self.school_cd -= dt
+        if self.school_cd <= 0:
+            self.school_cd = rng.uniform(22, 40)
+            if not self.schools and getattr(g, 'place', 'lake') == 'lake':
+                d = rng.uniform(0.3, max(0.35, g.rod_spec()['range']))
+                x, y = cast_point(d, rng.uniform(-0.9, 0.9))
+                if not (g.wagon_here() and WAGON_RECT.inflate(30, 16).collidepoint(x, y)):
+                    self.schools.append(dict(x=x, y=y, vx=rng.choice((-1, 1)) * rng.uniform(1.5, 3.5),
+                                             life=rng.uniform(28, 42), n=rng.randint(5, 8), seed=rng.random() * 6,
+                                             left=2, jump=rng.uniform(1.0, 2.5)))
+        for sc in self.schools:
+            sc['life'] -= dt
+            sc['x'] += sc['vx'] * dt
+            if sc['x'] < 300 or sc['x'] > 618:
+                sc['vx'] = -sc['vx']
+                sc['x'] = min(618, max(300, sc['x']))
+            sc['jump'] -= dt
+            sc['rip'] = sc.get('rip', 0.0) - dt
+            if sc['rip'] <= 0 and sc['life'] > 2:
+                sc['rip'] = rng.uniform(0.25, 0.6)
+                persp = 0.5 + (sc['y'] - HORIZON) / 170
+                self.ripple(sc['x'] + rng.uniform(-12, 12) * persp, sc['y'] + rng.uniform(-2, 2) * persp,
+                            3 + 3 * persp, 9, 160)
+            if sc['jump'] <= 0 and sc['life'] > 2:
+                sc['jump'] = rng.uniform(1.2, 3.0)
+                persp = 0.5 + (sc['y'] - HORIZON) / 170
+                jx = sc['x'] + rng.uniform(-9, 9) * persp
+                self.splash(jx, sc['y'], 3, 0.35 + 0.2 * persp)
+                self.ripple(jx, sc['y'], 4 + 4 * persp, 10, 150)
+        self.schools = [sc for sc in self.schools if sc['life'] > 0]
         # festival fireworks on Lantern Night
         if g.lantern_night():
             self.fw_cd -= dt
@@ -917,10 +961,36 @@ class World:
                 pygame.draw.rect(near, (230, 110, 80, a), (x - w_ // 2, y - w_, w_, w_))
                 pygame.draw.line(near, (255, 200, 140, a), (x - w_ // 2, y - w_ // 2), (x + w_ // 2 - 1, y - w_ // 2))
 
+    def _schools(self, near):
+        t = self.t
+        for sc in self.schools:
+            persp = 0.5 + (sc['y'] - HORIZON) / 170
+            fade = max(0.0, min(1.0, sc['life'] / 2.0, (40 - sc['life']) / 2.0 + 1))
+            # a darker patch of water under them
+            pw, ph = max(8, int(38 * persp)), max(3, int(8 * persp))
+            pygame.draw.ellipse(near, (24, 44, 58, int(80 * fade)), (int(sc['x'] - pw / 2), int(sc['y'] - ph / 2), pw, ph))
+            pygame.draw.ellipse(near, (230, 242, 250, int(40 * fade)), (int(sc['x'] - pw / 2), int(sc['y'] - ph / 2), pw, ph), 1)
+            for i in range(sc['n']):
+                ph_ = t * (1.1 + 0.13 * i) + i * 1.9 + sc['seed']
+                fx = sc['x'] + math.sin(ph_) * 11 * persp + (i - sc['n'] / 2) * 2.2 * persp
+                fy = sc['y'] + math.cos(ph_ * 0.7) * 2.2 * persp
+                up = math.sin(ph_ * 2.3)
+                if up > 0.0:
+                    # a fin or a back breaking the surface, flashing silver as it rolls
+                    fw = 3 if persp > 0.8 else 2
+                    near.fill((34, 48, 58, int(240 * fade)), (int(fx), int(fy) - 1, fw, 1))
+                    near.set_at((int(fx) + fw // 2, int(fy) - 2), (34, 48, 58, int(240 * fade)))
+                    if up > 0.75:
+                        near.fill((235, 244, 250, int(240 * fade)), (int(fx), int(fy) - 1, fw, 1))
+                elif up < -0.7:
+                    near.set_at((int(fx), int(fy)), (226, 240, 248, int(150 * fade)))
+
     def _spot_things(self, near, env, g):
         """Little touches that belong to each rowboat spot."""
         t = self.t
         spot = self.spot
+        if self.schools:
+            self._schools(near)
         if spot in art.COAST_LAMP:
             self._sea_things(near, env, g)
             return

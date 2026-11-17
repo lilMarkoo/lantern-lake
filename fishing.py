@@ -47,6 +47,27 @@ def spot_depth(spot, d):
 # how long bites take at each spot, and how fast the creek carries the bobber (pixels per second)
 SPOT_WAIT = {'dock': 1.0, 'cove': 0.8, 'deep': 1.35, 'creek': 0.9, 'pier': 0.9, 'rocks': 1.1}
 CREEK_DRIFT = 6.0
+HOLD_REEL = 0.4          # while waiting: a tap twitches the bobber, holding this long reels the line in
+TWITCH_CUT = (1.1, 0.8, 0.5)     # how much each of the first twitches shortens the wait (then they spook)
+_sil_cache = {}
+
+
+def silhouette(spec, width, flip=False):
+    """A dark fish-shaped shadow for seeing a fish under the water."""
+    width = max(4, int(width))
+    key = (spec['id'], width, flip)
+    sil = _sil_cache.get(key)
+    if sil is None:
+        spr = art.fish_sprite(spec)
+        h = max(2, int(spr.get_height() * width / spr.get_width()))
+        sil = pygame.transform.scale(spr, (width, h))
+        if flip:
+            sil = pygame.transform.flip(sil, True, False)
+        sil.fill((12, 28, 38, 255), special_flags=pygame.BLEND_RGBA_MIN)
+        if len(_sil_cache) > 400:
+            _sil_cache.clear()
+        _sil_cache[key] = sil
+    return sil
 
 
 class Fishing:
@@ -76,6 +97,14 @@ class Fishing:
         self.fly_pos = None
         self.leap_h = 0.0
         self.message = ''
+        self.pressing = False
+        self.hold_t = 0.0
+        self.twitches = 0
+        self.twitch_anim = 0.0
+        self.school = False
+        self.fdir = 1.0              # which way the hooked fish is swimming in the water (-1 left, 1 right)
+        self.fspeed = 0.0
+        self.spray_t = 0.0
         if not hasattr(self, 'aim'):
             self.aim = 0.33
 
@@ -98,12 +127,8 @@ class Fishing:
         elif st == 'fly':
             seasons.press_fly(self)
         elif st == 'waiting':
-            if self.nib_anim > 0:
-                g.toast('Too eager! It was only a nibble.', (200, 120, 100))
-            else:
-                g.toast('You reel in the line.', (150, 140, 130))
-            self.flee_shadow()
-            self.to_reel_back()
+            self.pressing = True               # a tap twitches the bobber; holding reels in (see update)
+            self.hold_t = 0.0
         elif st == 'bite':
             self.hook()
         elif st == 'fight' and self.mg:
@@ -112,6 +137,41 @@ class Fishing:
     def release(self):
         if self.state == 'charging':
             self.cast(self.power)
+        elif self.state == 'waiting' and self.pressing:
+            self.pressing = False
+            if self.hold_t < HOLD_REEL:
+                self.twitch()
+
+    def twitch(self):
+        """Give the bobber a little tug toward you. A few twitches draw fish in, twitching on a nibble makes
+        it bite, and too many spook them."""
+        g = self.g
+        x, y = self.dst
+        persp = 0.5 + (y - HORIZON) / 170
+        if x > self.tip[0] + 30:
+            x -= 2 + 2 * persp
+            y = min(y + 0.8 * persp, 322)
+        self.dst = (x, y)
+        self.twitch_anim = 0.3
+        self.twitches += 1
+        g.world.ripple(x, y, 4 + 4 * persp, 14, 170)
+        g.world.splash(x, y, 3, 0.3 + 0.2 * persp)
+        g.audio.play('plop', 0.3, x / W)
+        junk = self.catch['spec'].get('junk')
+        if self.nib_anim > 0:
+            # a twitch right on a nibble: it can't resist
+            self.bite_at = min(self.bite_at, self.t + 0.45)
+            self.nibbles = []
+            if not junk and self.shadow is None:
+                self._spawn_shadow()
+            g.toast("A twitch on the nibble! Here it comes...", (90, 150, 190))
+        elif self.twitches <= len(TWITCH_CUT):
+            self.bite_at = max(self.t + 0.7, self.bite_at - TWITCH_CUT[self.twitches - 1])
+        else:
+            self.bite_at += 2.5
+            self.nibbles = [n + 2.5 for n in self.nibbles]
+            self.flee_shadow()
+            g.toast('Easy! Too much twitching spooks them.', (200, 120, 100))
 
     # ------------------------------------------------------------ transitions
     def cast(self, power):
@@ -137,8 +197,13 @@ class Fishing:
         w.splash(x, y, 6, 0.6 * persp)
         g.audio.play('plop', 0.6, x / W)
         self.hot = w.take_spot(x, y, persp)
+        self.school = not self.hot and w.take_school(x, y, persp)
+        self.pressing = False
+        self.twitches = 0
         if self.hot:
             g.toast('Right on the bubbles! Something is down there...', (90, 150, 190))
+        elif self.school:
+            g.toast("Into the school! They're feeding.", (90, 150, 190))
         self.catch = self.pick(self.d)
         spec = self.catch['spec']
         base = self.rng.uniform(2.5, 7.5)
@@ -159,6 +224,8 @@ class Fishing:
         base *= 1 - 0.06 * getattr(self, 'fly_q', 0)
         if self.hot:
             base *= 0.45
+        elif self.school:
+            base *= 0.5
         self.bite_at = base
         self.nibbles = []
         if base > 1.8:
@@ -242,6 +309,8 @@ class Fishing:
                 w *= 3
             if self.hot and r >= 2:
                 w *= 1.8
+            if getattr(self, 'school', False) and r >= 2:
+                w *= 1.3
             if spot == 'deep':
                 w *= 1.6 if r >= 3 else 0.45 if r == 1 else 1.0     # few small fish out in the deep water
             elif spot == 'cove' and r == 1:
@@ -318,7 +387,13 @@ class Fishing:
             g.audio.play('warn', 0.8)
         else:
             self.mg = ReelGame(spec, g.rod_spec(), g.assist(), self.rng, size_k)
-        g.shake(1.5)
+        self.pressing = False
+        self.fdir = 1.0 if self.rng.random() < 0.5 else -1.0
+        if not self.shadow or self.shadow['mode'] != 'approach':
+            self._spawn_shadow()             # so the fish is always there to see in the water
+        self.shadow['a'] = max(self.shadow['a'], 0.6)
+        g.world.splash(self.bob[0], self.bob[1], 6 + spec['rarity'] * 2, 0.8 + spec['strength'] * 0.6)
+        g.shake(1.2 + spec['strength'] * 1.6)
 
     def start_landing(self, pos):
         g = self.g
@@ -328,8 +403,17 @@ class Fishing:
         self.t = 0
         self.fly_from = tuple(pos)
         self.fly_pos = list(pos)
-        g.world.splash(pos[0], pos[1], 14, 1.2)
+        spec = self.catch['spec']
+        r = 0 if spec.get('junk') else spec['rarity']
+        self.land_dur = 0.7 if r == 0 else 0.8 + (0.25 if r >= 3 else 0.0)
+        g.world.splash(pos[0], pos[1], 14 + r * 4, 1.2 + r * 0.12)
         g.world.ripple(pos[0], pos[1], 16)
+        g.world.ripple(pos[0], pos[1], 9, 10)
+        if r >= 2:
+            from data import RARITY_COLORS
+            g.world.sparkles(pos[0], pos[1] - 6, 6 + r * 3, RARITY_COLORS[r], 10)
+        if r:
+            g.shake(0.8 + r * 0.4)
         g.audio.play('splash', 0.7, pos[0] / W)
         self.shadow = None
 
@@ -399,15 +483,26 @@ class Fishing:
             rate = 22
             if k >= 1:
                 self.land()
+        elif st == 'waiting' and self.pressing and self.hold_t + dt >= HOLD_REEL:
+            self.pressing = False
+            g.toast('You reel in the line.', (150, 140, 130))
+            self.flee_shadow()
+            self.to_reel_back()
         elif st == 'waiting':
             target = -40
+            if self.pressing:
+                self.hold_t += dt
             if getattr(g, 'spot', 'dock') == 'creek':
                 # the current carries the bobber downstream (to the right) until the line pulls tight
                 self.dst = (min(self.dst[0] + CREEK_DRIFT * dt, min(628, self.drift_max)), self.dst[1])
             x, y = self.dst
             self.nib_anim = max(0, self.nib_anim - dt)
-            dip = 1.5 if self.nib_anim > 0 else 0
-            self.bob = [x, y + math.sin(self.t * 2.6) * 0.6 + dip]
+            self.twitch_anim = max(0.0, self.twitch_anim - dt)
+            dip = 2.5 * math.sin(math.pi * min(1.0, self.nib_anim / 0.3)) if self.nib_anim > 0 else 0
+            hop = -math.sin(math.pi * self.twitch_anim / 0.3) * 2.0 if self.twitch_anim > 0 else 0
+            if self.twitch_anim > 0:
+                target = -46
+            self.bob = [x, y + math.sin(self.t * 2.6) * 0.6 + dip + hop]
             if self.nibbles and self.t >= self.nibbles[0]:
                 self.nibbles.pop(0)
                 self.nib_anim = 0.3
@@ -435,16 +530,20 @@ class Fishing:
                     self.bend += 0.15 * math.sin(self.t * 37)
                     rate = 30
         elif st == 'landing':
-            k = min(1.0, self.t / 0.7)
+            dur = getattr(self, 'land_dur', 0.7)
+            k = min(1.0, self.t / dur)
+            if dur > 0.9:
+                k = k * k * (3 - 2 * k)          # rare fish hang in the air for a moment at the top
             fx, fy = self.fly_from
             tx, ty = HAND[0] + 10, HAND[1] - 26
-            self.fly_pos = [fx + (tx - fx) * k, fy + (ty - fy) * k - math.sin(math.pi * k) * 40]
+            self.fly_pos = [fx + (tx - fx) * k, fy + (ty - fy) * k - math.sin(math.pi * k) * (40 + dur * 14)]
             self.bob = list(self.fly_pos)
             target = -95
             rate = 10
             if k >= 1:
                 self.state = 'caught'
                 self.t = 0
+                g.world.splash(tx, ty + 4, 6, 0.5)        # drips as you grab it
                 g.on_catch(self.catch)
         elif st == 'caught':
             target = -95
@@ -493,7 +592,7 @@ class Fishing:
         persp = 0.5 + (y - HORIZON) / 170
         side = self.rng.choice((-1, 1))
         self.shadow = dict(x=x + side * self.rng.uniform(26, 40) * persp, y=y + self.rng.uniform(-6, 8) * persp,
-                           w=(5 + sz * 22) * persp, h=(2 + sz * 6) * persp, a=0.0, mode='approach', fx=side)
+                           w=(5 + sz * 22) * persp, h=(2 + sz * 6) * persp, a=0.0, mode='approach', fx=side, sz=sz)
 
     def _update_shadow(self, dt):
         s = self.shadow
@@ -553,6 +652,33 @@ class Fishing:
                 g.audio.play('click', 0.3)
             elif k == 'creak':
                 g.audio.play('creak', 0.6)
+                g.shake(0.7)
+            elif k == 'dive':
+                w.splash(fx, fy, 10, 0.9)
+                w.ripple(fx, fy, 12)
+                w.ripple(fx, fy, 7, 10)
+                g.audio.play('splash_small', 0.6, fx / W)
+                g.shake(1.2)
+            elif k == 'surface':
+                w.splash(fx, fy, 7, 0.7)
+                w.ripple(fx, fy, 10)
+                g.audio.play('splash_small', 0.5, fx / W)
+            elif k == 'sulk':
+                w.ripple(fx, fy, 8, 8, 200)
+                g.audio.play('nibble', 0.5, fx / W)
+            elif k == 'unsulk':
+                w.splash(fx, fy, 5, 0.6)
+            elif k == 'turn':
+                w.splash(fx, fy, 6, 0.7)
+                w.ripple(fx, fy, 8, 18)
+                g.shake(1.0)
+            elif k == 'second':
+                w.splash(fx, fy, 20, 1.4)
+                w.ripple(fx, fy, 18)
+                w.ripple(fx, fy, 11, 12)
+                g.audio.play('warn', 0.8, fx / W)
+                g.audio.play('splash', 0.7, fx / W)
+                g.shake(3.5)
             elif k == 'stage':
                 w.splash(fx, fy, 22, 1.5)
                 w.ripple(fx, fy, 20)
@@ -583,8 +709,15 @@ class Fishing:
         ang = math.radians(mg.fa)
         tx = bx + math.cos(ang) * 16 * persp * (1 - max(0, p) * 0.5)
         ty = by + math.sin(ang) * 5 * persp
+        if getattr(mg, 'sulk', 0) > 0:
+            tx, ty = fx, fy                      # dead still on the bottom
         k = min(1, dt * (14 if mg.lunge > 0 else 6))
-        self.fish_pos = [fx + (tx - fx) * k, fy + (ty - fy) * k]
+        nx, ny = fx + (tx - fx) * k, fy + (ty - fy) * k
+        vx = (nx - fx) / max(dt, 1e-3)
+        self.fspeed += (abs(vx) - self.fspeed) * min(1, dt * 8)
+        if abs(vx) > 2:
+            self.fdir = 1.0 if vx > 0 else -1.0
+        self.fish_pos = [nx, ny]
         L = mg.leap
         if L:
             lk = min(1.0, L['t'] / 1.25)
@@ -593,22 +726,59 @@ class Fishing:
             self.leap_h = max(0.0, self.leap_h - dt * 80)
         self.bob = [self.fish_pos[0], self.fish_pos[1] - self.leap_h]
         self.splash_t -= dt
+        diving = getattr(mg, 'dive', 0) > 0
         if self.splash_t <= 0 and not L:
-            busy = mg.lunge > 0 or mg.warn > 0
-            self.splash_t = 0.18 if busy else 0.5
-            w.ripple(self.fish_pos[0], self.fish_pos[1], 6 + 6 * persp, 16, 140)
-            if busy:
+            busy = mg.lunge > 0 or mg.warn > 0 or getattr(mg, 'tell', 0) > 0
+            self.splash_t = 0.18 if busy else 0.35 if diving else 0.5
+            if diving:
+                # bubbles coming up from deep down
+                w.particles.append(dict(x=self.fish_pos[0] + self.rng.uniform(-3, 3) * persp, y=self.fish_pos[1],
+                                        vx=0, vy=-6, g=0, life=0.5, max=0.5, col=(226, 242, 250), kind='spark'))
+            else:
+                w.ripple(self.fish_pos[0], self.fish_pos[1], 6 + 6 * persp, 16, 140)
+            if busy and not diving:
                 w.splash(self.fish_pos[0], self.fish_pos[1], 3, 0.5)
+                if mg.lunge > 0:
+                    w.splash(self.fish_pos[0] - self.fdir * 4 * persp, self.fish_pos[1], 3, 0.7)   # tail slap
+        # a tight line flicks off water drops
+        self.spray_t -= dt
+        if mg.strain > 0.8 and self.spray_t <= 0:
+            self.spray_t = 0.12
+            tx_, ty_ = self.tip
+            q = self.rng.uniform(0.35, 0.95)
+            w.splash(tx_ + (self.fish_pos[0] - tx_) * q, ty_ + (self.fish_pos[1] - ty_) * q, 1, 0.25)
 
     # ------------------------------------------------------------ drawing
     def draw_shadow(self, frame):
         s = self.shadow
-        if not s or s['a'] <= 0.02:
+        if not s or s['a'] <= 0.02 or not self.catch:
             return
-        w, h = max(3, int(s['w'])), max(2, int(s['h']))
-        surf = pygame.Surface((w, h), pygame.SRCALPHA)
-        pygame.draw.ellipse(surf, (10, 26, 36, int(110 * s['a'])), (0, 0, w, h))
-        frame.blit(surf, (int(s['x'] - w / 2), int(s['y'] - h / 2)))
+        spec = self.catch['spec']
+        mg = self.mg if self.state == 'fight' else None
+        w = s['w'] * 1.25
+        if self.state == 'fight':
+            w = (5 + s.get('sz', 0.4) * 22) * (0.5 + (s['y'] - HORIZON) / 170) * 1.25   # grows as it comes in
+        alpha = 120 * s['a']
+        flip = s['fx'] < 0
+        x, y = s['x'], s['y']
+        if mg:
+            flip = self.fdir < 0
+            if getattr(mg, 'dive', 0) > 0:
+                w *= 0.7                      # deep down: smaller and fainter
+                alpha = 45
+            else:
+                alpha = 150
+            if mg.lunge > 0 or mg.warn > 0:
+                x += math.sin(self.t * 50) * 1.2
+        elif s['mode'] == 'approach':
+            flip = (self.bob[0] if self.bob else x) < x
+        sil = silhouette(spec, w, flip)
+        if self.state == 'fight' and getattr(mg, 'sulk', 0) <= 0:
+            # the tail beats: squash the shadow a little in time
+            k = 1 + 0.08 * math.sin(self.t * (14 if mg and mg.lunge > 0 else 7))
+            sil = pygame.transform.scale(sil, (max(2, int(sil.get_width() * k)), sil.get_height()))
+        sil.set_alpha(int(alpha))
+        frame.blit(sil, (int(x - sil.get_width() / 2), int(y - sil.get_height() / 2)))
 
     def draw_water(self, near):
         st = self.state
@@ -634,11 +804,31 @@ class Fishing:
             if self.leap_h > 1 and self.fish_pos:
                 x, y = int(self.fish_pos[0]), int(self.fish_pos[1])
             persp = 0.5 + (y - HORIZON) / 170
+            mg = self.mg
+            diving = mg is not None and getattr(mg, 'dive', 0) > 0
+            sulking = mg is not None and getattr(mg, 'sulk', 0) > 0
             r = int(3 + 3 * persp)
-            for i in range(4):
-                a = self.t * 9 + i * 1.6
-                near.set_at((x + int(math.cos(a) * r), y + int(math.sin(a) * r * 0.4)), (240, 248, 255, 220))
-            near.fill((255, 255, 255, 180), (x - r, y, r * 2, 1))
+            if not diving:
+                for i in range(4):
+                    a = self.t * (4 if sulking else 9) + i * 1.6
+                    near.set_at((x + int(math.cos(a) * r), y + int(math.sin(a) * r * 0.4)), (240, 248, 255, 220))
+                near.fill((255, 255, 255, 180), (x - r, y, r * 2, 1))
+            if mg and self.leap_h <= 1 and not diving and not sulking and self.fish_pos:
+                fx, fy = self.fish_pos
+                d = self.fdir
+                busy = mg.lunge > 0 or mg.warn > 0
+                # its back fin cuts the surface, with a wake fanning out behind
+                if busy or self.fspeed > 6 or math.sin(self.t * 3.1) > 0.2:
+                    fh = max(2, int((2 + 2 * persp) * (1.4 if busy else 1.0)))
+                    bx = int(fx - d * 2 * persp)
+                    pygame.draw.polygon(near, (40, 54, 64, 235),
+                                        [(bx - d * 3 * persp, fy), (bx + d * 2 * persp, fy), (bx - d * persp, fy - fh)])
+                    near.set_at((int(bx - d * persp), int(fy - fh)), (200, 216, 226, 230))
+                if self.fspeed > 4 or busy:
+                    ln = int((5 + min(14, self.fspeed * 0.5)) * persp)
+                    for sgn in (-1, 1):
+                        pygame.draw.line(near, (230, 242, 250, 150), (int(fx - d * 3 * persp), int(fy)),
+                                         (int(fx - d * (3 * persp + ln)), int(fy + sgn * ln * 0.25)))
 
     def draw_line(self, near):
         st = self.state
@@ -663,9 +853,9 @@ class Fishing:
             spr = art.fish_sprite(self.catch['spec'])
             sw = spr.get_width()
             if st == 'landing':
-                k = 0.35
+                k = 0.42
                 small = pygame.transform.scale(spr, (int(sw * k), int(spr.get_height() * k)))
-                rot = pygame.transform.rotate(small, math.sin(self.t * 25) * 30)
+                rot = pygame.transform.rotate(small, math.sin(self.t * 25) * 35)
                 near.blit(rot, (int(bx - rot.get_width() / 2), int(by - rot.get_height() / 2)))
             return
         strain = self.mg.strain if (st == 'fight' and self.mg) else 0
@@ -676,11 +866,16 @@ class Fishing:
         else:
             sag = 9
         mx, my = (tx + bx) / 2, (ty + by) / 2 + sag
+        shiver = max(0.0, strain - 0.55) * 2.4
+        if st == 'fight' and self.mg and (self.mg.lunge > 0 or self.mg.warn > 0):
+            shiver += 0.8
         pts = []
         for i in range(13):
             s = i / 12
             px = (1 - s) ** 2 * tx + 2 * (1 - s) * s * mx + s * s * bx
             py = (1 - s) ** 2 * ty + 2 * (1 - s) * s * my + s * s * by
+            if shiver:
+                py += math.sin(math.pi * s) * math.sin(self.t * 55 + s * 9) * shiver
             pts.append((px, py))
         col = (236, 236, 226, 190)
         if st == 'fight' and strain > 0.75:

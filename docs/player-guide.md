@@ -7,7 +7,9 @@
 | Action | Input |
 |---|---|
 | Wind up and cast | Hold left click or Space, point where it should land (mouse or arrow keys), let go |
-| Hook a bite | Click when the bobber goes under (ignore nibbles) |
+| Twitch the bobber | Tap click or Space while you wait. A twitch right on a nibble makes it bite |
+| Reel the line back in | Hold click or Space while you wait |
+| Hook a bite | Click when the bobber goes under |
 | Reel | Keep the golden arc on the fish (mouse, or A / D). Hold to reel faster, let go when it lunges |
 | Leap | When the fish jumps, click or press Space as the shrinking ring meets the gold ring |
 | Keep / put in tank / release a catch | Space / T / R |
@@ -110,11 +112,38 @@ with a sharp-then-smooth filter so the pixels stay even.
 The hooked fish swims around a ring and you steer a golden arc to stay on it. While it is inside the arc
 the line comes in, and outside it the fish gets away. Holding the button reels faster but builds line strain.
 Fish shake and show a "!" before they lunge, and holding through a lunge snaps the line. Calm fish drift,
-small ones dart, eels zigzag and big fish make long runs. Rarer fish also leap out of the water for a timing
-challenge (Perfect gives a big boost, a miss costs you), and golden glimmers on the ring are worth a few coins.
+small ones dart, eels zigzag and big fish make long runs. The first seconds of a fight tell you what kind of
+fighter you have:
+
+- **Circlers** race round faster and faster, give a little shiver, then turn back hard. Watch for the shiver
+- **Divers** vanish into the deep for a moment. Only a trail of bubbles on the ring shows where they are, and
+  holding while one dives strains the line more
+- **Sulkers** (catfish and sturgeon) stop dead on the bottom. Only pulling brings a sulking fish in, and pulling
+  is hard on the line, so pump it: hold, let go, hold
+
+Big fish get a **second wind** near the end: they change how they fight and come straight at you. Rarer fish
+also leap out of the water for a timing challenge (Perfect gives a big boost, a miss costs you), and golden
+glimmers on the ring are worth a few coins.
+
+You can watch the fight in the lake too: the fish's dark shape fights at the end of the line, its fin cuts the
+water when it runs, it slaps the surface when it lunges, and a tight line shivers and flicks off drops. When it
+comes in, it bursts out of the water and you hold it up for a moment (with its name, its size and a NEW or
+Record tag) before the catch card. Click or press Space to skip ahead.
 The camera leans in during the fight. Better rods have a wider, faster arc. "Relaxed reeling" in the pause
 menu gives a wider arc, longer warnings and slower leaps. The arc has brackets and the strain bar is hatched,
 so it does not rely on colour.
+
+## Waiting for a bite
+
+While the bobber sits, fish nose around it. Small dips are nibbles. **Tap** to twitch the bobber: the first
+few twitches draw fish in a little sooner, a twitch right on a nibble makes it bite, and too much twitching
+spooks them. **Hold** to reel the line back in.
+
+Two things on the water are worth casting at:
+
+- **Bubbles**: something hungry is down there. Bites come quicker and rarer fish are likelier
+- **Feeding schools**: a dark patch with little fins breaking the surface, drifting slowly across the water.
+  Cast into one for quick bites (a school is good for a couple of fish before it moves on)
 
 ## The rowboat and fishing spots
 
