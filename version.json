@@ -1,12 +1,11 @@
 {
-  "version": "0.2.1",
+  "version": "0.3.0",
   "notes": [
-    "Fixes: the launcher's update window no longer hides its buttons, The Shore's cards no longer cut off their hints, the reel stays with the keyboard keys instead of jumping to the mouse, and friends on Radmin VPN or Hamachi can join without a room key (the host screen now shows the Radmin address).",
-    "Saltmarsh, a whole new region down the river. Once you own a rowboat, Harbourmaster Morwen writes that the old channel is open: open the map and row about an hour downstream to the sea.",
-    "Two new places to fish, Saltmarsh Pier and Kelp Rocks, and 19 sea fish (70 fish in all), from Harbour Sprats and Rock Gobies to the Old Halibut, the Blue Lobster and something enormous that only comes home with the light.",
-    "Tides: the sea rises and falls twice a day, a little later each day. Some fish only bite at high water, some only at low. The HUD shows the tide and the harbour board has a tide table.",
-    "A harbour village to walk around, with five new neighbours to befriend: Morwen's daily orders, Nell's fish stall (with a double-price catch of the day and two sea baits), chowder at the Gull & Lantern, Ossian's boatyard (a sail and a bow lamp for your boat) and Kit's shell collection on the beach.",
-    "Light the old lighthouse: bring Sol sea glass from the beach, a Silver Sea Bass and lamp oil, and its beam sweeps the sky every night after.",
-    "Two new aquarium exhibits (Harbour Waters and the Kelp Forest), a Coast page in the journal, a coast map, and two new badges: Sea Legs and Keeper of the Light (29 in all)."
+    "A radio! Press R for three little stations with their own music (Lantern FM, Saltmarsh Shanty and Night Bells), and hosts who read the weather, the tides and the news from round the lake between songs.",
+    "A friendlier first day: catch two fish and Grandma's radishes are ready to pick, Biscuit gets a yarn toy, and you mend the loose plank on the dock.",
+    "Goals (Q): see everything you have on the go and pin one. The card in the corner shows the next step, where to go and when (for fish: the spots, hours, seasons, weather and tide).",
+    "The harbour comes alive: two fishermen chat at the Gull & Lantern (buy them a round for a tip), you can help Ossian build a boat until she's launched, and Kit swaps your spare shells for missing ones or sea glass.",
+    "Watch the lighthouse being mended: the scaffold comes down, the lens glints, the oil arrives and Sol's chimney smokes as you bring him what he needs.",
+    "Livelier fishing: tap to twitch the bobber, cast into feeding schools, and fish that circle, dive or sulk on the line. You see them fighting in the water and hold each catch up before the card."
   ]
 }
