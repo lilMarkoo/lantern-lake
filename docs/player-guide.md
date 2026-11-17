@@ -17,6 +17,8 @@
 | Change bait | Tab |
 | Lake map (row to another spot) | B, the Boat button, or click the rowboat by the dock |
 | The lanterns (your long-term goal) | L, or click the lantern line on the left of the screen |
+| Goals: see everything on the go, pin one to the HUD | Q |
+| The radio | R |
 | Walk up to Fernwick village and back | T, or the Town / Lake button |
 | In Fernwick: walk / go in or talk | A and D (or the arrow keys, or click where to go) / E, W or Space |
 | Pet Biscuit, read the mailbox, visit the cabin, shop at Wren's Wagon | Click the cat, the mailbox, the cabin door, the houseboat |
@@ -64,9 +66,9 @@ Switch B):
 In cooking and cutscenes the bottom button works like Space. Moving the mouse hides the controller's pointer.
 
 The **quick menu** (View / Share / -) has everything that otherwise needs the keyboard or mouse: Journal, Shop,
-Calendar, Cabin, Pet Biscuit, Mailbox, Wren's Wagon (when it's moored), Lake map, Lanterns, Walk to Fernwick /
-Back to the lake, Rest until morning, Photo mode, music on/off, Chat (when playing together) and the four
-emotes. When a shooting star is falling, *Wish on the shooting star!* is at the top. In photo mode the bottom
+Calendar, Goals, Cabin, Pet Biscuit, Mailbox, Wren's Wagon (when it's moored), Lake map, Lanterns, Walk to
+Fernwick / Back to the lake, Rest until morning, Photo mode, music on/off, the Radio, Chat (when playing together)
+and the four emotes. When a shooting star is falling, *Wish on the shooting star!* is at the top. In photo mode the bottom
 button takes a photo, the left button saves a picture of the screen, and any other button leaves.
 
 Text boxes (your name, the host's address, chat) open an **on-screen keyboard** when you use a controller:
@@ -90,9 +92,35 @@ your save, so they stay the same when you start a new game.
 
 ### The HUD
 
-The top left shows the clock and **one tracked objective**: a villager's request, a birthday or today's festival.
-When there are two, a small arrow on the card switches between them (dots show which one you're on). The live
-festival comes first, then the request. Under it are the day's notes: snacks, visitors, fish runs, the sky.
+The top left shows the clock and **one tracked goal**: what to do next, where to go, and when (for a fish: the
+spots it swims at, and the hours, seasons, weather and tide it wants). When there's more than one, a small arrow
+on the card switches between them (dots show which one you're on). A live festival comes first, then the
+request. At the sea, the harbour's jobs (the lighthouse, Morwen's orders, Kit's shells) come before a letter
+asking for a lake fish. Under it are the day's notes: snacks, visitors, fish runs, the sky. Away at the sea,
+the lake's chores (the garden, the wagon, the crab pot) stay at home.
+
+### Goals (Q)
+
+The **Goals** window lists everything you have on the go: the letter in your mailbox, today's festival, the
+lighthouse, Morwen's orders, Kit's shells, the lanterns, a legend hunt, the garden and the shore, each with its
+next step, where and when. **Pin** one and the card in the corner follows it everywhere until you unpin it
+(a little red pin marks it).
+
+### The radio (R)
+
+A little set with three stations, each with its own music. The station keeps playing while you fish, in place
+of the usual music, and the host reads the weather for tomorrow, the high tide at Saltmarsh, fish runs,
+festivals, the wagon and letters from listeners between the songs. A card under the others shows the station
+and what the host is saying; click it to open the set.
+
+| Station | Music | Host |
+| --- | --- | --- |
+| Lantern FM 88.4 | Slow beats, soft keys and kalimba | Marigold |
+| Saltmarsh Shanty 96.1 | A squeezebox in six-eight with a stamping foot | Captain Dorrie |
+| Night Bells 103.7 | Glassy bells over slow pads | Moth |
+
+The volume follows your music setting (with music off, the radio still plays, quietly). The game remembers
+your station.
 
 The **HUD** setting (Options > Gameplay) has three styles:
 
@@ -106,6 +134,14 @@ The whole screen, menus and text included, is pixel art on the lake's 640x360 gr
 and the text uses a bitmap font drawn in code (`pixfont.py`). Fullscreen uses your monitor's own resolution, and
 whole-number sizes (1280x720, 1920x1080, 2560x1440) give perfectly square pixels. Other window sizes are scaled
 with a sharp-then-smooth filter so the pixels stay even.
+
+## Your first day
+
+A new game starts with a short welcome, **Settling in**, on the tracker card: catch two fish, and Grandma's
+radishes (planted before you came) pop up ready to pick. Pick them, and a yarn basket arrives for Biscuit. Play
+with her (Cabin, Biscuit tab), and she finds Grandma's old tool box under the dock. Click the loose plank
+sticking up on the dock to mend it: the dock gets a fresh plank and a pennant, and the tool box has 50 coins in
+it.
 
 ## Reeling
 
@@ -198,18 +234,28 @@ and at five hearts they give you a present.
 - **Nell's Fish Stall**: the *catch of the day* sells for double (anywhere, all day). Nell sells two sea baits,
   *Ragworm* (sea fish bite much sooner) and *Squid Strips* (rare sea fish come twice as often), and buys your sea
   fish
-- **The Gull & Lantern**: *Harbour Chowder* (45 coins, once a day) makes rare sea fish bite more often. Listen
-  at the bar for a tip about a sea fish you haven't caught yet
+- **The Gull & Lantern**: a room with a fire, a bar and two old fishermen, Bram and Old Tam, talking about the
+  tide, tomorrow's weather, the lighthouse, Ossian's boat and you (what they say changes with what's going on).
+  *Harbour Chowder* (45 coins, once a day) makes rare sea fish bite more often. *Buy them a round* (30 coins,
+  once a day) for a little luck and a tip about a sea fish you haven't caught yet
 - **Ossian's Boatyard**: a *Little Sail* (the river in 20 minutes) and a *Bow Lamp* (sea fish bite sooner at
-  night)
-- **The beach**: new shells and sea glass wash up every morning. Find all eight kinds of shell for Kit's
-  collection and a 600-coin prize
+  night). Ossian is building a new boat on the trestles in his shed: *Lend a hand* once a day and watch it go
+  from a bare keel to ribs, planks and paint. On the fourth day she's launched and moored by the slipway, and
+  Ossian gives you 250 coins (25 for each day before that)
+- **The beach**: new shells and sea glass wash up every morning (always at least one piece of sea glass while
+  Sol still needs it). Find all eight kinds of shell for Kit's collection and a 600-coin prize
+- **Swapping with Kit**: spare shells (any you have more than one of) can be swapped. Kit gives you a missing
+  shell of your choice for 2 spares (3 for a Pink Conch, 4 for a Tiger Cowrie), or a piece of sea glass for 2.
+  Kit never takes your last one of a kind
 
 ### The lighthouse
 
 The Saltmarsh lighthouse has been dark for years. Sol, the old keeper, needs three things to light it again: six
 pieces of sea glass to mend the lens, a Silver Sea Bass for supper, and 600 coins for oil and a wick. Bring them
-to Sol at the lighthouse, then press *Light the lamp*. You earn the *Keeper of the Light* badge, the beam sweeps
+to Sol at the lighthouse, then press *Light the lamp*. You can watch the work as you go: the lighthouse wears
+a scaffold that comes down a section with each thing you bring, the mended lens glints in the sun, barrels of oil
+stand on the quay, Sol's cottage window glows and the chimney smokes once he has his supper, and Sol taps away
+with a hammer while the work goes on. When all three are done, the lamp room flickers, ready. You earn the *Keeper of the Light* badge, the beam sweeps
 the sky every night, rare sea fish bite a little more often after dusk, and Sol writes about something he saw
 off Kelp Rocks.
 

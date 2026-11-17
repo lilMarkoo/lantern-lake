@@ -19,7 +19,7 @@ import coast
 import town as T
 import ui as U
 from art import W, H, HORIZON, lerp_c, darken, lighten, add_glow
-from data import FISH_BY_ID, SEA_FISH, RARITY_COLORS
+from data import FISH_BY_ID, RARITY_COLORS
 
 HB_W = 1600
 FLOOR = T.GROUND                 # feet on the quay (the same height as Fernwick's pavement)
@@ -40,6 +40,9 @@ INN_HOURS = (660, 1380)
 HEADLESS = False                 # set by main at start-up, with its clock formatter
 fmt_clock = str
 HOME = {'morwen': 262, 'nell': STALL_X, 'ossian': 852, 'sol': 1182, 'kit': 1420}
+BOAT_X = 872                     # Ossian's new boat, on the trestles in the shed
+INN_FOLK = (dict(name='Bram', shirt=(150, 60, 56), hair=(90, 60, 40), hat='beanie'),
+            dict(name='Old Tam', shirt=(70, 80, 110), hair=(206, 206, 210), hat='captain'))
 
 
 def folk_here(g, k):
@@ -367,6 +370,8 @@ class HarbourScene:
         self.gulls = [dict(x=self.rng.uniform(0, HB_W), y=self.rng.uniform(40, 140), vx=self.rng.choice((-1, 1)) *
                            self.rng.uniform(14, 26), ph=self.rng.uniform(0, 6)) for _ in range(4)]
         self.said = 0.0
+        self.talk = None                # the fishermen's conversations at the inn (made when you go in)
+        self.talk_t0 = 0.0
         self.glows = (art.glow(46, (255, 186, 104)), art.glow(18, (255, 186, 104)), art.glow(60, (255, 236, 170)))
 
     # ------------------------------------------------------------ what's in reach
@@ -455,6 +460,9 @@ class HarbourScene:
         g = self.g
         self.panel = panel
         self.line = ''
+        if panel == 'inn':
+            self.talk = self.inn_talk()
+            self.talk_t0 = self.t
         k = 'morwen' if panel == 'board' else panel
         if k in coast.FOLK and (panel != 'board' or folk_here(g, 'morwen')):
             if panel != 'board':
@@ -536,6 +544,8 @@ class HarbourScene:
                 gl['vx'] = -gl['vx']
         if rng.random() < dt * 1.2:                              # smoke from the inn chimney
             self.smoke.append([707.0 + rng.uniform(-2, 2), float(FLOOR - 158), 3.0])
+        if ('bass' in g.coast['tasks'] or coast.lit(g)) and rng.random() < dt * 1.0:     # ...and Sol's
+            self.smoke.append([1111.0 + rng.uniform(-1, 1), float(FLOOR - 98), 3.0])
         for p in self.smoke:
             p[0] += (6 + getattr(g.env, 'wind', 0.3) * 10) * dt
             p[1] -= 7 * dt
@@ -595,6 +605,33 @@ class HarbourScene:
     def audio_ctx(self):
         return {'town': True, 'sea': True}
 
+    # ------------------------------------------------------------ work you can watch
+    def _burst(self, x, y, n=24, col=(255, 236, 170)):
+        rng = self.rng
+        for _ in range(n):
+            self.fx.append([x + rng.uniform(-8, 8), y + rng.uniform(-6, 6), rng.uniform(-26, 26),
+                            rng.uniform(-44, -10), rng.uniform(0.8, 1.4), col])
+
+    def _task(self, tid):
+        """Give Sol what the lamp needs, then close the window so you can see the change."""
+        if not coast.do_task(self.g, tid):
+            return
+        self.close_panel()
+        x, y = {'glass': (LIGHT_X, 86), 'bass': (1111, FLOOR - 92), 'oil': (1146, FLOOR - 12)}[tid]
+        self._burst(x, y)
+        if tid == 'oil':
+            self._burst(LIGHT_X, 110, 16, (220, 200, 160))     # the top of the scaffold comes down
+
+    def _light(self):
+        if coast.light_up(self.g):
+            self.close_panel()
+            self._burst(LIGHT_X, 86, 40, (255, 240, 180))
+
+    def _help(self):
+        if coast.help_boat(self.g):
+            self.close_panel()
+            self._burst(BOAT_X + (190 if self.g.coast['boat'] >= len(coast.BOAT_STAGES) - 1 else 0), FLOOR - 30)
+
     # ------------------------------------------------------------ for the bot: a stroll round the harbour
     def auto(self, dt, rng):
         g = self.g
@@ -646,10 +683,21 @@ class HarbourScene:
         elif p == 'inn':
             if g.coins > 400:
                 coast.buy_chowder(g)
+            if g.coins > 200:
+                coast.buy_round(g, self.rng)
+            for _ in range(3):                    # sit and listen for a bit
+                self.t += 3.2
+                g.draw()
         elif p == 'ossian':
             for u in coast.UPGRADES:
                 if g.coins > u['price'] + 400:
                     coast.buy_up(g, u['id'])
+            self._help()
+        elif p == 'kit':
+            for sh in coast.SHELLS:
+                coast.swap_shell(g, sh['id'])
+            while coast.swap_glass(g):
+                pass
         elif p == 'sol':
             for tsk in coast.LIGHT_TASKS:
                 coast.do_task(g, tsk['id'])
@@ -727,10 +775,11 @@ class HarbourScene:
                 if k == 'nell':
                     T.walker(s, x, FLOOR - 8, face, 0, f['shirt'], f['hair'], f['hat'], season)
                     continue
-                step = (t * 4) if k == 'ossian' and int(t / 3) % 2 else 0
+                works = k == 'ossian' or (k == 'sol' and 0 < len(st['tasks']) < 3 and not coast.lit(g))
+                step = (t * 4) if works and int(t / 3) % 2 else 0
                 T.ground_shadow(s, x, FLOOR, 13, 60)
                 T.walker(s, x, FLOOR, face, 0, f['shirt'], f['hair'], f['hat'], season)
-                if k == 'ossian' and step:                     # tap, tap, tap with the mallet
+                if step:                                       # tap, tap, tap with the mallet
                     up = math.sin(t * 9) > 0
                     hx = x + 8 * face
                     s.fill((110, 80, 60), (hx, FLOOR - 22 - (3 if up else 0), 2, 7))
@@ -775,6 +824,7 @@ class HarbourScene:
                 f = coast.FOLK['kit']
                 T.ground_shadow(s, x, FLOOR, 10, 50)
                 T.walker(s, x, FLOOR, k['face'], k['step'], f['shirt'], f['hair'], f['hat'], season, True)
+        self._draw_works(s, sc, t)
         # you
         x = int(self.x - sc)
         T.ground_shadow(s, x, FLOOR, 13, 60)
@@ -807,8 +857,11 @@ class HarbourScene:
                 yy = wt + int(math.sin(t * 2 + xx * 0.08) * 1.5)
                 s.fill((236, 244, 246), (xx, yy, 3, 1))
         # boats moored along the quay, bobbing
-        for i, (bx0, col) in enumerate(((STEPS_X + 4, (90, 130, 160)), (176, (200, 90, 70)), (560, (70, 110, 90)),
-                                        (744, (230, 200, 120)), (1120, (120, 90, 140)))):
+        moored = [(STEPS_X + 4, (90, 130, 160)), (176, (200, 90, 70)), (560, (70, 110, 90)), (744, (230, 200, 120)),
+                  (1120, (120, 90, 140))]
+        if st['boat'] >= len(coast.BOAT_STAGES) - 1:
+            moored.append((BOAT_X + 190, (70, 110, 160)))
+        for i, (bx0, col) in enumerate(moored):
             x = bx0 - sc
             if -50 < x < W + 50:
                 bob = math.sin(t * 1.6 + i * 1.3) * 1.5
@@ -819,6 +872,10 @@ class HarbourScene:
                 s.fill(darken(col, 0.35), (x - 14, y + 1, 28, 2))
                 if i == 0:
                     T.sign_text(s, 'YOURS', (x, y - 2), (250, 246, 230))
+                elif i == 5:
+                    s.fill((250, 250, 246), (x - 20, y - 5, 40, 1))
+                    s.fill((150, 140, 130), (x - 1, y - 32, 2, 26))
+                    pygame.draw.polygon(s, (240, 236, 226), [(x + 1, y - 31), (x + 1, y - 9), (x + 14, y - 9)])
                 elif i % 2:
                     s.fill((150, 140, 130), (x - 1, y - 30, 2, 24))      # a mast
                     pygame.draw.line(s, (120, 110, 100), (x, y - 30), (x + 14, y - 7))
@@ -829,6 +886,80 @@ class HarbourScene:
                 flap = math.sin(t * 6 + gl['ph']) * 2
                 y = int(gl['y'] + math.sin(t * 0.8 + gl['ph']) * 6)
                 pygame.draw.lines(s, (240, 240, 244), False, [(x - 5, y - flap), (x, y), (x + 5, y - flap)], 2)
+
+    def _draw_works(self, s, sc, t):
+        """What the lighthouse work and Ossian's boat look like today."""
+        g = self.g
+        st = g.coast
+        tasks = st['tasks']
+        lit = coast.lit(g)
+        cx = 1111 - sc                                      # Sol's chimney
+        if -20 < cx < W + 20:
+            s.fill((150, 120, 100), (cx - 3, FLOOR - 96, 7, 16))
+            s.fill((116, 92, 78), (cx - 4, FLOOR - 97, 9, 2))
+        lx = LIGHT_X - sc
+        if not lit and -70 < lx < W + 70:
+            # the scaffold comes down a section at a time as the work gets done
+            n = 3 - len(tasks)
+            secs = ((96, 156), (156, 222), (222, FLOOR - 6))[3 - n:] if n else ()
+            wood, dark = (156, 122, 84), (112, 86, 60)
+            for a, b in secs:
+                for px in (lx - 30, lx + 29):
+                    s.fill(wood, (px, a, 2, b - a))
+                s.fill(dark, (lx - 33, a, 66, 3))             # the walkway
+                s.fill(wood, (lx - 33, a, 66, 1))
+                pygame.draw.line(s, dark, (lx - 29, a + 3), (lx - 22, b - 2))
+                pygame.draw.line(s, dark, (lx + 28, a + 3), (lx + 21, b - 2))
+            if secs:                                         # a ladder up the side
+                top = secs[0][0]
+                for yy in range(top + 4, FLOOR - 6, 6):
+                    s.fill(dark, (lx + 33, yy, 6, 1))
+                s.fill(wood, (lx + 32, top, 1, FLOOR - 6 - top))
+                s.fill(wood, (lx + 39, top, 1, FLOOR - 6 - top))
+        if 'oil' in tasks or lit:                            # barrels of lamp oil and a crate of wicks
+            bx = 1140 - sc
+            if -20 < bx < W + 20:
+                for i in range(2):
+                    xx = bx + i * 9
+                    s.fill((128, 84, 54), (xx - 4, FLOOR - 13, 8, 12))
+                    s.fill((90, 60, 40), (xx - 4, FLOOR - 10, 8, 1))
+                    s.fill((90, 60, 40), (xx - 4, FLOOR - 5, 8, 1))
+                s.fill((170, 140, 96), (bx - 2, FLOOR - 20, 11, 7))
+                s.fill((130, 104, 70), (bx - 2, FLOOR - 17, 11, 1))
+        self._boat(s, BOAT_X - sc, FLOOR, st['boat'])
+
+    def _boat(self, s, x, G, stage):
+        """Ossian's boat on its trestles (side view): keel, ribs, planks, paint. Gone once launched."""
+        if not -70 < x < W + 70:
+            return
+        s.fill((44, 36, 34), (x - 48, G - 42, 96, 28))       # in front of the shed's old hull
+        for tx in (x - 28, x + 28):                          # the trestles
+            pygame.draw.line(s, (110, 84, 60), (tx - 6, G - 4), (tx, G - 19))
+            pygame.draw.line(s, (110, 84, 60), (tx + 6, G - 4), (tx, G - 19))
+            s.fill((130, 98, 70), (tx - 7, G - 20, 14, 2))
+        if stage >= len(coast.BOAT_STAGES) - 1:
+            return
+        wood = (178, 134, 92)
+        if stage >= 2:
+            col = (70, 110, 160) if stage >= 3 else wood
+            hull = [(x - 46, G - 40), (x + 48, G - 43), (x + 38, G - 22), (x - 38, G - 22)]
+            pygame.draw.polygon(s, col, hull)
+            for yy in (G - 36, G - 31, G - 26):
+                pygame.draw.line(s, darken(col, 0.18), (x - 42 + (G - 22 - yy) // 3, yy), (x + 42 - (G - 22 - yy) // 4, yy))
+            pygame.draw.line(s, lighten(col, 0.3), (x - 46, G - 40), (x + 48, G - 43), 2)
+            if stage >= 3:
+                pygame.draw.line(s, (240, 240, 236), (x - 42, G - 36), (x + 44, G - 39), 1)
+                T.sign_text(s, coast.BOAT_NAME.upper(), (x + 14, G - 31), (250, 246, 230))
+        else:
+            s.fill(wood, (x - 40, G - 24, 80, 3))            # the keel, with the stem and stern posts
+            pygame.draw.line(s, wood, (x + 40, G - 23), (x + 47, G - 43), 2)
+            pygame.draw.line(s, wood, (x - 40, G - 23), (x - 45, G - 40), 2)
+            if stage >= 1:
+                for i in range(7):
+                    rx = x - 33 + i * 11
+                    h = 15 - abs(i - 3)
+                    pygame.draw.lines(s, (200, 160, 112), False, [(rx, G - 23), (rx - 2, G - 23 - h // 2),
+                                                                   (rx - 1, G - 23 - h - 2)])
 
     def _lights(self, frame, sc, t, wins, lamps):
         g = self.g
@@ -858,9 +989,27 @@ class HarbourScene:
                         art.draw_beam(frame, (lx, ly), (lx + a * 460, ly + 6 - abs(a) * 20), 30 * abs(a),
                                       0.34 * nf * min(1.0, abs(a) * 1.5))
             else:
-                frame.fill((22, 26, 34), (lx - 10, ly - 10, 20, 20))
-                for i in range(3):
-                    frame.fill((70, 80, 96), (lx - 8 + i * 6, ly - 9, 1, 18))
+                tasks = g.coast['tasks']
+                if 'glass' in tasks:                                # the mended lens catches the sky
+                    frame.fill((70, 104, 136), (lx - 10, ly - 10, 20, 20))
+                    gx = int((t * 16) % 46) - 12
+                    if -10 <= gx < 9:
+                        frame.fill((236, 246, 255), (lx + gx, ly - 10, 2, 20))
+                else:
+                    frame.fill((22, 26, 34), (lx - 10, ly - 10, 20, 20))
+                    for i in range(3):
+                        frame.fill((70, 80, 96), (lx - 8 + i * 6, ly - 9, 1, 18))
+                if coast.can_light(g):                             # ready: a test flicker in the lamp room
+                    fl = 0.25 + 0.3 * abs(math.sin(t * 7)) * (0.6 + 0.4 * math.sin(t * 2.3))
+                    frame.fill((int(220 * fl), int(160 * fl), int(70 * fl)), (lx - 8, ly - 8, 16, 16),
+                               special_flags=pygame.BLEND_ADD)
+                    add_glow(frame, mid, (lx, ly), fl * 0.7)
+        if ('bass' in g.coast['tasks'] or coast.lit(g)) and nf < 0.45:      # supper on at Sol's cottage
+            on = 0.45 - nf
+            for r in wins:
+                if COTTAGE[0] <= r.x <= COTTAGE[1] and -20 < r.x - sc < W + 20:
+                    frame.fill((int(230 * on), int(150 * on), int(60 * on)), r.move(-sc, 0),
+                               special_flags=pygame.BLEND_ADD)
 
     # ------------------------------------------------------------ UI
     def draw_ui(self, s):
@@ -1038,19 +1187,183 @@ class HarbourScene:
             ui.blit_text(s, 'No sea fish in your basket. Nell only buys from the sea.', (x0, y + 10), 'small',
                          U.SOFT)
 
+    LINE_T = 3.4                     # seconds each line of talk stays up
+
+    def inn_talk(self):
+        """Today's conversations between Bram and Old Tam: the tide, the weather, the light, the boat, you."""
+        g = self.g
+        st = g.coast
+        rng = random.Random(g.day * 31 + 7)
+        convs = []
+        high = next(((d, m) for k, d, m in coast.next_tides(g, 3) if k == 'High'), None)
+        hi = fmt_clock(high[1]) if high else 'tonight'
+        convs.append([(0, "Tide's on the turn. High water at %s." % hi),
+                      (1, 'High water, big fish. Always been the way.'),
+                      (0, 'You said that about my cousin.'),
+                      (1, 'And was I wrong?')])
+        tom = g.forecast.get(str(g.day + 1), 'clear')
+        sky = {'rain': ("Rain tomorrow, the radio says.", "Good. The fish don't mind getting wet."),
+               'storm': ('Storm coming tomorrow. Tie everything down.', "And the Thunderfin come up. Mark my words."),
+               'fog': ('Fog tomorrow. Thick as chowder.', 'Then stay in and eat chowder.'),
+               'snow': ('Snow tomorrow!', 'My knees told me that last week.')}.get(
+            tom, ('Fair weather tomorrow, they reckon.', "Fair weather, fair fishing. Even you'll catch something."))
+        convs.append([(1, sky[0]), (0, sky[1])])
+        tasks = st['tasks']
+        if coast.lit(g):
+            convs.append([(1, 'Years that light was dark, and now look at it.'),
+                          (0, 'I saw a grey back out by the rocks last night...'),
+                          (1, 'The Mariner? Never. Not in my lifetime.'),
+                          (0, "Well, your lifetime isn't over yet.")])
+        elif not tasks:
+            convs.append([(0, 'Old Sol was up the lighthouse again.'), (1, 'Talking to the lamp, was he?'),
+                          (0, "Says it'll shine again if someone helps him."),
+                          (1, 'Somebody young and foolish, then.')])
+        elif len(tasks) < 3:
+            convs.append([(0, 'Did you see? Part of the scaffold is down.'), (1, 'Someone is helping Sol. About time.'),
+                          (0, 'The lens caught the sun this morning!' if 'glass' in tasks else
+                           'Sol had a proper supper last night, smoke and all.' if 'bass' in tasks else
+                           'Barrels of lamp oil on the quay, too.'),
+                          (1, 'Well, I never.')])
+        else:
+            convs.append([(0, 'Sol has everything the lamp needs now.'), (1, 'Then why is it still dark?'),
+                          (0, 'Waiting for the right person to light it, he says.')])
+        bs = st['boat']
+        if bs == 0:
+            convs.append([(0, "Ossian's laid a new keel at the yard."), (1, 'Another boat? Who for?'),
+                          (0, "Won't say. Could use a hand, though.")])
+        elif bs < len(coast.BOAT_STAGES) - 1:
+            convs.append([(1, "Ossian's boat is coming on."),
+                          (0, {1: 'Ribs up already.', 2: 'Planked and caulked!', 3: 'Painted blue. Got a name, too.'}[bs]),
+                          (1, 'Someone from the lake is helping him, I hear.')])
+        else:
+            convs.append([(0, 'The %s rides nicely on her mooring.' % coast.BOAT_NAME),
+                          (1, "Best boat Ossian ever built. Don't tell him I said so.")])
+        sea = [FISH_BY_ID[f] for f in g.journal if FISH_BY_ID.get(f, {}).get('method') == 'sea']
+        if sea:
+            f = max(sea, key=lambda x: x['rarity'])
+            convs.append([(0, 'That angler from the lake landed a %s, you know.' % f['name']),
+                          (1, "From the lake? Beginner's luck."),
+                          (0, '%d kinds of sea fish, Nell says.' % len(sea)), (1, '...Pass the chowder.')])
+        else:
+            convs.append([(1, 'Lake folk never catch a thing in salt water.'),
+                          (0, 'Give them time. The tide teaches everyone.')])
+        rng.shuffle(convs)
+        return convs
+
+    def talk_now(self):
+        """(speaker, text) of the line being said now, or None in the pause between conversations."""
+        if not self.talk:
+            return None
+        el = self.t - self.talk_t0
+        lines = []
+        for c in self.talk:
+            lines += c + [None]                       # a pause after each one
+        k = int(el / self.LINE_T) % len(lines)
+        return lines[k]
+
+    def _inn_scene(self, s, sr):
+        """The room: panelling, the fire, the bar, and Bram and Old Tam at their table."""
+        g = self.g
+        ui = g.ui
+        t = self.t
+        pygame.draw.rect(s, (86, 58, 42), sr, border_radius=12)
+        for xx in range(sr.x + 10, sr.right - 10, 24):
+            s.fill((74, 48, 34), (xx, sr.y + 20, 2, sr.h - 74))
+        s.fill((58, 38, 28), (sr.x + 4, sr.y + 8, sr.w - 8, 12))                 # a beam
+        fl = pygame.Rect(sr.x + 4, sr.bottom - 56, sr.w - 8, 52)
+        pygame.draw.rect(s, (116, 80, 54), fl, border_bottom_left_radius=10, border_bottom_right_radius=10)
+        for yy in range(fl.y + 10, fl.bottom, 12):
+            s.fill((100, 68, 46), (fl.x, yy, fl.w, 2))
+        # the hearth
+        hx = sr.x + 96
+        stone = pygame.Rect(hx - 64, sr.y + 52, 128, sr.h - 104)
+        pygame.draw.rect(s, (130, 124, 116), stone, border_radius=6)
+        for yy in range(stone.y + 12, stone.bottom, 16):
+            for xx in range(stone.x + ((yy // 16) % 2) * 12, stone.right - 8, 24):
+                pygame.draw.rect(s, (112, 106, 100), (xx, yy, 20, 12), 1, border_radius=2)
+        mouth = pygame.Rect(hx - 40, stone.bottom - 76, 80, 76)
+        pygame.draw.rect(s, (30, 20, 18), mouth, border_top_left_radius=30, border_top_right_radius=30)
+        glow = pygame.Surface((160, 120))
+        glow.fill((0, 0, 0))
+        k = 0.8 + 0.2 * math.sin(t * 6) * math.sin(t * 2.7)
+        pygame.draw.circle(glow, (int(110 * k), int(56 * k), int(20 * k)), (80, 80), 56)
+        pygame.draw.circle(glow, (int(160 * k), int(90 * k), int(30 * k)), (80, 86), 30)
+        s.blit(glow, (hx - 80, mouth.bottom - 100), special_flags=pygame.BLEND_RGB_ADD)
+        for i in range(5):                                   # flames
+            fx = hx - 26 + i * 13
+            h = 26 + 14 * abs(math.sin(t * (5 + i) + i * 1.7))
+            base = mouth.bottom - 10
+            pygame.draw.polygon(s, (236, 120, 50), [(fx - 8, base), (fx + 8, base), (fx + math.sin(t * 9 + i) * 3, base - h)])
+            pygame.draw.polygon(s, (252, 210, 110), [(fx - 4, base), (fx + 4, base),
+                                                     (fx + math.sin(t * 11 + i) * 2, base - h * 0.55)])
+        s.fill((80, 56, 40), (hx - 34, mouth.bottom - 10, 68, 6))         # the logs
+        s.fill((60, 44, 32), (stone.x - 6, stone.y - 6, stone.w + 12, 8))   # the mantel
+        # the bar, with bottles, and the ship in a bottle
+        bx = sr.right - 190
+        for j in range(2):
+            s.fill((60, 40, 30), (bx, sr.y + 50 + j * 46, 170, 4))
+            for i in range(7):
+                col = ((90, 140, 90), (150, 70, 60), (200, 170, 90), (90, 110, 160))[(i + j) % 4]
+                pygame.draw.rect(s, col, (bx + 10 + i * 22, sr.y + 26 + j * 46, 10, 24), border_radius=3)
+                s.fill(lighten(col, 0.35),
+                       (bx + 12 + i * 22, sr.y + 30 + j * 46, 2, 12))
+        pygame.draw.ellipse(s, (210, 230, 236), (bx + 30, sr.y + 120 - 14, 110, 26), 2)
+        pygame.draw.polygon(s, (120, 80, 56), [(bx + 60, sr.y + 122), (bx + 112, sr.y + 122), (bx + 104, sr.y + 128),
+                                                (bx + 68, sr.y + 128)])
+        pygame.draw.polygon(s, (240, 236, 226), [(bx + 86, sr.y + 108), (bx + 86, sr.y + 121), (bx + 100, sr.y + 121)])
+        s.fill((96, 64, 44), (bx - 10, sr.bottom - 96, 200, 46))           # the counter
+        s.fill((130, 90, 60), (bx - 14, sr.bottom - 100, 208, 8))
+        # Bram and Old Tam
+        say = self.talk_now()
+        tx = sr.centerx - 30
+        ty = sr.bottom - 44
+        heads = []
+        for i, fk in enumerate(INN_FOLK):
+            x = tx + (-74 if i == 0 else 74)
+            tmp = pygame.Surface((26, 40), pygame.SRCALPHA)
+            T.walker(tmp, 13, 38, 1 if i == 0 else -1, 0, fk['shirt'], fk['hair'], fk['hat'], g.env.season, False)
+            big = pygame.transform.scale(tmp, (78, 120))
+            bob = -2 if say and say[0] == i and int(t * 6) % 2 else 0
+            s.blit(big, big.get_rect(midbottom=(x, ty + bob)))
+            heads.append((x, ty - 82))
+        # the table and two mugs in front of them
+        pygame.draw.rect(s, (130, 92, 62), (tx - 60, ty - 40, 120, 10), border_radius=3)
+        s.fill((100, 70, 48), (tx - 6, ty - 30, 12, 30))
+        for mx in (tx - 34, tx + 22):
+            pygame.draw.rect(s, (220, 214, 200), (mx, ty - 56, 14, 16), border_radius=2)
+            pygame.draw.rect(s, (250, 246, 236), (mx, ty - 58, 14, 4), border_radius=2)
+            pygame.draw.arc(s, (220, 214, 200), (mx + 10, ty - 54, 10, 10), -1.6, 1.6, 2)
+        for i, fk in enumerate(INN_FOLK):
+            ui.blit_text(s, fk['name'], (heads[i][0], ty + 6), 'tiny', (250, 236, 210), 'midtop')
+        # the speech bubble
+        if say:
+            who, text = say
+            lines = ui.wrap(text, 'small', 250)[:3]
+            w = max(ui.fonts['small'].size(ln)[0] for ln in lines) + 28
+            h = 14 + 22 * len(lines)
+            hxp, hyp = heads[who]
+            br = pygame.Rect(0, 0, w, h)
+            br.midbottom = (hxp + (40 if who == 0 else -40), hyp - 16)
+            br.clamp_ip(sr.inflate(-16, -16))
+            pygame.draw.polygon(s, (255, 252, 242), [(hxp - 6 + (6 if who == 0 else -6), br.bottom - 2),
+                                                     (hxp + 10 * (1 if who == 0 else -1), br.bottom - 2),
+                                                     (hxp, hyp - 3)])
+            pygame.draw.rect(s, (255, 252, 242), br, border_radius=12)
+            pygame.draw.rect(s, (150, 120, 96), br, 2, border_radius=12)
+            for j, ln in enumerate(lines):
+                ui.blit_text(s, ln, (br.x + 14, br.y + 8 + j * 22), 'small', U.INK)
+
     def draw_inn(self, s):
         g = self.g
         ui = g.ui
-        rect = T._panel(g, s, 820, 470, 'The Gull & Lantern')
-        x0 = rect.x + 40
-        cw = rect.w - 80
-        y = rect.y + 96
-        for ln in ui.wrap('A low-beamed room that smells of woodsmoke and salt. Fishermen argue about the weather '
-                          'over the fire, and a ship in a bottle sits above the bar.', 'small', cw)[:3]:
-            ui.blit_text(s, ln, (x0, y), 'small', U.SOFT)
-            y += 24
-        y += 14
-        r = pygame.Rect(x0, y, cw, 86)
+        st = g.coast
+        rect = T._panel(g, s, 960, 610, 'The Gull & Lantern')
+        x0 = rect.x + 36
+        cw = rect.w - 72
+        y = rect.y + 92
+        self._inn_scene(s, pygame.Rect(x0, y, cw, 250))
+        y += 262
+        r = pygame.Rect(x0, y, cw, 80)
         ui.tile(s, r, (250, 240, 214), (200, 150, 80))
         pygame.draw.ellipse(s, (240, 236, 226), (r.x + 18, r.y + 22, 64, 38))
         pygame.draw.ellipse(s, (236, 214, 160), (r.x + 24, r.y + 26, 52, 24))
@@ -1058,31 +1371,37 @@ class HarbourScene:
             s.fill((250, 250, 250), (r.x + 34 + i * 8, r.y + 10 - (int(self.t * 10 + i * 3) % 8), 2, 6))
         ui.blit_text(s, 'Harbour Chowder', (r.x + 104, r.y + 12), 'bodyb', U.INK)
         ui.blit_text(s, 'Rare sea fish bite more often for the rest of the day.', (r.x + 104, r.y + 46), 'small',
-                     U.SOFT)
+                     U.SOFT, maxw=cw - 300)
         had = g.buff('chowder')
-        ui.button(s, (r.right - 170, r.y + 22, 156, 44), 'Eaten today' if had else '%d coins' % coast.CHOWDER,
+        ui.button(s, (r.right - 180, r.y + 18, 166, 44), 'Eaten today' if had else '%d coins' % coast.CHOWDER,
                   lambda: coast.buy_chowder(g), 'primary', enabled=not had and g.coins >= coast.CHOWDER,
                   font='smallb', nav=True)
-        y += 112
-        ui.blit_text(s, 'Overheard at the bar', (x0, y), 'bodyb', U.INK)
-        y += 32
-        rng = random.Random(g.day * 13 + 5)
-        unknown = [f for f in SEA_FISH if f['id'] not in g.journal and (f['id'] != 'mariner' or coast.lit(g))]
-        if unknown:
-            f = rng.choice(unknown)
-            text = '"They say there\'s a %s about. %s"' % (f['name'], f['hint'])
-        elif not coast.lit(g):
-            text = '"Shame about the old light. Sol was the best keeper this coast ever had."'
+        y += 90
+        r = pygame.Rect(x0, y, cw, 92)
+        bought = st['round_day'] == g.day
+        ui.tile(s, r, (250, 240, 214), (200, 150, 80))
+        for i, mx in enumerate((r.x + 26, r.x + 50)):           # two mugs
+            pygame.draw.rect(s, (220, 190, 120), (mx, r.y + 30, 18, 24), border_radius=3)
+            pygame.draw.rect(s, (252, 248, 236), (mx, r.y + 26, 18, 7), border_radius=3)
+            pygame.draw.arc(s, (200, 170, 100), (mx + 14, r.y + 34, 12, 12), -1.6, 1.6, 2)
+        if bought and st.get('tip'):
+            ui.blit_text(s, 'Old Tam leans in and lowers his voice:', (r.x + 104, r.y + 10), 'smallb', U.INK)
+            yy = r.y + 36
+            for ln in ui.wrap(st['tip'], 'small', cw - 300)[:2]:
+                ui.blit_text(s, ln, (r.x + 104, yy), 'small', U.SOFT)
+                yy += 22
         else:
-            text = '"Is it true you have caught every fish in the sea? Drinks are on you!"'
-        for ln in ui.wrap(text, 'small', cw)[:3]:
-            ui.blit_text(s, ln, (x0, y), 'small', U.INK)
-            y += 24
+            ui.blit_text(s, 'Buy the fishermen a round', (r.x + 104, r.y + 12), 'bodyb', U.INK)
+            ui.blit_text(s, 'They might let you in on a secret, and a cheer brings a little luck.', (r.x + 104, r.y + 48),
+                         'small', U.SOFT, maxw=cw - 300)
+        ui.button(s, (r.right - 180, r.y + 24, 166, 44), 'Cheers!' if bought else '%d coins' % coast.ROUND,
+                  lambda: coast.buy_round(g, self.rng), 'primary', enabled=not bought and g.coins >= coast.ROUND,
+                  font='smallb', nav=True)
 
     def draw_ossian(self, s):
         g = self.g
         ui = g.ui
-        rect = T._panel(g, s, 900, 480, "Ossian's Boatyard")
+        rect = T._panel(g, s, 900, 600, "Ossian's Boatyard")
         self._head(s, rect, 'ossian')
         x0 = rect.x + 240
         cw = rect.right - 30 - x0
@@ -1102,6 +1421,37 @@ class HarbourScene:
                           lambda uid=u['id']: coast.buy_up(g, uid), 'primary', enabled=g.coins >= u['price'],
                           font='smallb', nav=True)
             y += 100
+        # the boat on the trestles
+        st = g.coast
+        stage = st['boat']
+        last = len(coast.BOAT_STAGES) - 1
+        y += 6
+        ui.blit_text(s, "Ossian's new boat", (x0, y), 'bodyb', U.INK)
+        y += 34
+        r = pygame.Rect(x0, y, cw, 120)
+        ui.tile(s, r, (244, 236, 218), (150, 190, 160) if stage >= last else (190, 170, 140))
+        pic = pygame.Surface((110, 50), pygame.SRCALPHA)
+        if stage >= last:
+            pygame.draw.polygon(pic, (70, 110, 160), [(8, 24), (102, 21), (92, 40), (18, 40)])
+            pic.fill((90, 150, 190), (0, 40, 110, 10))
+        else:
+            self._boat(pic, 55, 48, stage)
+            pic.fill((0, 0, 0, 0), (0, 0, 6, 50))
+        pic = pygame.transform.scale(pic, (220, 100))
+        s.blit(pic, (r.x + 10, r.y + 10))
+        tx = r.x + 244
+        ui.blit_text(s, coast.BOAT_STAGES[stage] if stage < last else 'The %s is afloat!' % coast.BOAT_NAME,
+                     (tx, r.y + 14), 'bodyb', U.INK, maxw=r.right - tx - 206)
+        sub = ('She rides on her mooring by the slipway. Ossian beams every time he looks at her.' if stage >= last
+               else 'Lend Ossian a hand once a day and watch her take shape. Day %d of %d.' % (stage + 1, last))
+        y2 = r.y + 44
+        for ln in ui.wrap(sub, 'small', r.right - tx - 206)[:3]:
+            ui.blit_text(s, ln, (tx, y2), 'small', U.SOFT)
+            y2 += 22
+        if stage < last:
+            ok = coast.can_help(g)
+            ui.button(s, (r.right - 196, r.centery - 21, 182, 42), 'Lend a hand' if ok else 'More tomorrow',
+                      self._help, 'primary', enabled=ok, font='smallb', nav=True)
 
     def draw_sol(self, s):
         g = self.g
@@ -1148,42 +1498,62 @@ class HarbourScene:
                       'oil': g.coins >= coast.OIL_COST}[tsk['id']]
                 label = {'glass': 'Give glass  %d/%d' % (min(st['glass'], coast.GLASS_NEED), coast.GLASS_NEED),
                          'bass': 'Give sea bass' if ok else 'No sea bass', 'oil': 'Pay %d' % coast.OIL_COST}[tsk['id']]
-                ui.button(s, (r.right - 170, r.y + 17, 156, 44), label, lambda tid=tsk['id']: coast.do_task(g, tid),
+                ui.button(s, (r.right - 170, r.y + 17, 156, 44), label, lambda tid=tsk['id']: self._task(tid),
                           'primary', enabled=ok, font='smallb', nav=True)
             y += 86
         y += 6
         ui.button(s, (x0, y, cw, 54), 'Light the lamp!' if coast.can_light(g) else 'Light the lamp  (%d of 3 ready)'
-                  % len(st['tasks']), lambda: coast.light_up(g), 'primary', enabled=coast.can_light(g), font='h3',
+                  % len(st['tasks']), self._light, 'primary', enabled=coast.can_light(g), font='h3',
                   nav=True)
+        y += 64
+        ui.blit_text(s, 'Each thing you bring, you can watch the work happen on the lighthouse.', (x0, y), 'tiny',
+                     U.SOFT, maxw=cw)
 
     def draw_kit(self, s):
         g = self.g
         ui = g.ui
         st = g.coast
-        rect = T._panel(g, s, 900, 500, "Kit's Shell Collection")
+        rect = T._panel(g, s, 940, 600, "Kit's Shell Collection")
         self._head(s, rect, 'kit')
         x0 = rect.x + 240
         cw = rect.right - 30 - x0
-        y = rect.y + 100
+        y = rect.y + 96
         have = sum(1 for sh in coast.SHELLS if st['shells'].get(sh['id']))
+        spare = coast.spares(g)
         ui.blit_text(s, 'Shells found: %d of %d' % (have, len(coast.SHELLS)), (x0, y), 'bodyb', U.INK)
+        ui.blit_text(s, 'Spare shells to swap: %d' % spare, (x0 + cw, y + 4), 'small', U.SOFT, 'topright')
         y += 38
         tw = (cw - 3 * 10) // 4
         for i, sh in enumerate(coast.SHELLS):
-            r = pygame.Rect(x0 + (i % 4) * (tw + 10), y + (i // 4) * 104, tw, 94)
+            r = pygame.Rect(x0 + (i % 4) * (tw + 10), y + (i // 4) * 112, tw, 102)
             n = st['shells'].get(sh['id'], 0)
             ui.tile(s, r, (250, 244, 228) if n else (232, 226, 214), sh['col'] if n else (190, 180, 168))
             if n:
-                shell_icon(s, sh['id'], (r.centerx, r.y + 34), 4)
-                ui.blit_text(s, '%s  x%d' % (sh['name'], n), (r.centerx, r.bottom - 22), 'tiny', U.INK, 'center',
+                shell_icon(s, sh['id'], (r.centerx, r.y + 36), 4)
+                ui.blit_text(s, '%s  x%d' % (sh['name'], n), (r.centerx, r.bottom - 24), 'tiny', U.INK, 'center',
                              maxw=r.w - 8)
             else:
-                ui.blit_text(s, '?', (r.centerx, r.y + 30), 'h3', (180, 170, 160), 'center')
-                ui.blit_text(s, '???', (r.centerx, r.bottom - 22), 'tiny', U.SOFT, 'center')
-        y += 220
+                ui.blit_text(s, '?', (r.centerx, r.y + 22), 'h3', (180, 170, 160), 'center')
+                ui.blit_text(s, sh['name'], (r.centerx, r.y + 46), 'tiny', U.SOFT, 'center', maxw=r.w - 8)
+                cost = coast.swap_cost(sh['id'])
+                ui.button(s, (r.x + 8, r.bottom - 36, r.w - 16, 28), 'Swap %d spares' % cost,
+                          lambda sid=sh['id']: coast.swap_shell(g, sid), 'primary', enabled=spare >= cost,
+                          font='tiny', nav=True)
+        y += 2 * 112 + 8
+        if coast.needs_glass(g):
+            r = pygame.Rect(x0, y, cw, 66)
+            ui.tile(s, r, (236, 244, 246), (120, 170, 190))
+            for j, gl in enumerate(coast.GLASS):
+                pygame.draw.rect(s, gl['col'], (r.x + 16 + j * 14, r.y + 26 + (j % 2) * 6, 11, 9), border_radius=3)
+            ui.blit_text(s, 'Sea glass for the lighthouse lens: %d of %d' % (st['glass'], coast.GLASS_NEED),
+                         (r.x + 70, r.y + 10), 'smallb', U.INK, maxw=cw - 260)
+            ui.blit_text(s, 'Kit keeps a bucket of it. %d spare shells for a piece.' % coast.GLASS_SWAP,
+                         (r.x + 70, r.y + 38), 'tiny', U.SOFT, maxw=cw - 260)
+            ui.button(s, (r.right - 180, r.y + 12, 166, 42), 'Swap %d spares' % coast.GLASS_SWAP,
+                      lambda: coast.swap_glass(g), 'primary', enabled=spare >= coast.GLASS_SWAP, font='smallb',
+                      nav=True)
+            y += 76
         txt = ('Every one! The harbour paid out %d coins for the full set.' % coast.SHELL_REWARD if st['shell_done']
                else 'Find every kind and the harbour pays a %d-coin prize. New shells wash up each morning.'
                % coast.SHELL_REWARD)
-        ui.blit_text(s, txt, (x0, y), 'small', U.SOFT, maxw=cw)
-        ui.blit_text(s, 'Sea glass in your pocket: %d   (Sol needs %d to mend the lighthouse lens)'
-                     % (st['glass'], coast.GLASS_NEED), (x0, y + 30), 'small', U.INK, maxw=cw)
+        ui.blit_text(s, txt, (x0, y + 4), 'small', U.SOFT, maxw=cw)

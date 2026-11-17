@@ -588,6 +588,8 @@ class World:
         import wildlife
         if self.spot == 'dock':
             self._dock_dynamic(near, env, g)
+            import goals
+            goals.draw_dock(near, g, t)
             seasons.draw_pot(near, g, t)
             import biscuit
             biscuit.draw_gift(near, g, t)

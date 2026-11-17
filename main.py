@@ -65,6 +65,8 @@ import discover
 import aquarium as aqmod
 import coast
 import harbour as hbmod
+import goals as goalmod
+import radio as radiomod
 import pad as padmod
 import ui as U
 from art import W, H, DECK_Y
@@ -102,7 +104,7 @@ UI_SCALES = [50, 60, 67, 75, 85, 100, 110]      # interface size, percent (100 =
 DEFAULT_SETTINGS = dict(master=1.0, music=0.5, sfx=0.8, amb=0.8, assist=False, fullscreen=False, window=None,
                         fps=60, show_fps=False, shake=1.0, zoom=True, hints=True, clock24=False, speed=1.0,
                         bg_pause=True, ui_scale=100, mp_name='', mp_addr='', slot=1, prompts='auto',
-                        tutorial=True, binds={}, hud='calm')
+                        tutorial=True, binds={}, hud='calm', radio=None)
 HUD_STYLES = ('full', 'calm', 'compact')
 PROMPTS = ['auto', 'keyboard', 'xbox', 'ps', 'switch']
 PROMPT_LABELS = ['Auto', 'Keyboard', 'Xbox', 'PS', 'Switch']
@@ -238,6 +240,8 @@ class Game:
         self.ui = U.UI()
         self._loading()
         self.audio = Audio()
+        self.radio = radiomod.Radio(self)
+        radiomod.fmt_clock = fmt_clock
         self.pad = None
         self.last_input = 'kb'       # 'kb' or 'pad': which one the hints on screen should show
         self.env = Env()
@@ -422,6 +426,8 @@ class Game:
             st['fps'] = 60
         if st['shake'] not in SHAKE_LEVELS:
             st['shake'] = 1.0
+        if st.get('radio') not in radiomod.BY_ID:
+            st['radio'] = None
         if st['speed'] not in DAY_SPEEDS:
             st['speed'] = 1.0
         if st['ui_scale'] not in UI_SCALES:
@@ -595,6 +601,8 @@ class Game:
         hbmod.HEADLESS, hbmod.fmt_clock = HEADLESS, fmt_clock
         self.aqscene = None          # also Saltmarsh harbour (harbour.py), under overlay 'harbour'
         self.coast = coast.new()     # Saltmarsh, down the river (coast.py)
+        self.goals = goalmod.new()   # the welcome quest and the pinned goal (goals.py)
+        goalmod.fmt_clock = fmt_clock
         self.cat_bond = 0            # Biscuit (biscuit.py): bond points, today's little things, a present
         self.cat_day = {}
         self.cat_gift = None
@@ -632,7 +640,7 @@ class Game:
                     cat_bond=self.cat_bond, cat_day=self.cat_day, cat_gift=self.cat_gift,
                     cat_follow=self.cat_follow, home=self.home, tut=self.tut, tut_day=self.tut_day,
                     garden=self.garden, nature=self.nature, shore=self.shore, finds=self.finds,
-                    coast=self.coast)
+                    coast=self.coast, goals=self.goals)
         if self.solo:
             data.update(self.solo)       # visiting a friend: your own lake keeps its own day and weather
         try:
@@ -767,6 +775,7 @@ class Game:
         self.shore = shoremod.clean(self.shore)
         self.finds = discover.clean(self.finds)
         self.coast = coast.clean(self.coast)
+        self.goals = goalmod.clean(d.get('goals'))
         self.nature = {k: {'stars': max(1, min(3, int(v.get('stars', 1)))), 'day': int(v.get('day', 0)),
                            'n': max(1, int(v.get('n', 1))),
                            'at': v.get('at') if v.get('at') in SPOT_BY_ID or v.get('at') == 'town' else None}
@@ -1632,6 +1641,7 @@ class Game:
         entry['count'] += 1
         entry['best'] = max(entry['best'], size)
         self.total += 1
+        goalmod.on_catch(self, spec)
         if not spec.get('junk'):
             if self.spot not in self.stats.setdefault('spots', []):
                 self.stats['spots'].append(self.spot)
@@ -1784,7 +1794,8 @@ class Game:
         items = []
         if self.world.shooting and lake:
             items.append(('Wish on the shooting star!', self.wish_on_star))
-        items += [('Journal', key(pygame.K_j)), ('Shop', key(pygame.K_s)), ('Calendar', key(pygame.K_k))]
+        items += [('Journal', key(pygame.K_j)), ('Shop', key(pygame.K_s)), ('Calendar', key(pygame.K_k)),
+                  ('Goals', key(pygame.K_q))]
         if lake:
             items.append(('Cabin', key(pygame.K_c)))
         if dock:
@@ -1805,6 +1816,7 @@ class Game:
         items.append(('Rest until morning', key(pygame.K_z)))
         items.append(('Photo mode', key(pygame.K_p)))
         items.append(('Music on' if self.settings['music'] <= 0 else 'Music off', key(pygame.K_m)))
+        items.append(('Radio', key(pygame.K_r)))
         if self.net.online:
             items.append(('Chat', key(pygame.K_RETURN)))
             items.append(('Friends: gifts, races, outings', lambda: self.toggle('coop')))
@@ -1872,6 +1884,9 @@ class Game:
             return True
         if self.spot != 'dock':
             return False
+        if self.goals['step'] == 3 and goalmod.PLANK_CLICK.collidepoint(wx, wy):
+            goalmod.mend_plank(self)
+            return True
         if self.has('pot') and seasons.pot_rect(self).collidepoint(wx, wy):
             seasons.pot_action(self)
             return True
@@ -2373,6 +2388,10 @@ class Game:
                 self.toggle('map')
             elif not ov:
                 self.open_map()
+        elif k == pygame.K_q and ov in (None, 'goals'):
+            self.toggle('goals')
+        elif k == pygame.K_r and ov in (None, 'radio'):
+            self.toggle('radio')
         elif ov:
             return
         elif k == pygame.K_t:
@@ -2428,6 +2447,8 @@ class Game:
         self.next_queue()
 
     def start_game(self, continue_=True):
+        if self.radio.station is None and self.settings.get('radio') in radiomod.BY_ID:
+            self.radio.tune(self.settings['radio'])
         if not continue_:
             self.new_game_state()
             self.env.minute = self.minute
@@ -2488,9 +2509,11 @@ class Game:
             gardenmod.update(self, dt)
             wildlife.update(self, dt)
             tutorial.update(self, dt)
+            goalmod.update(self, dt)
             coop.update(self, dt)
             story.update(self, dt)
             story.update_fx(self, dt)
+        self.radio.update(dt)
         if self.place == 'town' and self.mode == 'play':
             walk = 0
             if self.typing is None and not HEADLESS:
@@ -2729,6 +2752,10 @@ class Game:
                 townmod.draw_panel(self, scr, ov)
             elif ov == 'lanterns':
                 story.draw_panel(self, scr)
+            elif ov == 'goals':
+                goalmod.draw_panel(self, scr)
+            elif ov == 'radio':
+                self.radio.draw_panel(scr)
             elif ov == 'quick':
                 self.draw_quick(scr)
         elif self.mode == 'play' and self.place == 'lake':
@@ -2934,17 +2961,31 @@ class Game:
         return True
 
     def objectives(self):
-        """What the HUD can track: an expedition with friends, today's festival and the open request.
-        A live expedition or festival comes first."""
+        """What the HUD can track: an expedition with friends, the welcome quest, today's festival, the open
+        request (at the sea, the harbour's jobs come first). A pinned goal (Q) always comes first."""
         out = ['expedition'] if coop.exp_live(self) else []
+        if goalmod.active(self):
+            out.append('welcome')
         fest = self.festival_today() and not self.festival.get('done')
         req = self.request and not self.request.get('done')
         if fest and self.minute >= self.festival['start']:
             out.append('festival')
-        if req:
+        if coast.at_coast(self):
+            sea = [gid for gid in goalmod.COAST_GOALS if goalmod.info(self, gid)]
+            if req and goalmod.catchable_here(self, FISH_BY_ID[self.request['fish']]):
+                out.append('request')
+            out += sea
+        if req and 'request' not in out:
             out.append('request')
         if fest and 'festival' not in out:
             out.append('festival')
+        pin = self.goals.get('pinned')
+        if pin:
+            if pin in out:
+                out.remove(pin)
+                out.insert(0, pin)
+            elif goalmod.info(self, pin):
+                out.insert(0, pin)
         return out
 
     def tracked_objective(self):
@@ -2976,30 +3017,63 @@ class Game:
         ui.hotspot(chip.inflate(8, 8), self.cycle_objective)
         return chip.w + 8
 
+    GOAL_H = 84                  # the tracker card: what to do, where, and when
+
+    def _hud_lines(self, s, r, extra, top, where, when, prog=None):
+        """The words on a tracker card, with a progress pill beside the first line."""
+        ui = self.ui
+        right = r.right - 14 - extra
+        tw = right - r.x - 58
+        if prog:
+            a, b = prog
+            done = a >= b
+            pill = U.snap_rect(pygame.Rect(right - 60, r.y + 8, 60, 26))
+            s.blit(ui._button_skin(pill.w, pill.h, U.SAGE if done else (234, 220, 194),
+                                   U.SAGE_D if done else U.BROWN, 1), pill)
+            ui.blit_text(s, '%d/%d' % (a, b), (pill.centerx, pill.centery - 1), 'smallb',
+                         (255, 255, 250) if done else U.INK, 'center')
+            tw1 = pill.x - 6 - r.x - 58
+        else:
+            tw1 = tw
+        ui.blit_text(s, top, (r.x + 58, r.y + 9), 'smallb', U.INK, maxw=tw1)
+        ui.blit_text(s, where, (r.x + 58, r.y + 35), 'small', U.SOFT, maxw=tw)
+        ui.blit_text(s, when, (r.x + 58, r.y + 57), 'small', U.SOFT, maxw=tw)
+
     def _hud_request(self, s, y, CW, objs):
         ui = self.ui
         req = self.request
         f = FISH_BY_ID[req['fish']]
         bday = req.get('birthday')
-        r2 = ui.panel(s, (16, y, CW, 64), fill=(252, 236, 240) if bday else U.PAPER, radius=16)
+        r2 = ui.panel(s, (16, y, CW, self.GOAL_H), fill=(252, 236, 240) if bday else U.PAPER, radius=16)
         if bday:
-            U.cake(s, (r2.x + 30, r2.y + 32), 1.1)
+            U.cake(s, (r2.x + 30, r2.y + 34), 1.1)
         else:
-            U.envelope(s, (r2.x + 16, r2.y + 20, 30, 22))
+            U.envelope(s, (r2.x + 16, r2.y + 24, 30, 22))
         ui.hotspot(r2, self.read_request)
         extra = self._hud_switch(s, r2, objs, 'request') if len(objs) > 1 else 0
         who = req['who'].split(' (')[0]
-        pill = pygame.Rect(0, 0, 64, 28)
-        pill.midright = (r2.right - 14 - extra, r2.centery)
-        ui.blit_text(s, ("%s's birthday" % who) if bday else '%s needs' % who, (r2.x + 58, r2.y + 10),
-                     'small', U.SOFT, maxw=pill.x - r2.x - 66)
-        ui.blit_text(s, f['name'], (r2.x + 58, r2.y + 34), 'smallb', U.INK, maxw=pill.x - r2.x - 66)
-        done = req['have'] >= req['need']
-        pill = U.snap_rect(pill)
-        s.blit(ui._button_skin(pill.w, pill.h, U.SAGE if done else (234, 220, 194),
-                               U.SAGE_D if done else U.BROWN, 1), pill)
-        ui.blit_text(s, '%d/%d' % (req['have'], req['need']), (pill.centerx, pill.centery - 1), 'smallb',
-                     (255, 255, 250) if done else U.INK, 'center')
+        where, when = goalmod.fish_where(self, f)
+        self._hud_lines(s, r2, extra, ("%s's birthday: %s" if bday else '%s needs: %s') % (who, f['name']),
+                        where, when, (req['have'], req['need']))
+        if self.goals.get('pinned') == 'request':
+            goalmod.draw_pin(s, (r2.x + 10, r2.y + 6))
+
+    def _hud_goal(self, s, y, CW, objs, gid):
+        """Any other goal: its next step, then where and when, and how far along it is."""
+        ui = self.ui
+        gl = goalmod.info(self, gid)
+        if not gl:
+            return
+        if gid == 'welcome':
+            r = ui.panel(s, (16, y, CW, self.GOAL_H), fill=(240, 246, 232), border=(120, 160, 110), radius=16)
+        else:
+            r = ui.panel(s, (16, y, CW, self.GOAL_H), radius=16)
+        almanac.event_icon(s, gl['icon'], (r.x + 30, r.y + 34), 1.0)
+        ui.hotspot(r, gl['act'] or (lambda: self.toggle('goals')))
+        extra = self._hud_switch(s, r, objs, gid) if len(objs) > 1 else 0
+        self._hud_lines(s, r, extra, gl['next'], gl['where'] or gl['title'], gl['when'], gl.get('pill'))
+        if self.goals.get('pinned') == gid:
+            goalmod.draw_pin(s, (r.x + 10, r.y + 6))
 
     def _hud_festival(self, s, y, CW, objs):
         ui = self.ui
@@ -3095,6 +3169,15 @@ class Game:
                           else 'Meteors from %s' % fmt_clock(1260)))
         elif self.meteor_live():
             lines.append(('meteor', 'Meteor shower now!'))
+        if coast.at_coast(self):
+            lines = [ln for ln in lines if ln[0] not in ('garden', 'wagon', 'reeds', 'birthday')
+                     and not ln[1].startswith('Crab pot')]
+        cur = self.tracked_objective()[0]
+        if cur in ('lantern', 'garden', 'shore'):
+            kind = {'lantern': 'lantern', 'garden': 'garden', 'shore': 'reeds'}[cur]
+            lines = [ln for ln in lines if ln[0] != kind]
+        elif cur == 'legend':
+            lines = [ln for ln in lines if not ln[1].startswith('Legend')]
         return lines
 
     def draw_hud(self, s):
@@ -3138,13 +3221,16 @@ class Game:
         cur, objs = self.tracked_objective()
         if cur == 'request':
             self._hud_request(s, y, CW, objs)
-            y += 72
+            y += self.GOAL_H + 8
         elif cur == 'festival':
             self._hud_festival(s, y, CW, objs)
             y += 72
         elif cur == 'expedition':
             self._hud_expedition(s, y, CW, objs)
             y += 72
+        elif cur:
+            self._hud_goal(s, y, CW, objs, cur)
+            y += self.GOAL_H + 8
         # today's other notes: they step aside while a cast is out (and always while reeling)
         quiet = (self.hud_tuck > 0.5) if style != 'full' else self.fishing.state in ('fight', 'landing')
         if not quiet:
@@ -3166,6 +3252,8 @@ class Game:
                                    lambda: (self.set_lan_tab('legends'), self.open_lanterns()))
                     ui.blit_text(s, text, (r7.x + 58, r7.y + 25 + i * 30), 'small', U.INK, 'midleft', maxw=tw)
                 y = r7.bottom + 8
+        if self.fishing.state not in ('fight', 'landing'):
+            y = self.radio.draw_widget(s, y, CW)
         self._hud_left = y           # the chat sits under the left-hand cards
         # coins, bait and luck down the right-hand side
         b = BAIT_BY_ID[self.bait]
@@ -5084,25 +5172,25 @@ class Game:
         for i, (a, name, _) in enumerate(acts):
             col, row = divmod(i, half)
             x = rect.x + 56 + col * 384
-            yy = y + 4 + row * 40
-            r = pygame.Rect(x - 8, yy - 2, 368, 38)
+            yy = y + 2 + row * 35
+            r = pygame.Rect(x - 8, yy - 1, 368, 33)
             waiting = getattr(self, 'rebinding', None) == a
             hov = r.collidepoint(ui.mouse)
             if waiting or hov:
                 pygame.draw.rect(s, (252, 240, 214) if waiting else (246, 236, 216), r, border_radius=8)
-            ui.blit_text(s, name, (x, yy + 17), 'small', U.INK, 'midleft')
+            ui.blit_text(s, name, (x, yy + 15), 'small', U.INK, 'midleft')
             if waiting:
-                ui.blit_text(s, 'Press a key...', (r.right - 10, yy + 17), 'smallb', (200, 120, 60), 'midright')
+                ui.blit_text(s, 'Press a key...', (r.right - 10, yy + 15), 'smallb', (200, 120, 60), 'midright')
             else:
                 k = b.key_of(a)
                 kr = ui.keycap(s, bindsmod.key_label(k), (0, 0), 'midleft', pad=False, remap=False)
-                kr.midright = (r.right - 10, yy + 17)
+                kr.midright = (r.right - 10, yy + 15)
                 pygame.draw.rect(s, (246, 236, 216) if hov else (250, 244, 232), kr.inflate(4, 4))
                 ui.keycap(s, bindsmod.key_label(k), kr.topleft, 'topleft', pad=False, remap=False)
                 if k != bindsmod.DEFAULT[a]:
                     pygame.draw.circle(s, (226, 150, 70), (kr.x - 10, kr.centery), 4)
             ui.hotspot(r, lambda a=a: self.rebind(a))
-        ny = y + 4 + half * 40 + 6
+        ny = y + 2 + half * 35 + 6
         ui.blit_text(s, 'Click an action, then press its new key (Esc cancels). The mouse always works too.',
                      (rect.x + 56, ny), 'small', U.SOFT)
         by = rect.bottom - 76
@@ -6036,6 +6124,23 @@ def run_bot(seconds):
             biscuit.give_treat(g)                 # Biscuit's day, and a bit of decorating
             if biscuit.toys(g):
                 biscuit.play(g)
+            g.update(1 / 30)                      # (the welcome quest notices the play)
+            if g.goals['step'] == 3 and goalmod.mend_plank(g):
+                did('mend_plank')
+            if rng.random() < 0.5:
+                g.radio.tune(rng.choice([None] + [st['id'] for st in radiomod.STATIONS]))
+                did('radio')
+                g.overlay = 'radio'
+                g.draw()
+                g.overlay = None
+            if rng.random() < 0.4:
+                gl = goalmod.all_goals(g)
+                if gl:
+                    goalmod.pin(g, rng.choice(gl)['id'] if rng.random() < 0.8 else g.goals['pinned'] or gl[0]['id'])
+                    did('pin')
+                g.overlay = 'goals'
+                g.draw()
+                g.overlay = None
             pick = rng.choice(homemod.CATALOGUE + homemod.mounts(g) + homemod.photos(g))
             if not homemod.owns(g, pick['id']) and g.coins > pick['price'] + 600:
                 if pick['kind'] in ('wall', 'floor'):
@@ -6163,6 +6268,9 @@ def run_bot(seconds):
           'orders', g.stats.get('coast_orders', 0), 'combed', g.stats.get('combed', 0), 'shells', len(cs['shells']),
           'glass', cs['glass'], 'light', cs['light'], cs['tasks'], 'ups', cs['ups'], 'chowder', cs['chowder'],
           'sea fish', coast.sea_known(g), 'friends', cs['friends'], flush=True)
+    print('feedback 2.2: welcome step', g.goals['step'], 'pinned', g.goals['pinned'], 'boat', cs['boat'],
+          'boat help', g.stats.get('boat_help', 0), 'round day', cs['round_day'], 'shells', cs['shells'],
+          'radio', g.radio.station, 'host lines', len(g.radio.log), flush=True)
     print('story: lit', g.story['lit'], 'festival', g.story['festival'], 'heart scenes', g.heart_seen,
           'scenes played', tb['scenes'], flush=True)
     print('cook scenes', len(tb['stars']), 'stars', {k: tb['stars'].count(k) for k in (-1, 0, 1, 2, 3)},

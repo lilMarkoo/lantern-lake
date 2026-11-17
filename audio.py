@@ -13,6 +13,9 @@ BAND_SCALE = [55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72, 74, 76]     # C major 
 class Audio:
     def __init__(self):
         self.ok = False
+        self.radio = None            # a radio station's style playing instead of the usual music (radio.py)
+        self.radio_duck = False      # the host is talking: the music sits back
+        self.radio_vol = 0.5
         self.music_vol = 0.5
         self.sfx_vol = 0.8
         self.amb_vol = 0.8
@@ -351,7 +354,10 @@ class Audio:
                 self.play('chat%d' % random.randrange(6), chat[0] * random.uniform(0.25, 0.45) * self.amb_vol, chat[1])
         self.band_vol += (ctx.get('band', 0.0) - self.band_vol) * min(1, dt * 1.5)
         self._band_music(dt)
-        self._music(dt, env, quiet=self.band_vol > 0.3, town=bool(ctx.get('town')))
+        if self.radio:
+            self._radio_music(dt, quiet=self.band_vol > 0.3)
+        else:
+            self._music(dt, env, quiet=self.band_vol > 0.3, town=bool(ctx.get('town')))
 
     def step(self, vol=0.3):
         self.play('step%d' % random.randrange(4), vol * random.uniform(0.7, 1.0), random.uniform(0.42, 0.58))
@@ -437,6 +443,172 @@ class Audio:
                 v = self.music_vol * random.uniform(0.25, 0.45)
                 pan = random.uniform(0.3, 0.7)
                 ch.set_volume(v * min(1, 2 * (1 - pan)), v * min(1, 2 * pan))
+
+    # ------------------------------------------------------------ the radio
+    RADIO_CH = 7
+    LOFI_CHORDS = [(53, 57, 60, 64), (52, 55, 59, 62), (50, 53, 57, 60), (48, 52, 55, 59)]
+    LOFI_MEL = [67, 69, 72, 74, 76, 79, 81]
+    SHANTY_CHORDS = [(50, 57, 62, 65), (48, 55, 60, 64), (50, 57, 62, 65), (45, 52, 57, 60)]
+    SHANTY_SCALE = [62, 64, 65, 67, 69, 71, 72, 74, 76, 77, 79]
+    BELL_TONES = [72, 74, 76, 79, 81, 84, 86, 88]
+    RADIO_STEP = {'lofi': 0.34, 'shanty': 0.2, 'bells': 0.9}
+
+    def _radio_build(self):
+        """The radio's drum kit, its tuning static and the faint hiss of the set (made the first time it's on)."""
+        if 'r_kick' in self.sounds:
+            return
+        S = self.sounds
+        sr = self.sr
+        x, t = self._sweep(160, 46, 0.36, 16)
+        S['r_kick'] = self._snd(x * np.exp(-t * 8) * (1 - np.exp(-t * 900)), 0.9)
+        t = self._t(0.24)
+        snare = self._band(self._noise(len(t)), 900, 5200) * np.exp(-t * 16) + 0.5 * np.sin(2 * np.pi * 186 * t) * np.exp(-t * 26)
+        S['r_snare'] = self._snd(snare, 0.45)
+        t = self._t(0.07)
+        S['r_hat'] = self._snd(self._band(self._noise(len(t)), 6000, 14000) * np.exp(-t * 60), 0.3)
+        t = self._t(0.7)
+        crackle = (self.rng.random(len(t)) < 0.003) * self.rng.standard_normal(len(t)) * 5
+        st = (self._band(self._noise(len(t)), 300, 4500) * (0.6 + 0.4 * np.sin(2 * np.pi * 13 * t)) + crackle)
+        st *= np.minimum(1, t / 0.04) * np.minimum(1, (0.7 - t) / 0.25)
+        S['r_static'] = self._snd(st, 0.5)
+        t = self._t(3.0)
+        crackle = (self.rng.random(len(t)) < 0.0008) * self.rng.standard_normal(len(t)) * 6
+        hiss = self._band(self._noise(len(t)), 1500, 9000) * 0.35 + crackle
+        k = int(sr * 0.05)                                   # loop without a click
+        hiss[:k] *= np.linspace(0, 1, k)
+        hiss[-k:] *= np.linspace(1, 0, k)
+        S['r_hiss'] = self._snd(hiss, 0.25)
+        self.radio_ch = pygame.mixer.Channel(self.RADIO_CH)
+        self.radio_t = 0.0
+        self.radio_n = 0
+        self.radio_ci = 0
+        self.radio_m = 69
+
+    def rnote(self, m, kind):
+        """The radio's instruments: soft electric keys, a round bass, and long glassy bells."""
+        key = (kind, m)
+        snd = self.notes.get(key)
+        if snd is None:
+            f = self.mf(m)
+            if kind == 'keys':
+                t = self._t(1.8)
+                x = (np.sin(2 * np.pi * f * t) + 0.25 * np.sin(4 * np.pi * f * t) + 0.08 * np.sin(6 * np.pi * f * t))
+                x *= np.exp(-t * 1.6) * (1 + 0.12 * np.sin(2 * np.pi * 4.5 * t)) * (1 - np.exp(-t * 300))
+                snd = self._snd(x, 0.45)
+            elif kind == 'bass':
+                t = self._t(0.7)
+                x = (np.sin(2 * np.pi * f * t) + 0.3 * np.sin(4 * np.pi * f * t)) * np.exp(-t * 3.2)
+                snd = self._snd(x * (1 - np.exp(-t * 200)), 0.6)
+            else:
+                snd = self._snd(self._bell(f, 2.8, 1.6), 0.45)
+            self.notes[key] = snd
+        return snd
+
+    def radio_on(self, style):
+        if not self.ok:
+            self.radio = style
+            return
+        self._radio_build()
+        if self.radio != style:
+            self.radio = style
+            self.radio_t = 0.0
+            self.radio_n = 0
+            if style != 'bells':
+                for ch in self.pads:
+                    ch.fadeout(900)
+        self.radio_ch.play(self.sounds['r_hiss'], loops=-1)
+        self.radio_ch.set_volume(0.0)
+
+    def radio_off(self):
+        self.radio = None
+        if self.ok and 'r_hiss' in self.sounds:
+            self.radio_ch.fadeout(400)
+
+    def radio_static(self, vol=0.5):
+        if self.ok:
+            self._radio_build()
+            self.play('r_static', vol)
+
+    def _rplay(self, snd, v, pan=0.5):
+        ch = snd.play()
+        if ch:
+            ch.set_volume(v * min(1.0, 2 * (1 - pan)), v * min(1.0, 2 * pan))
+
+    def _radio_music(self, dt, quiet=False):
+        style = self.radio
+        v = self.radio_vol * (0.35 if self.radio_duck else 1.0) * (0.25 if quiet else 1.0)
+        self.radio_ch.set_volume(0.035 * self.radio_vol)
+        if v < 0.005:
+            return
+        step = self.RADIO_STEP.get(style, 0.4)
+        self.radio_t += dt
+        if self.radio_t < step:
+            return
+        self.radio_t -= step
+        n = self.radio_n
+        self.radio_n += 1
+        rnd = random.random
+        if style == 'lofi':                                   # slow beats: kick, snare, hats, keys and a kalimba
+            i = n % 8
+            if i == 0 and n % 32 == 0:
+                self.radio_ci = (self.radio_ci + 1) % 4
+            chord = self.LOFI_CHORDS[self.radio_ci]
+            if i in (0, 5) or (i == 3 and rnd() < 0.3):
+                self._rplay(self.sounds['r_kick'], v * 0.55)
+            if i in (2, 6):
+                self._rplay(self.sounds['r_snare'], v * 0.32)
+            self._rplay(self.sounds['r_hat'], v * (0.22 if i % 2 == 0 else 0.12), 0.6)
+            if i == 0:
+                for m in chord:
+                    self._rplay(self.rnote(m + 12, 'keys'), v * 0.16, 0.45)
+                self._rplay(self.rnote(chord[0] - 12, 'bass'), v * 0.5)
+            elif i == 4:
+                for m in chord[2:]:
+                    self._rplay(self.rnote(m + 12, 'keys'), v * 0.12, 0.55)
+            elif i == 3:
+                self._rplay(self.rnote(chord[0] - 12 + (7 if rnd() < 0.5 else 0), 'bass'), v * 0.35)
+            if rnd() < 0.26:
+                ch = self.note(random.choice(self.LOFI_MEL)).play()
+                if ch:
+                    pan = random.uniform(0.35, 0.65)
+                    ch.set_volume(v * 0.3 * min(1, 2 * (1 - pan)), v * 0.3 * min(1, 2 * pan))
+        elif style == 'shanty':                               # a squeezebox in six-eight with a stamping foot
+            i = n % 6
+            if i == 0 and n % 24 == 0:
+                self.radio_ci = (self.radio_ci + 1) % 4
+            chord = self.SHANTY_CHORDS[self.radio_ci]
+            if i in (0, 3):
+                self._rplay(self.sounds['r_kick'], v * 0.45)
+                self._rplay(self.acc_note(chord[0] - 12 if i == 0 else chord[1] - 12, 0.3), v * 0.4)
+            else:
+                self._rplay(self.acc_note(chord[2], 0.14), v * 0.16, 0.4)
+            if rnd() < (0.9 if i in (0, 3) else 0.55):
+                sc = self.SHANTY_SCALE
+                k = sc.index(self.radio_m) if self.radio_m in sc else 4
+                k = max(0, min(len(sc) - 1, k + random.choice((-2, -1, -1, 1, 1, 2, 0))))
+                if i == 0 and rnd() < 0.6:
+                    near = [m for m in sc if (m - chord[0]) % 12 in (0, 3, 4, 7)]
+                    k = sc.index(min(near, key=lambda m: abs(m - sc[k])))
+                self.radio_m = sc[k]
+                self._rplay(self.acc_note(self.radio_m, 0.36 if i in (0, 3) else 0.2), v * 0.36, 0.55)
+        else:                                                 # night bells over the slow pads
+            if n % 10 == 0:
+                self.chord_i = (self.chord_i + 1) % 4
+                old = self.pads[self.pad_i]
+                old.fadeout(3000)
+                self.pad_i = 1 - self.pad_i
+                ch = self.pads[self.pad_i]
+                ch.play(self.pad_sounds[self.chord_i], fade_ms=1500)
+                ch.set_volume(v * 0.26)
+            else:
+                self.pads[self.pad_i].set_volume(v * 0.26)
+            if rnd() < 0.55:
+                m = random.choice(self.BELL_TONES)
+                if (m - self.chord_tones[self.chord_i][0]) % 12 in (1, 6, 11):
+                    m -= 2
+                self._rplay(self.rnote(m, 'bell'), v * random.uniform(0.2, 0.34), random.uniform(0.25, 0.75))
+            if rnd() < 0.08:
+                self._rplay(self.rnote(self.chord_tones[self.chord_i][0] - 12, 'bell'), v * 0.3)
 
     def set_music(self, v):
         self.music_vol = max(0.0, min(1.0, v))

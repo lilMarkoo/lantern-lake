@@ -69,6 +69,8 @@ GLASS = [dict(id='green', col=(120, 200, 150), w=6), dict(id='blue', col=(120, 1
          dict(id='amber', col=(240, 180, 80), w=1)]
 SHELL_REWARD = 600
 GLASS_NEED = 6
+GLASS_SWAP = 2                  # spare shells Kit takes for one piece of sea glass
+SHELL_SWAP = {'conch': 3, 'cowrie': 4}      # ...and for a shell you are missing (2 for the common ones)
 
 # the lighthouse: three things Sol needs before the lamp can be lit
 LIGHT_TASKS = [
@@ -88,6 +90,14 @@ UPGRADES = [
 UP_BY_ID = {u['id']: u for u in UPGRADES}
 
 CHOWDER = 45
+ROUND = 30                      # a round for the fishermen at the Gull & Lantern: they tell you a secret
+
+# the boat Ossian is building: lend a hand once a day and watch it grow on the trestles
+BOAT_STAGES = ('Just a keel on the trestles', 'Ribs going up', 'Planked and caulked', 'Painted and named',
+               'Launched!')
+BOAT_NAME = 'Kittiwake'
+BOAT_PAY = 25
+BOAT_PRIZE = 250
 
 SEA_BAITS = [
     dict(id='ragworm', name='Ragworm', price=30, pack=10, merchant=True, sea=True,
@@ -105,7 +115,8 @@ for _b in SEA_BAITS:
 def new():
     return dict(open=False, friends={}, chat={}, gifts=[], orders=[], orders_day=0, beach=[], beach_day=0,
                 shells={}, glass=0, shell_done=False, light='dark', tasks=[], ups=[], catch=None, catch_day=0,
-                mrest=0, visits=0, chowder=0, seen_rocks=False, told_light=False)
+                mrest=0, visits=0, chowder=0, seen_rocks=False, told_light=False, boat=0, boat_day=0,
+                round_day=0, tip='')
 
 
 def clean(st):
@@ -128,7 +139,8 @@ def clean(st):
     st['ups'] = [u for u in st['ups'] if u in UP_BY_ID]
     if st['light'] not in ('dark', 'lit'):
         st['light'] = 'dark'
-    if st['catch'] not in FISH_BY_ID:
+    st['boat'] = max(0, min(len(BOAT_STAGES) - 1, st['boat']))
+    if st.get('catch') not in FISH_BY_ID:
         st['catch'] = None
     return st
 
@@ -252,12 +264,20 @@ def morning(g):
             else:
                 k = _weighted(rng, SHELLS)
                 st['beach'].append(dict(x=x, kind='shell', id=k['id']))
+        if needs_glass(g) and not any(b['kind'] == 'glass' for b in st['beach']):
+            b = st['beach'][rng.randrange(len(st['beach']))]
+            b['kind'], b['id'] = 'glass', _weighted(rng, GLASS)['id']
     if st['light'] == 'lit' and 'mariner_letter' not in g.town_day:
         g.town_day['mariner_letter'] = g.day
         g.queue.append(('letter', ('Dear friend,', (
             "Last night, from the lamp room, I saw it: a great grey back rolling off Kelp Rocks, right where the "
             "beam touched the water. The Grey Mariner has come home.\n"
             "Fish the rocks on a high tide at night, and hold on tight."), '- Sol, keeper of the Saltmarsh light')))
+
+
+def needs_glass(g):
+    st = g.coast
+    return st['light'] != 'lit' and 'glass' not in st['tasks'] and st['glass'] < GLASS_NEED
 
 
 def _weighted(rng, items):
@@ -498,9 +518,10 @@ def do_task(g, tid):
     st['tasks'].append(tid)
     add_friend(g, 'sol', 5)
     g.audio.play('jingle2', 0.6)
-    g.toast('Sol: "%s"' % {'glass': 'The lens is whole again. Look how it catches the light!',
-                          'bass': 'Oh, a proper supper. Thank you, truly.',
-                          'oil': 'Fresh oil, a new wick. She\'s nearly ready.'}[tid], (90, 140, 180))
+    g.toast({'glass': 'Sol fits the glass into the lens. Up top, it catches the sun already!',
+             'bass': 'Sol takes the sea bass home. Smoke curls from the cottage chimney: supper is on.',
+             'oil': 'Ossian rolls the oil barrels down the quay, and the top of the scaffold comes down.'}[tid],
+            (90, 140, 180))
     g.save()
     return True
 
@@ -517,6 +538,104 @@ def light_up(g):
     g.audio.play('jingle4', 0.8)
     g.toast('The Saltmarsh light shines again, sweeping out across the sea!', (250, 220, 140))
     g.check_badges()
+    g.save()
+    return True
+
+
+# ---------------------------------------------------------------- swapping with Kit
+def spares(g):
+    """Shells you have more than one of."""
+    return sum(max(0, n - 1) for n in g.coast['shells'].values())
+
+
+def swap_cost(sid):
+    return SHELL_SWAP.get(sid, 2)
+
+
+def _spend_spares(g, n):
+    sh = g.coast['shells']
+    for _ in range(n):
+        sid = max(sh, key=lambda k: sh[k])               # the one you have most of goes first
+        sh[sid] -= 1
+
+
+def swap_glass(g):
+    if not needs_glass(g) or spares(g) < GLASS_SWAP:
+        return False
+    _spend_spares(g, GLASS_SWAP)
+    g.coast['glass'] += 1
+    add_friend(g, 'kit', 2)
+    g.audio.play('jingle1', 0.5)
+    g.toast('Kit trades you a piece of sea glass from the bucket. (%d/%d)' % (g.coast['glass'], GLASS_NEED),
+            (110, 170, 190))
+    g.save()
+    return True
+
+
+def swap_shell(g, sid):
+    st = g.coast
+    cost = swap_cost(sid)
+    if st['shells'].get(sid) or spares(g) < cost:
+        return False
+    _spend_spares(g, cost)
+    st['shells'][sid] = 1
+    add_friend(g, 'kit', 2)
+    g.audio.play('jingle2', 0.5)
+    g.toast('Kit swaps you a %s for %d spares. "Deal! Look after it."' % (SHELL_BY_ID[sid]['name'], cost),
+            (200, 160, 110))
+    check_shells(g)
+    g.save()
+    return True
+
+
+# ---------------------------------------------------------------- the boatyard and the inn
+def can_help(g):
+    st = g.coast
+    return st['boat'] < len(BOAT_STAGES) - 1 and st['boat_day'] != g.day
+
+
+def help_boat(g):
+    st = g.coast
+    if not can_help(g):
+        return False
+    st['boat'] += 1
+    st['boat_day'] = g.day
+    add_friend(g, 'ossian', 4)
+    if st['boat'] == len(BOAT_STAGES) - 1:
+        g.coins += BOAT_PRIZE
+        g.audio.play('jingle4', 0.7)
+        g.toast('Down the slipway she goes! The %s floats, and Ossian presses %d coins on you.'
+                % (BOAT_NAME, BOAT_PRIZE), (90, 140, 180))
+    else:
+        g.coins += BOAT_PAY
+        g.audio.play('jingle2', 0.55)
+        g.toast({1: 'You hold the ribs while Ossian pegs them to the keel. +%d coins',
+                 2: 'Plank after plank, hammered and caulked. The hull is closed! +%d coins',
+                 3: 'Blue paint, a white stripe and her name on the bow. +%d coins'}[st['boat']] % BOAT_PAY,
+                (90, 140, 180))
+    g.stats['boat_help'] = g.stats.get('boat_help', 0) + 1
+    g.save()
+    return True
+
+
+def buy_round(g, rng=random):
+    """A round for the fishermen: they tell you about a fish (or a secret of the harbour)."""
+    st = g.coast
+    if st['round_day'] == g.day or g.coins < ROUND:
+        return False
+    g.coins -= ROUND
+    st['round_day'] = g.day
+    unknown = [f for f in SEA_FISH if f['id'] not in g.journal and (f['id'] != 'mariner' or lit(g))]
+    if unknown:
+        f = rng.choice(unknown)
+        st['tip'] = '"Want to know a secret? There\'s a %s about. %s"' % (f['name'], f['hint'])
+    elif not lit(g):
+        st['tip'] = '"Help old Sol with that lamp. When it\'s lit, something big comes in to the rocks at night."'
+    else:
+        st['tip'] = '"Nothing left in the sea you haven\'t caught! Well. Have you tried the lake in winter?"'
+    g.luck = min(3.0, g.luck + 0.5)
+    g.audio.play('jingle1', 0.5)
+    g.toast('The fishermen raise their mugs to you. A little luck, and a tip!', (200, 150, 80))
     g.save()
     return True
 
