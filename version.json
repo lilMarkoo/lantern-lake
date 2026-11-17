@@ -1,7 +1,7 @@
 {
-  "version": "2.0.1",
+  "version": "0.2.1",
   "notes": [
-    "Fixed the launcher's update window hiding its buttons when the notes are long. Download the new launcher once and updates work again.",
+    "Fixes: the launcher's update window no longer hides its buttons, The Shore's cards no longer cut off their hints, the reel stays with the keyboard keys instead of jumping to the mouse, and friends on Radmin VPN or Hamachi can join without a room key (the host screen now shows the Radmin address).",
     "Saltmarsh, a whole new region down the river. Once you own a rowboat, Harbourmaster Morwen writes that the old channel is open: open the map and row about an hour downstream to the sea.",
     "Two new places to fish, Saltmarsh Pier and Kelp Rocks, and 19 sea fish (70 fish in all), from Harbour Sprats and Rock Gobies to the Old Halibut, the Blue Lobster and something enormous that only comes home with the light.",
     "Tides: the sea rises and falls twice a day, a little later each day. Some fish only bite at high water, some only at low. The HUD shows the tide and the harbour board has a tide table.",

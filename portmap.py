@@ -91,9 +91,38 @@ def looks_like_code(text):
 def is_public(ip):
     """True for an address on the open internet (not home, loopback, link-local or a provider's shared range)."""
     try:
-        return ipaddress.ip_address(ip).is_global
+        a = ipaddress.ip_address(ip)
     except ValueError:
         return False
+    if a.version == 4 and any(a in n for n in VPN_NETS):
+        return False
+    return a.is_global
+
+
+# Radmin VPN (26.x.x.x) and Hamachi (25.x.x.x) hand out addresses from ranges the internet counts as public, but
+# only your friends are on them, so they join like a home network
+VPN_NETS = (ipaddress.ip_network('26.0.0.0/8'), ipaddress.ip_network('25.0.0.0/8'))
+
+
+def vpn_addresses():
+    """This computer's addresses on Radmin / Hamachi style networks, if any."""
+    out = []
+    try:
+        ips = [i[4][0] for i in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET)]
+    except OSError:
+        ips = []
+    try:
+        ips += socket.gethostbyname_ex(socket.gethostname())[2]
+    except OSError:
+        pass
+    for ip in ips:
+        try:
+            a = ipaddress.ip_address(ip)
+        except ValueError:
+            continue
+        if any(a in n for n in VPN_NETS) and ip not in out:
+            out.append(ip)
+    return out
 
 
 # ---------------------------------------------------------------------------- UPnP

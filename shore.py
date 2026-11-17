@@ -462,6 +462,7 @@ def draw_panel(g, s):
             continue
         ns = next_step(g, p['id'])
         label, needs, why = ns
+        by -= 24                      # leave room for a two-line hint above the button
         ui.blit_text(s, cost_text(needs), (r.x + 16, by), 'small', U.SOFT, maxw=r.w - 32)
         short = missing(g, needs)
         note = why or ('Short of %s' % short if short else '')

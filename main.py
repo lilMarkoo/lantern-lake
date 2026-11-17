@@ -300,6 +300,7 @@ class Game:
         self.cal_off = 0
         self.cal_sel = 1
         self.steer_mode = 'mouse'
+        self.mouse_acc = 0           # how far the mouse has really travelled since the keys last steered
         self.bot_aim = None
         self.cam = [1.0, W / 2, H / 2]
         self.cam_rect = pygame.Rect(0, 0, W, H)
@@ -2065,6 +2066,10 @@ class Game:
         self.net_shutdown()
         pygame.quit()
 
+    def key_steer(self):
+        self.steer_mode = 'keys'
+        self.mouse_acc = 0
+
     def mouse_move(self, pos, steer=True):
         self.ui.mouse = pos
         self.ui.mouse_moved = True
@@ -2192,7 +2197,10 @@ class Game:
             elif self.pad and self.pad.event(e):
                 pass
             elif e.type == pygame.MOUSEMOTION:
-                self.mouse_move(self.to_logical(e.pos))
+                # a bumped mouse or a click's wobble must not steal the reel from the keys: the mouse only takes
+                # over after it has really travelled
+                self.mouse_acc += abs(e.rel[0]) + abs(e.rel[1])
+                self.mouse_move(self.to_logical(e.pos), steer=self.mouse_acc > 40)
                 if abs(e.rel[0]) + abs(e.rel[1]) > 3:        # a real nudge, not a bumped desk
                     self.last_input = 'kb'
                     if self.pad:
@@ -2329,7 +2337,7 @@ class Game:
                 tn.start_toss(self)
             return
         if k in (pygame.K_a, pygame.K_d, pygame.K_LEFT, pygame.K_RIGHT):
-            self.steer_mode = 'keys'
+            self.key_steer()
         if k == pygame.K_j:
             self.toggle('journal')
         elif k == pygame.K_k:
@@ -2597,7 +2605,7 @@ class Game:
         steer = (1 if (keys[pygame.K_d] or keys[pygame.K_RIGHT]) else 0) - \
                 (1 if (keys[pygame.K_a] or keys[pygame.K_LEFT]) else 0)
         if steer:
-            self.steer_mode = 'keys'
+            self.key_steer()
             return None, steer
         if self.steer_mode == 'mouse':
             mx, my = self.ui.mouse
@@ -2612,7 +2620,7 @@ class Game:
         k = (1 if (keys[pygame.K_d] or keys[pygame.K_RIGHT]) else 0) - \
             (1 if (keys[pygame.K_a] or keys[pygame.K_LEFT]) else 0)
         if k:
-            self.steer_mode = 'keys'
+            self.key_steer()
             f.aim = clamp(f.aim + k * dt * 1.4, -1.0, 1.0)
         elif self.steer_mode == 'mouse' and not HEADLESS:
             wx, wy = self.s2w(*self.ui.mouse)
@@ -4152,6 +4160,10 @@ class Game:
             ui.blit_text(s, 'On your Wi-Fi:  %s' % self.my_address(), (rect.centerx, y), 'small', U.SOFT,
                          'center', maxw=bw)
             y += 28
+            if self.my_vpn():
+                ui.blit_text(s, 'On Radmin / VPN:  %s' % self.my_vpn(), (rect.centerx, y), 'small', U.SOFT,
+                             'center', maxw=bw)
+                y += 28
         elif n.role == 'guest':
             ui.button(s, (bx, y, bw, 52), "Leave %s's lake" % n.host_name, self.leave_lake, nav=True)
             ui.blit_text(s, 'Your own lake keeps its own calendar.', (rect.centerx, y + 64), 'small', U.SOFT,
@@ -4180,6 +4192,16 @@ class Game:
         ip = getattr(self, '_lan_ip', None) or netmod.lan_address()
         self._lan_ip = ip
         return ip if n.port == netmod.PORT else '%s:%d' % (ip, n.port)
+
+    def my_vpn(self):
+        """The address friends on Radmin VPN or Hamachi join at, or None."""
+        if not hasattr(self, '_vpn_ip'):
+            found = netmod.portmap.vpn_addresses()
+            self._vpn_ip = found[0] if found else None
+        ip = self._vpn_ip
+        if not ip:
+            return None
+        return ip if self.net.port == netmod.PORT else '%s:%d' % (ip, self.net.port)
 
     def my_name(self):
         return self.net.clean_name(self.settings.get('mp_name', ''))
@@ -4221,6 +4243,8 @@ class Game:
         self.overlay = None
         self.start_game(self.has_save)
         self.add_chat('', 'Your lake is open. Friends on your Wi-Fi join at %s' % self.my_address(), SYS_C)
+        if self.my_vpn():
+            self.add_chat('', 'Friends on Radmin or a VPN join at %s' % self.my_vpn(), SYS_C)
         if online:
             self.go_online()
         else:
@@ -4234,6 +4258,8 @@ class Game:
         self.online_seen = None
         self.overlay = None
         self.add_chat('', 'Your lake is open. Friends on your Wi-Fi join at %s' % self.my_address(), SYS_C)
+        if self.my_vpn():
+            self.add_chat('', 'Friends on Radmin or a VPN join at %s' % self.my_vpn(), SYS_C)
         if online:
             self.go_online()
         else:
@@ -4652,6 +4678,8 @@ class Game:
         ui.button(s, (lx, rect.y + 394, cw, 46), 'Host on this Wi-Fi only', self.host_lake, enabled=not busy,
                   nav=True)
         ui.blit_text(s, 'Your Wi-Fi address:  %s' % self.my_address(), (lx, rect.y + 452), 'small', U.SOFT, maxw=cw)
+        if self.my_vpn():
+            ui.blit_text(s, 'Radmin / VPN address:  %s' % self.my_vpn(), (lx, rect.y + 476), 'small', U.SOFT, maxw=cw)
         # join
         rx = rect.centerx + 40
         rw = rect.right - 50 - rx
