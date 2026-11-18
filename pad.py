@@ -55,6 +55,7 @@ class Pad:
         self.layouts = {}            # instance id -> 'xbox' / 'ps' / 'switch'
         self.names = {}
         self.layout = 'xbox'         # the brand of the pad used most recently
+        self.last_iid = None         # ...and which pad that was (it gets the rumble)
         self.dpad = set()
         self.osk = [1, 0]            # row, column of the on-screen keyboard
         self.caps = False
@@ -112,7 +113,20 @@ class Pad:
     def _used(self, iid):
         """This pad was just touched: show its buttons in the hints."""
         self.layout = self.layouts.get(iid, self.layout)
+        self.last_iid = iid
         self.g.last_input = 'pad'
+
+    def rumble(self, low, high, ms):
+        """Shake the pad in your hands: low is the heavy motor (a fish's weight), high the light one (a buzz)."""
+        dev = self.joys.get(self.last_iid)
+        if dev is None and self.joys:
+            dev = next(iter(self.joys.values()))
+        if dev is None:
+            return False
+        try:
+            return bool(dev.rumble(max(0.0, min(1.0, low)), max(0.0, min(1.0, high)), int(ms)))
+        except (pygame.error, AttributeError, TypeError):
+            return False
 
     # ------------------------------------------------------------ context
     def context(self):

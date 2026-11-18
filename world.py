@@ -584,6 +584,8 @@ class World:
         self._spot_things(near, env, g)
         seasons.draw_ice(near, env, self, g)
         g.fishing.draw_water(near)
+        import lakelife
+        lakelife.draw(near, g, t)
         near.blit(self.fg, (0, 0))
         import wildlife
         if self.spot == 'dock':

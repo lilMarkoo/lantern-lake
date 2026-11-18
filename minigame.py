@@ -19,7 +19,7 @@ import art
 import ui as U
 from data import RARITY_COLORS
 
-CX, CY, R = 196, 424, 104          # ring position on the 1280x720 interface layer
+CX, CY, R = 204, 446, 88           # ring position on the 1280x720 interface layer
 TARGET = 40                        # leap timing: the radius the shrinking ring has to meet
 PERFECT, NICE = 9, 22              # leap timing windows in pixels
 LEAPS = {1: 0, 2: 1, 3: 2, 4: 2, 5: 3}
@@ -486,13 +486,13 @@ def _backdrop():
         c = size // 2
         for i in range(24):
             r = R + 52 - i
-            pygame.draw.circle(s, (22, 30, 46, min(190, 18 + i * 8)), (c, c), r)
+            pygame.draw.circle(s, (22, 30, 46, min(140, 12 + i * 6)), (c, c), r)
         _cache['bg'] = s
     return s
 
 
-def draw(s, ui, mg, t, title):
-    """Draw the ring minigame on the interface layer."""
+def draw(s, ui, mg, t, title, teach=True):
+    """Draw the ring minigame on the interface layer. teach: show the how-to lines under it."""
     spec = mg.spec
     stage = getattr(mg, 'stage', 0)
     bg = _backdrop()
@@ -640,8 +640,9 @@ def draw(s, ui, mg, t, title):
     # centre: the reel, or the leap timing rings
     L = mg.leap
     if L:
-        pygame.draw.circle(s, (250, 240, 214), (CX, CY), 62)
-        pygame.draw.circle(s, (120, 82, 58), (CX, CY), 62, 3)
+        dr = R - 37
+        pygame.draw.circle(s, (250, 240, 214), (CX, CY), dr)
+        pygame.draw.circle(s, (120, 82, 58), (CX, CY), dr, 3)
         pygame.draw.circle(s, (240, 214, 150), (CX, CY), TARGET + PERFECT, 0)
         pygame.draw.circle(s, (250, 240, 214), (CX, CY), TARGET - PERFECT, 0)
         pygame.draw.circle(s, (200, 140, 50), (CX, CY), TARGET, 4)
@@ -653,13 +654,13 @@ def draw(s, ui, mg, t, title):
             word = {'perfect': 'Perfect!', 'nice': 'Nice!', 'miss': 'Missed'}[L['done']]
             ui.blit_text(s, word, (CX, CY), 'h3', U.INK, 'center')
     else:
-        pygame.draw.circle(s, (120, 82, 58), (CX, CY), 36)
-        pygame.draw.circle(s, (232, 214, 182), (CX, CY), 32)
+        pygame.draw.circle(s, (120, 82, 58), (CX, CY), 32)
+        pygame.draw.circle(s, (232, 214, 182), (CX, CY), 28)
         for i in range(6):
             a = mg.spin + i * math.pi / 3
-            pygame.draw.line(s, (150, 112, 82), (CX, CY), (CX + math.cos(a) * 28, CY + math.sin(a) * 28), 3)
-        pygame.draw.circle(s, (120, 82, 58), (CX, CY), 8)
-        hx, hy = CX + math.cos(mg.spin) * 26, CY + math.sin(mg.spin) * 26
+            pygame.draw.line(s, (150, 112, 82), (CX, CY), (CX + math.cos(a) * 24, CY + math.sin(a) * 24), 3)
+        pygame.draw.circle(s, (120, 82, 58), (CX, CY), 7)
+        hx, hy = CX + math.cos(mg.spin) * 22, CY + math.sin(mg.spin) * 22
         pygame.draw.circle(s, (210, 120, 90), (int(hx), int(hy)), 7)
         pygame.draw.circle(s, (120, 60, 50), (int(hx), int(hy)), 7, 2)
     # popups float up from the centre
@@ -668,7 +669,7 @@ def draw(s, ui, mg, t, title):
         y = CY - 80 - pt * 40
         ui.blit_text(s, text, (CX, y), 'bodyb', col, 'center', (30, 20, 30), alpha=255 * min(1, a * 2))
     # line strain: hatched danger end so it reads without colour
-    bw, bh = 236, 16
+    bw, bh = 210, 14
     bx, by = CX - bw // 2, CY + R + 34
     ui.blit_text(s, 'Line strain', (bx, by - 22), 'smallb', (250, 244, 232), 'topleft', (30, 20, 30))
     if mg.coins:
@@ -691,6 +692,15 @@ def draw(s, ui, mg, t, title):
         pygame.draw.rect(s, c, (bx, by, fw, bh), border_radius=8)
     flash = mg.over_t > 0 and int(t * 16) % 2
     pygame.draw.rect(s, (255, 250, 240) if flash else U.BROWN_D, bar, 2, border_radius=8)
+    if not teach:
+        lines = ()
+        if getattr(mg, 'sulk', 0) > 0:
+            lines = ('It sulks: pump it in. Hold, let go, hold',)
+        elif getattr(mg, 'dive', 0) > 0:
+            lines = ('It dived deep: follow the bubbles',)
+        for i, line in enumerate(lines):
+            ui.blit_text(s, line, (CX, by + bh + 12 + i * 20), 'small', (240, 232, 220), 'midtop', (30, 20, 30))
+        return
     if ui.pad_layout:
         lines = ('Steer with the left stick', 'Hold %s to reel faster, let go when it lunges' % ui.pad_label('A'))
     else:

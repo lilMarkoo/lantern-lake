@@ -52,6 +52,31 @@ TWITCH_CUT = (1.1, 0.8, 0.5)     # how much each of the first twitches shortens 
 _sil_cache = {}
 
 
+# the bobber, row by row: (offset up from its foot, from x, to x, colour); bigger the nearer it is
+BOB_RED, BOB_HI, BOB_WHITE, BOB_STICK = (222, 58, 56), (255, 140, 120), (250, 248, 240), (60, 50, 50)
+BOBBER = {
+    'near': [(-7, 0, 0, BOB_STICK), (-6, -1, 1, BOB_RED), (-5, -2, 2, BOB_RED), (-4, -2, 2, BOB_RED),
+             (-3, -2, 2, BOB_WHITE), (-2, -1, 1, BOB_WHITE), (-1, 0, 0, BOB_WHITE)],
+    'mid': [(-5, 0, 0, BOB_STICK), (-4, -1, 1, BOB_RED), (-3, -1, 1, BOB_RED), (-2, -1, 1, BOB_WHITE),
+            (-1, 0, 0, BOB_WHITE)],
+    'far': [(-3, 0, 0, BOB_STICK), (-2, 0, 1, BOB_RED), (-1, 0, 1, BOB_WHITE)],
+}
+
+
+def draw_bobber(dst, x, y, persp, water=None):
+    """A red and white float with its foot at (x, y). With water given, whatever is below the waterline
+    (a nibble pulling it down) is hidden."""
+    rows = BOBBER['near' if persp > 0.74 else 'mid' if persp > 0.56 else 'far']
+    x, y = int(x), int(round(y))
+    for dy, x0, x1, col in rows:
+        yy = y + dy
+        if water is not None and yy >= water:
+            continue
+        dst.fill(col, (x + x0, yy, x1 - x0 + 1, 1))
+    if persp > 0.74 and (water is None or y - 5 < water):
+        dst.set_at((x - 1, y - 5), BOB_HI)
+
+
 def silhouette(spec, width, flip=False):
     """A dark fish-shaped shadow for seeing a fish under the water."""
     width = max(4, int(width))
@@ -105,6 +130,11 @@ class Fishing:
         self.fdir = 1.0              # which way the hooked fish is swimming in the water (-1 left, 1 right)
         self.fspeed = 0.0
         self.spray_t = 0.0
+        self.crank = 0.0             # the reel handle's angle (actors.py turns the angler's hand with it)
+        self.rum_t = 0.0             # the pad's next rumble
+        self.slowmo = 0.0            # a breath of slow motion as a catch clears the water
+        self.drip_t = 0.0
+        self.ring_t = 1.0            # the next little ring the resting bobber sends out
         if not hasattr(self, 'aim'):
             self.aim = 0.33
 
@@ -364,7 +394,10 @@ class Fishing:
         x, y = self.bob
         g.world.splash(x, y, 10, 0.9)
         g.world.ripple(x, y, 14)
-        g.audio.play('bite', 0.8, x / W)
+        g.world.ripple(x, y, 8, 10)
+        g.audio.play('bloop', 0.65, x / W)
+        g.audio.play('bite', 0.45, x / W)
+        self._buzz(0.85, 0.5, 260)
         g.on_bite()
 
     def hook(self):
@@ -372,6 +405,7 @@ class Fishing:
         spec = self.catch['spec']
         g.use_bait()
         g.audio.play('hook', 0.6)
+        self._buzz(0.6, 0.3, 160)
         if spec.get('junk'):
             self.start_landing(self.bob)
             return
@@ -406,6 +440,9 @@ class Fishing:
         spec = self.catch['spec']
         r = 0 if spec.get('junk') else spec['rarity']
         self.land_dur = 0.7 if r == 0 else 0.8 + (0.25 if r >= 3 else 0.0)
+        if r:
+            self.slowmo = 0.14 + 0.04 * r       # the world holds its breath as it breaks the surface
+            self._buzz(0.5 + 0.08 * r, 0.25, 240)
         g.world.splash(pos[0], pos[1], 14 + r * 4, 1.2 + r * 0.12)
         g.world.ripple(pos[0], pos[1], 16)
         g.world.ripple(pos[0], pos[1], 9, 10)
@@ -451,8 +488,16 @@ class Fishing:
         self.t = 0
 
     # ------------------------------------------------------------ update
+    def _buzz(self, low, high, ms):
+        """A one-off rumble (the steady fight rumble waits until it's done)."""
+        if self.g.rumble(low, high, ms):
+            self.rum_t = ms / 1000.0
+
     def update(self, dt):
         g = self.g
+        if self.slowmo > 0:
+            self.slowmo -= dt
+            dt *= 0.3
         self.t += dt
         st = self.state
         target = -55.0
@@ -498,16 +543,23 @@ class Fishing:
             x, y = self.dst
             self.nib_anim = max(0, self.nib_anim - dt)
             self.twitch_anim = max(0.0, self.twitch_anim - dt)
-            dip = 2.5 * math.sin(math.pi * min(1.0, self.nib_anim / 0.3)) if self.nib_anim > 0 else 0
+            dip = 3.5 * math.sin(math.pi * min(1.0, self.nib_anim / 0.3)) if self.nib_anim > 0 else 0
             hop = -math.sin(math.pi * self.twitch_anim / 0.3) * 2.0 if self.twitch_anim > 0 else 0
             if self.twitch_anim > 0:
                 target = -46
-            self.bob = [x, y + math.sin(self.t * 2.6) * 0.6 + dip + hop]
+            self.bob = [x, y + math.sin(self.t * 2.6) * 0.7 + dip + hop]
+            self.ring_t -= dt
+            if self.ring_t <= 0:
+                # the bobber rocking on the water sends out little rings
+                self.ring_t = self.rng.uniform(1.6, 3.0)
+                persp = 0.5 + (y - HORIZON) / 170
+                g.world.ripple(x, y, 3 + 4 * persp, 6, 80)
             if self.nibbles and self.t >= self.nibbles[0]:
                 self.nibbles.pop(0)
                 self.nib_anim = 0.3
                 g.world.ripple(x, y, 6, 10, 120)
                 g.audio.play('nibble', 0.5, x / W)
+                self._buzz(0.0, 0.35, 70)
             if not self.catch['spec'].get('junk') and self.shadow is None and self.t >= self.bite_at - 2.4:
                 self._spawn_shadow()
             if self.t >= self.bite_at:
@@ -515,7 +567,7 @@ class Fishing:
         elif st == 'bite':
             target = -42
             x, y = self.dst
-            self.bob = [x, y + 3]
+            self.bob = [x, y + min(9.0, self.t * 70)]       # yanked clean under
             if self.t > self.window:
                 self.fail('It got away... bites are quick!')
         elif st == 'fight':
@@ -538,6 +590,15 @@ class Fishing:
             tx, ty = HAND[0] + 10, HAND[1] - 26
             self.fly_pos = [fx + (tx - fx) * k, fy + (ty - fy) * k - math.sin(math.pi * k) * (40 + dur * 14)]
             self.bob = list(self.fly_pos)
+            self.drip_t -= dt
+            if self.drip_t <= 0 and k < 0.9:
+                # water running off it on the way in
+                self.drip_t = 0.035
+                px, py = self.fly_pos
+                floor = fy + (ty + 8 - fy) * min(1.0, k + 0.15)
+                g.world.particles.append(dict(x=px + self.rng.uniform(-3, 3), y=py + 2, vx=self.rng.uniform(-6, 6),
+                                              vy=self.rng.uniform(0, 10), g=160, life=1.0, max=1.0,
+                                              col=(214, 232, 244), kind='drop', floor=max(py + 4, floor)))
             target = -95
             rate = 10
             if k >= 1:
@@ -562,6 +623,50 @@ class Fishing:
                     self.shadow = None
         self.angle += (target - self.angle) * min(1, dt * rate)
         self._rod_geometry()
+        self._feel(dt)
+
+    def _feel(self, dt):
+        """The line's own sounds, the pad's rumble and the reel handle turning, every frame."""
+        g = self.g
+        st = self.state
+        reel = drag = hum = pitch = 0.0
+        pan = self.bob[0] / W if self.bob else 0.5
+        turning = False
+        if st == 'casting':
+            drag = 0.2                             # line peeling off the spool
+        elif st in ('reel_back', 'landing'):
+            reel, turning = 0.7, True
+        elif st == 'waiting' and self.pressing and self.hold_t > 0.12:
+            reel, turning = 0.55, True
+        elif st == 'fight' and self.mg:
+            mg = self.mg
+            hold = g.holding
+            sulk = getattr(mg, 'sulk', 0) > 0
+            if not mg.leap:
+                if mg.in_arc and (hold or not sulk):
+                    reel, turning = (0.9 if hold else 0.5), True
+                if mg.lunge > 0:
+                    drag = 0.95                    # it runs, and the drag sings
+                elif not mg.in_arc:
+                    drag = 0.38
+                elif getattr(mg, 'dive', 0) > 0:
+                    drag = 0.25
+            hum = clamp((mg.strain - 0.3) / 0.6) * 0.4
+            pitch = clamp((mg.strain - 0.55) / 0.45)
+            if self.fish_pos:
+                pan = self.fish_pos[0] / W
+            self.rum_t -= dt
+            if self.rum_t <= 0:
+                self.rum_t = 0.1
+                if mg.leap:
+                    g.rumble(0.05, 0.0, 150)
+                else:
+                    low = 0.1 + 0.45 * mg.strain + (0.4 if mg.lunge > 0 else 0.0)
+                    high = max(0.0, mg.strain - 0.6) * 1.6 + (0.3 if mg.over_t > 0 else 0.0)
+                    g.rumble(low, high, 150)
+        if turning:
+            self.crank += dt * (17 if (g.holding or st != 'fight') else 9)
+        g.audio.set_line(reel, drag, hum, pitch, pan)
 
     def _rod_geometry(self):
         rod = self.g.rod_spec()
@@ -632,6 +737,7 @@ class Fishing:
                 w.ripple(fx, fy, 14)
                 g.audio.play('splash', 0.6, fx / W)
             elif k == 'splashdown':
+                self._buzz(1.0, 0.4, 280)
                 w.splash(fx, fy, 16, 1.2)
                 w.ripple(fx, fy, 16)
                 w.ripple(fx, fy, 9, 10)
@@ -673,6 +779,7 @@ class Fishing:
                 w.ripple(fx, fy, 8, 18)
                 g.shake(1.0)
             elif k == 'second':
+                self._buzz(1.0, 0.7, 420)
                 w.splash(fx, fy, 20, 1.4)
                 w.ripple(fx, fy, 18)
                 w.ripple(fx, fy, 11, 12)
@@ -680,6 +787,7 @@ class Fishing:
                 g.audio.play('splash', 0.7, fx / W)
                 g.shake(3.5)
             elif k == 'stage':
+                self._buzz(1.0, 0.7, 420)
                 w.splash(fx, fy, 22, 1.5)
                 w.ripple(fx, fy, 20)
                 w.ripple(fx, fy, 12, 14)
@@ -693,6 +801,8 @@ class Fishing:
         legend = getattr(mg, 'stage', 0)
         if mg.result == 'snap':
             g.shake(3)
+            g.audio.play('twang', 0.7, fx / W)
+            self._buzz(1.0, 1.0, 350)
             self.fail(legends.on_escape(g, mg.spec['id']) if legend else
                       'Snap! The line broke. Let go when the fish lunges!', 'snap')
             return
@@ -786,20 +896,28 @@ class Fishing:
             return
         x, y = int(self.bob[0]), int(self.bob[1])
         if st in ('casting', 'waiting', 'reel_back'):
-            # red and white bobber
-            persp = 0.5 + (y - HORIZON) / 170
-            if persp > 0.75 or st == 'casting':
-                near.fill((250, 250, 245), (x - 1, y - 1, 3, 2))
-                near.fill((220, 60, 60), (x - 1, y - 3, 3, 2))
-                near.set_at((x, y - 4), (60, 50, 50))
-            else:
-                near.fill((250, 250, 245), (x, y - 1, 2, 1))
-                near.fill((220, 60, 60), (x, y - 2, 2, 1))
             if st == 'waiting':
-                near.fill((230, 240, 250, 140), (x - 2, y + 1, 5, 1))
+                wy = int(round(self.dst[1]))
+                persp = 0.5 + (wy - HORIZON) / 170
+                draw_bobber(near, x, y + 1, persp, wy)
+                hw = 2 + int(2 * persp)
+                near.fill((230, 240, 250, 150), (x - hw, wy, hw * 2 + 1, 1))
+            else:
+                persp = 0.5 + (y - HORIZON) / 170 if y > HORIZON else 1.0
+                draw_bobber(near, x, y, max(persp, 0.8 if st == 'casting' else persp))
         elif st == 'bite':
-            near.fill((220, 60, 60), (x - 1, y - 2, 3, 1))
-            near.fill((255, 255, 255, 200), (x - 3, y - 1, 7, 1))
+            # pulled under: a swirl and a boil of bubbles where it was
+            wx, wy = int(self.dst[0]), int(round(self.dst[1]))
+            persp = 0.5 + (wy - HORIZON) / 170
+            if self.t < 0.12:
+                draw_bobber(near, wx, y + 1, persp, wy)
+            rw = int((4 + self.t * 10) * persp) + 2
+            pygame.draw.ellipse(near, (240, 248, 255, 190), (wx - rw, wy - rw // 3, rw * 2, max(2, rw * 2 // 3)), 1)
+            for i in range(4):
+                a = self.t * 7 + i * 1.57
+                bx = wx + int(math.cos(a) * 2 * persp)
+                by = wy - int((self.t * 9 + i * 1.3) % 4)
+                near.set_at((bx, by), (236, 246, 255, 230))
         elif st == 'fight':
             if self.leap_h > 1 and self.fish_pos:
                 x, y = int(self.fish_pos[0]), int(self.fish_pos[1])

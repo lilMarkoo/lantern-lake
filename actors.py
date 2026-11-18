@@ -101,6 +101,16 @@ def draw_player(s, g, t):
     s.fill((240, 202, 172), (hx - 1, hy - 1 + breathe, 2, 2))
     if f.rod_pts:
         draw_rod(s, f.rod_pts, g.rod_spec()['color'])
+        if st not in ('caught', 'idle', 'charging', 'fly'):
+            # the reel just above your hand, and your other hand turning its handle
+            rx, ry = f.rod_pts[1]
+            rx, ry = int(rx) - 1, int(ry) + 2
+            s.fill((70, 70, 78), (rx - 1, ry - 1, 3, 3))
+            s.set_at((rx, ry), (170, 170, 180))
+            cx = rx + int(round(math.cos(f.crank) * 2))
+            cy = ry + int(round(math.sin(f.crank) * 2))
+            pygame.draw.line(s, darken(shirt, 0.12), (x + 2, by - 12), (cx, cy + 1))
+            s.fill((240, 202, 172), (cx, cy, 2, 2))
     # fish held up
     if st == 'caught' and f.catch:
         draw_held_fish(s, f.catch['spec'], hx, hy)

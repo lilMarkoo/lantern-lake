@@ -68,6 +68,7 @@ import harbour as hbmod
 import goals as goalmod
 import radio as radiomod
 import pad as padmod
+import lakelife
 import ui as U
 from art import W, H, DECK_Y
 from audio import Audio
@@ -104,7 +105,7 @@ UI_SCALES = [50, 60, 67, 75, 85, 100, 110]      # interface size, percent (100 =
 DEFAULT_SETTINGS = dict(master=1.0, music=0.5, sfx=0.8, amb=0.8, assist=False, fullscreen=False, window=None,
                         fps=60, show_fps=False, shake=1.0, zoom=True, hints=True, clock24=False, speed=1.0,
                         bg_pause=True, ui_scale=100, mp_name='', mp_addr='', slot=1, prompts='auto',
-                        tutorial=True, binds={}, hud='calm', radio=None)
+                        tutorial=True, binds={}, hud='calm', radio=None, rumble=True)
 HUD_STYLES = ('full', 'calm', 'compact')
 PROMPTS = ['auto', 'keyboard', 'xbox', 'ps', 'switch']
 PROMPT_LABELS = ['Auto', 'Keyboard', 'Xbox', 'PS', 'Switch']
@@ -219,6 +220,8 @@ class Game:
         self.options_from = None
         self.tracked = None          # which objective the HUD card follows (None: the most urgent)
         self.hud_tuck = 0.0          # 0 = toolbar shown, 1 = tucked away while a cast is out
+        self.hud_calm = 0.0          # 1 = the cards have faded right back: just you, the water and the bobber
+        self._hud_layer = None
         self._hud_t = 0.0
         self._dock_n = 6
         self._bufs = {}
@@ -1279,6 +1282,12 @@ class Game:
 
     def shake(self, amt):
         self.shake_amt = max(self.shake_amt, amt * self.settings.get('shake', 1.0))
+
+    def rumble(self, low, high, ms):
+        """Rumble the pad you're playing with (only while you're using one, and only if it's switched on)."""
+        if self.pad is None or self.last_input != 'pad' or not self.settings.get('rumble', True):
+            return False
+        return self.pad.rumble(low, high, ms)
 
     # ------------------------------------------------------------ calendar helpers
     def run_fish(self, day):
@@ -2508,6 +2517,7 @@ class Game:
             biscuit.update(self, dt)
             gardenmod.update(self, dt)
             wildlife.update(self, dt)
+            lakelife.update(self, dt)
             tutorial.update(self, dt)
             goalmod.update(self, dt)
             coop.update(self, dt)
@@ -2598,11 +2608,19 @@ class Game:
             z = 1.08
             fx = W / 2 + (f.fly_pos[0] - W / 2) * 0.5
             fy = H / 2 + (f.fly_pos[1] - H / 2) * 0.5
+        slow = False
+        if (self.mode == 'play' and f.state in ('waiting', 'bite') and f.bob and self.overlay is None
+                and self.place != 'town'):
+            # waiting for a bite: the view leans gently in toward the bobber
+            slow = True
+            z = 1.1
+            fx = W / 2 + ((PLAYER_X + f.bob[0]) / 2 - W / 2) * 0.9
+            fy = H / 2 + (f.bob[1] - H / 2) * 0.6
         if not self.settings.get('zoom', True):
             z = 1.0
         if self.shake_amt > 0.05:
             z = max(z, 1.03)
-        k = min(1.0, dt * 3)
+        k = min(1.0, dt * (0.7 if slow else 3))
         c = self.cam
         c[0] += (z - c[0]) * k
         c[1] += (fx - c[1]) * k
@@ -2948,6 +2966,26 @@ class Game:
         v = self.settings.get('hud', 'calm')
         return v if v in HUD_STYLES else 'calm'
 
+    def hud_quiet(self):
+        """Once the bobber has settled (and all through the fight), the HUD cards fade nearly away.
+        Pointing at them brings them back."""
+        showoff = self.overlay == 'catch' and self.card and self.card['t'] < 0
+        if self.hud_style() == 'full' or self.place == 'town' or self.mode != 'play' or (
+                self.overlay is not None and not showoff):
+            return False
+        f = self.fishing
+        if showoff:
+            return True
+        st = f.state
+        if st in ('fight', 'landing'):
+            return True
+        if st not in ('waiting', 'bite') or (st == 'waiting' and f.t < 1.6):
+            return False
+        mx, my = self.ui.mouse
+        if (mx < 16 + 372 + 24 and my < getattr(self, '_hud_left', 300) + 16) or (mx > SW - 16 - 320 and my < 190):
+            return False
+        return True
+
     def hud_tucked(self):
         """Calm HUD: while a cast is out, the menu toolbar and the day's notes step aside."""
         if self.hud_style() == 'full' or self.place == 'town' or self.overlay is not None:
@@ -3196,6 +3234,19 @@ class Game:
         if abs(target - self.hud_tuck) < 0.01:
             self.hud_tuck = target
         tuck = 1 - (1 - self.hud_tuck) ** 3
+        want = 1.0 if self.hud_quiet() else 0.0
+        self.hud_calm += (want - self.hud_calm) * min(1.0, dt * (1.3 if want > self.hud_calm else 7))
+        if abs(want - self.hud_calm) < 0.01:
+            self.hud_calm = want
+        self.audio.calm = self.hud_calm
+        real = s
+        if self.hud_calm > 0.01:
+            # the cards are drawn on a layer of their own so they can fade as one
+            lay = self._hud_layer
+            if lay is None or lay.get_size() != s.get_size():
+                lay = self._hud_layer = pygame.Surface(s.get_size(), pygame.SRCALPHA)
+            lay.fill((0, 0, 0, 0))
+            s = lay
         CW = 372                   # width of the left-hand cards
         tw = CW - 70               # room for text beside the card icons
         # clock
@@ -3285,6 +3336,10 @@ class Game:
                 U.clover(s, (r5.x + 24 + i * 22, r5.centery - 2), 8)
             ui.blit_text(s, 'Luck', (r5.right - 14, r5.centery), 'smallb', U.SOFT, 'midright')
             ry += 48
+        if s is not real:
+            s.set_alpha(int(255 * (1 - 0.8 * self.hud_calm)))
+            real.blit(s, (0, 0))
+            s = real
         # toolbar of menu buttons, bottom right: item-slot style tiles
         if self.place == 'town':
             slots = [('Journal', 'J', lambda: self.toggle('journal')),
@@ -3373,6 +3428,8 @@ class Game:
         elif st == 'idle' and seasons.fly_on(self):
             hint = self.hint([('key', 'Space'), 'or', ('key', 'Click'), 'to start a fly cast'],
                              [('pad', 'A'), 'to start a fly cast'])
+        if st == 'waiting' and f.t > 7 and self.total >= 3:
+            hint = None                  # it has been said: let the water have the screen
         if hint and self.overlay is None and self.settings.get('hints', True) and self.typing != 'chat':
             w = ui.rich(s, hint, (0, 0), measure=True) + 40
             room = SW - 16 - (0 if self.hud_tuck > 0.5 else 20 + self._dock_n * 72) - 16 - 16
@@ -3424,7 +3481,7 @@ class Game:
                 what = f.mg.spec['name'] + '!'
             elif f.mg.t < 2.5:
                 what = '%s... %s!' % (what.rstrip('!'), minigame.STYLE_NAMES.get(f.mg.style, 'a fighter').lower())
-            minigame.draw(s, ui, f.mg, self.t, what)
+            minigame.draw(s, ui, f.mg, self.t, what, teach=self.total < 10 and self.settings.get('hints', True))
 
     def draw_toasts(self, s):
         ui = self.ui
@@ -3493,7 +3550,29 @@ class Game:
         ui.blit_text(s, spec['name'], (rect.centerx, rect.y + 34), 'h2', U.INK, 'center')
         grow_k = min(1.0, max(0.0, (el - 0.15) / 0.7))
         grow_k = 1 - (1 - grow_k) ** 2
-        ui.blit_text(s, '%.1f cm' % (c['size'] * grow_k), (rect.centerx, rect.y + 72), 'bodyb', U.SOFT, 'center')
+        ui.blit_text(s, '%.1f cm' % (c['size'] * grow_k), (rect.centerx, rect.y + 64), 'bodyb', U.SOFT, 'center')
+        # the measuring tape
+        lo, hi = spec['size']
+        tw = rect.w - 60
+        tx, ty = rect.x + 30, rect.y + 82
+        pygame.draw.rect(s, (236, 206, 110), (tx, ty, tw, 12), border_radius=3)
+        fill = int(tw * min(1.0, c['size'] * grow_k / max(0.1, hi)))
+        if fill > 0:
+            pygame.draw.rect(s, (250, 226, 140), (tx, ty, fill, 12), border_radius=3)
+        for i in range(21):
+            xx = tx + int(tw * i / 20)
+            pygame.draw.line(s, (120, 90, 50), (xx, ty), (xx, ty + (7 if i % 5 == 0 else 4)))
+        if fill > 0:
+            pygame.draw.line(s, U.ROSE, (tx + fill, ty - 3), (tx + fill, ty + 14), 2)
+        best = c.get('old', 0)
+        if best and best < hi and not spec.get('junk'):
+            bx2 = tx + int(tw * best / hi)
+            pygame.draw.polygon(s, U.GOLD, [(bx2 - 5, ty + 20), (bx2 + 5, ty + 20), (bx2, ty + 13)])
+        pygame.draw.rect(s, (150, 112, 60), (tx, ty, tw, 12), 1, border_radius=3)
+        ticks = int(grow_k * 12)
+        if ticks > c.get('tape_n', 0):
+            c['tape_n'] = ticks
+            self.audio.play('click', 0.25 + 0.03 * ticks)
         ui.blit_text(s, 'Click or Space to look closer', (rect.centerx, rect.bottom + 22), 'small',
                      (250, 244, 232), 'center', (30, 20, 30))
 
@@ -5029,8 +5108,10 @@ class Game:
                     ('choice', 'Screen shake', 'When fish lunge, leap and splash down', ['Off', 'Gentle', 'Full'],
                      SHAKE_LEVELS.index(st['shake']) if st['shake'] in SHAKE_LEVELS else 2,
                      lambda i: self.set_opt('shake', SHAKE_LEVELS[i]), True),
-                    ('choice', 'Camera zoom while reeling', 'Leans in on the fight', ['Off', 'On'],
-                     int(bool(st['zoom'])), lambda i: self.set_opt('zoom', bool(i)), True)]
+                    ('choice', 'Camera zoom while fishing', 'Leans in on the bobber and the fight', ['Off', 'On'],
+                     int(bool(st['zoom'])), lambda i: self.set_opt('zoom', bool(i)), True),
+                    ('choice', 'Controller rumble', 'Feel the nibbles, the bite and the line', ['Off', 'On'],
+                     int(bool(st.get('rumble', True))), lambda i: self.set_opt('rumble', bool(i)), True)]
         if tab == 'game':
             return [('choice', 'Relaxed reeling', 'Wider arc, longer warnings, slower leaps', ['Off', 'On'],
                      int(self.assist()), lambda i: self.set_opt('assist', bool(i)), True),
@@ -5071,7 +5152,7 @@ class Game:
         else:
             rows = self.opt_rows(tab)
             cx_room = 440 - 56 - 12
-            step = 54 if len(rows) > 6 else 58 if len(rows) > 5 else 68
+            step = 47 if len(rows) > 7 else 54 if len(rows) > 6 else 58 if len(rows) > 5 else 68
             for row in rows:
                 if row[0] == 'slider':
                     _, key, label, desc = row
@@ -5209,7 +5290,7 @@ class Game:
 
     def reset_tab(self):
         keys = {'audio': ('master', 'music', 'sfx', 'amb'),
-                'display': ('fps', 'show_fps', 'shake', 'zoom', 'ui_scale'),
+                'display': ('fps', 'show_fps', 'shake', 'zoom', 'ui_scale', 'rumble'),
                 'game': ('assist', 'speed', 'clock24', 'hud', 'hints', 'bg_pause', 'tutorial')}.get(self.opt_tab, ())
         for k in keys:
             self.settings[k] = DEFAULT_SETTINGS[k]

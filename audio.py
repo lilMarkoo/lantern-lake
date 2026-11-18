@@ -7,6 +7,7 @@ import pygame
 
 AMB_CH = {'water': 0, 'rain': 1, 'crickets': 2, 'wind': 3, 'fountain': 6}
 PAD_CH = (4, 5)
+LINE_CH = {'reel': 8, 'drag': 9, 'hum_lo': 10, 'hum_hi': 11}     # the fishing line's own loops
 BAND_SCALE = [55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72, 74, 76]     # C major for the bandstand tunes
 
 
@@ -28,7 +29,7 @@ class Audio:
                 init = pygame.mixer.get_init()
             self.sr, _, self.ch = init
             pygame.mixer.set_num_channels(40)
-            pygame.mixer.set_reserved(8)
+            pygame.mixer.set_reserved(12)
             self.ok = True
         except Exception as e:  # no audio device: run silently
             print('Audio disabled:', e)
@@ -40,6 +41,15 @@ class Audio:
             ch.set_volume(0)
             ch.play(self.sounds['amb_' + k], loops=-1)
         self.pads = [pygame.mixer.Channel(i) for i in PAD_CH]
+        self.line_ch = {k: pygame.mixer.Channel(i) for k, i in LINE_CH.items()}
+        for k, ch in self.line_ch.items():
+            ch.set_volume(0)
+            ch.play(self.sounds['line_' + k], loops=-1)
+        self.line_cur = {k: 0.0 for k in LINE_CH}
+        self.line_want = {k: 0.0 for k in LINE_CH}
+        self.line_fresh = 0.0
+        self.line_pan = 0.5
+        self.calm = 0.0              # 0..1: the HUD has faded out while you wait, so the lake comes up a little
         self.pad_i = 0
         self.beat_t = 0.0
         self.beat_n = 0
@@ -181,6 +191,30 @@ class Audio:
                 parts.append((off, self._band(v, 120, 2400), 1.0))
                 off += d + r.uniform(0.01, 0.05)
             S['chat%d' % i] = self._snd(self._mix(parts, off + 0.05), 0.22)
+        # --- the fishing line: seamless one-second loops (whole-number rates, FFT-filtered noise)
+        t = self._t(1.0)
+        n = len(t)
+        ratchet = np.zeros(n)
+        click = self._band(self._noise(int(sr * 0.012)), 2500, 9000) * np.exp(-np.arange(int(sr * 0.012)) / sr * 380)
+        for i in range(18):                                     # the pawl clicking over the gear as the reel turns
+            j = int(i * n / 18)
+            k = min(len(click), n - j)
+            ratchet[j:j + k] += click[:k] * (0.8 + 0.2 * (i % 2))
+        whirr = self._band(self._noise(n), 160, 900) * (0.6 + 0.4 * np.sin(2 * np.pi * 18 * t)) ** 2
+        S['line_reel'] = self._snd(ratchet + whirr * 0.35, 0.6)
+        buzz = np.zeros(n)
+        tick = self._band(self._noise(int(sr * 0.006)), 2200, 8000) * np.exp(-np.arange(int(sr * 0.006)) / sr * 700)
+        for i in range(52):                                     # the drag screaming as the fish takes line
+            j = int(i * n / 52)
+            k = min(len(tick), n - j)
+            buzz[j:j + k] += tick[:k]
+        hiss = self._band(self._noise(n), 1800, 6500) * (0.7 + 0.3 * np.sin(2 * np.pi * 52 * t))
+        S['line_drag'] = self._snd(buzz + hiss * 0.5, 0.42)
+        for key, f0 in (('hum_lo', 196), ('hum_hi', 392)):      # a taut line singing in the wind
+            ph = 2 * np.pi * f0 * t + 0.004 * f0 * np.sin(2 * np.pi * 5 * t) / 5
+            x = np.sin(ph) + 0.35 * np.sin(2 * ph) + 0.18 * np.sin(3 * ph)
+            x = x * (0.8 + 0.2 * np.sin(2 * np.pi * 3 * t)) + self._band(self._noise(n), f0 * 2, f0 * 6) * 0.15
+            S['line_' + key] = self._snd(x, 0.3)
         # --- one-shots
         x, t = self._sweep(700, 160, 0.28, 22)
         S['plop'] = self._snd(x * np.exp(-t * 14) + self._band(self._noise(len(t)), 800, 5000) * np.exp(-t * 60) * 0.4, 0.7)
@@ -197,6 +231,22 @@ class Audio:
         S['click'] = self._snd(self._band(self._noise(len(t)), 2000, 9000) * np.exp(-t * 260), 0.3)
         x, t = self._sweep(400, 120, 0.6, 5)
         S['snap'] = self._snd(x * np.exp(-t * 6) + self._band(self._noise(len(t)), 1500, 8000) * np.exp(-t * 40), 0.6)
+        x, t = self._sweep(900, 240, 0.7, 9)                    # the line letting go: a plucked string
+        x2, _ = self._sweep(1810, 470, 0.7, 9)
+        S['twang'] = self._snd((x + 0.4 * x2) * np.exp(-t * 7) * (1 - np.exp(-t * 2000)), 0.5)
+        x, t = self._sweep(340, 80, 0.45, 12)                    # the bobber pulled under
+        bub = np.zeros(len(t))
+        for k0, f0 in ((0.08, 900), (0.16, 1250), (0.25, 1050)):
+            b, bt = self._sweep(f0 * 0.7, f0 * 1.4, 0.06, 30)
+            i = int(k0 * sr)
+            bub[i:i + len(b)] += b * np.exp(-bt * 40) * 0.35
+        S['bloop'] = self._snd(x * np.exp(-t * 9) * (1 - np.exp(-t * 600)) + bub, 0.7)
+        x, t = self._sweep(1700, 650, 0.12, 30)                  # a fish rising to take a fly
+        S['plip'] = self._snd(x * np.exp(-t * 30) + self._band(self._noise(len(t)), 1500, 6000) * np.exp(-t * 80) * 0.3,
+                              0.3)
+        t = self._t(0.9)
+        flut = 0.5 + 0.5 * np.sin(2 * np.pi * 13 * t + 2 * np.sin(2 * np.pi * 3 * t))
+        S['rustle'] = self._snd(self._band(self._noise(len(t)), 2200, 7500) * flut * np.sin(np.pi * t / 0.9) ** 2, 0.25)
         t = self._t(0.35)
         creak = np.sign(np.sin(2 * np.pi * (90 + 20 * np.sin(2 * np.pi * 7 * t)) * t))
         S['creak'] = self._snd(self._band(creak, 80, 900) * np.sin(np.pi * t / 0.35), 0.25)
@@ -313,10 +363,39 @@ class Audio:
             v = vol * self.sfx_vol
             ch.set_volume(v * min(1.0, 2 * (1 - pan)), v * min(1.0, 2 * pan))
 
+    def set_line(self, reel=0.0, drag=0.0, hum=0.0, pitch=0.0, pan=0.5):
+        """What the fishing line sounds like this frame (fishing.py calls it every frame it is out).
+        hum is how loud the taut line sings, pitch (0..1) slides it from low to high as the strain builds."""
+        if not self.ok:
+            return
+        w = self.line_want
+        w['reel'], w['drag'] = reel, drag
+        w['hum_lo'], w['hum_hi'] = hum * (1 - pitch), hum * pitch
+        self.line_pan = pan
+        self.line_fresh = 0.15
+
+    def _line(self, dt):
+        self.line_fresh -= dt
+        if self.line_fresh <= 0:
+            for k in self.line_want:
+                self.line_want[k] = 0.0
+        pan = self.line_pan
+        for k, ch in self.line_ch.items():
+            cur = self.line_cur[k]
+            want = self.line_want[k]
+            cur += (want - cur) * min(1.0, dt * (18 if want > cur else 9))
+            if cur < 0.003:
+                cur = 0.0
+            self.line_cur[k] = cur
+            v = cur * self.sfx_vol
+            ch.set_volume(v * min(1.0, 2 * (1 - pan) + 0.3), v * min(1.0, 2 * pan + 0.3))
+
     def update(self, dt, env, ctx):
         """ctx: dict with flags like night, crickets, feeder, chimes, menu."""
         if not self.ok:
             return
+        self._line(dt)
+        lift = 1 + 0.35 * self.calm      # with the HUD faded out, the lake itself comes up
         rain = env.rain
         night = env.nf
         winter = env.season == 3
@@ -332,7 +411,7 @@ class Audio:
             cur = self.cur_amb[k]
             cur += (targets[k] - cur) * min(1, dt * 0.8)
             self.cur_amb[k] = cur
-            ch.set_volume(cur * self.amb_vol)
+            ch.set_volume(min(1.0, cur * self.amb_vol * lift))
         # birds during the day
         self.bird_t -= dt
         if self.bird_t <= 0:

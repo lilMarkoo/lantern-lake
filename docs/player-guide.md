@@ -82,7 +82,8 @@ your save, so they stay the same when you start a new game.
 
 - **Audio**: master, music, sound effects and ambience volume sliders
 - **Display**: fullscreen, window size, interface size (50% to 110% for the HUD and menus), frame rate limit
-  (30 / 60 / 120 / 144), a frame rate counter, screen shake (off / gentle / full) and the camera zoom while reeling.
+  (30 / 60 / 120 / 144), a frame rate counter, screen shake (off / gentle / full), the camera zoom while fishing
+  and controller rumble.
   The interface size row lists which sizes land on whole screen pixels for your window. Those are the sharpest
   and also the fastest to draw (on a 1080p screen: 67% and 100%)
 - **Gameplay**: relaxed reeling, day length (slow, normal or quick days), 12 or 24-hour clock, the HUD style
@@ -98,6 +99,9 @@ on the card switches between them (dots show which one you're on). A live festiv
 request. At the sea, the harbour's jobs (the lighthouse, Morwen's orders, Kit's shells) come before a letter
 asking for a lake fish. Under it are the day's notes: snacks, visitors, fish runs, the sky. Away at the sea,
 the lake's chores (the garden, the wagon, the crab pot) stay at home.
+
+With the Calm or Compact HUD, the cards fade nearly away once your bobber has settled and all through the
+fight, so it's just you and the water. Point at them and they come back.
 
 ### Goals (Q)
 
@@ -164,7 +168,15 @@ glimmers on the ring are worth a few coins.
 You can watch the fight in the lake too: the fish's dark shape fights at the end of the line, its fin cuts the
 water when it runs, it slaps the surface when it lunges, and a tight line shivers and flicks off drops. When it
 comes in, it bursts out of the water and you hold it up for a moment (with its name, its size and a NEW or
-Record tag) before the catch card. Click or press Space to skip ahead.
+Record tag) before the catch card. The world holds its breath for a moment as a fish breaks the surface,
+water runs off it on the way in, and a measuring tape fills as its size counts up (a gold mark shows your
+old record). Click or press Space to skip ahead.
+
+You can hear the line too: the reel ticks as it turns (faster when you hold), the drag sings when a fish runs
+or lunges, and a tight line starts to hum, higher and higher as the strain builds. With a controller, you
+feel it: a tick on a nibble, a thump on the bite, the weight of the fish growing with the strain, and a jolt
+when it lunges or splashes down (Options, Display, Controller rumble). The how-to lines under the ring show
+for your first ten catches.
 The camera leans in during the fight. Better rods have a wider, faster arc. "Relaxed reeling" in the pause
 menu gives a wider arc, longer warnings and slower leaps. The arc has brackets and the strain bar is hatched,
 so it does not rely on colour.
@@ -173,7 +185,12 @@ so it does not rely on colour.
 
 While the bobber sits, fish nose around it. Small dips are nibbles. **Tap** to twitch the bobber: the first
 few twitches draw fish in a little sooner, a twitch right on a nibble makes it bite, and too much twitching
-spooks them. **Hold** to reel the line back in.
+spooks them. **Hold** to reel the line back in. A nibble pulls the float half under, and a real bite yanks
+it clean under with a bloop and a swirl: that's when to strike.
+
+While you wait the view leans gently in toward your bobber and the lake gets on with its day: a fish jumps far
+out, rings spread where one rises, the reeds rustle, and on a fine spring or summer day a damselfly may come
+and rest on your bobber (it's off at the first twitch or nibble).
 
 Two things on the water are worth casting at:
 
