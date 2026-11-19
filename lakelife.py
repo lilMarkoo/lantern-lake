@@ -35,8 +35,12 @@ class LakeLife:
         dusky = env.phase in ('dawn', 'dusk')
         rain = env.weather in ('rain', 'storm')
         w = g.world
+        rise = rising(g)
+        if rise and not g.stats.get('rise_told'):
+            g.stats['rise_told'] = True
+            g.toast('The evening rise! Fish are feeding at the surface: quicker bites, better fish.', (220, 150, 90))
         # a fish jumping clear of the water, far out
-        self.jump_t -= dt * (1.7 if dusky else 1.0)
+        self.jump_t -= dt * (3.0 if rise else 1.7 if dusky else 1.0)
         if self.jump_t <= 0:
             self.jump_t = rng.uniform(*JUMP)
             if not frozen:
@@ -59,7 +63,7 @@ class LakeLife:
                 g.audio.play('splash_small', 0.1 + 0.15 * j['p'], x / W)
         self.jumps = [j for j in self.jumps if j['t'] < j['dur'] + 0.1]
         # rings where a fish rises (more of them on a calm evening, none under ice)
-        self.rise_t -= dt * (1.5 if dusky else 1.0) * (0.6 if rain else 1.0)
+        self.rise_t -= dt * (3.0 if rise else 1.5 if dusky else 1.0) * (0.6 if rain else 1.0)
         if self.rise_t <= 0:
             self.rise_t = rng.uniform(*RISE)
             if not frozen:
@@ -143,6 +147,108 @@ class LakeLife:
             else:
                 near.set_at((x, y + 1), wing)
                 near.set_at((x + d, y + 1), wing)
+
+
+def rising(g):
+    """The evening rise: at dusk on the lake, fish come up to feed. Quicker bites, better fish, more rings."""
+    env = g.env
+    if env.phase != 'dusk' or g.place != 'lake' or env.weather == 'storm':
+        return False
+    import coast
+    import seasons
+    return not coast.at_coast(g) and not seasons.frozen(g)
+
+
+# ---------------------------------------------------------------- the dock fills up as you fish
+# (id, test, the line you get the first time)
+DOCK = (
+    ('bucket', lambda tot, sp: tot >= 5, 'A bait bucket of your own now sits on the dock.'),
+    ('board', lambda tot, sp: tot >= 15, 'You nailed a tally board to the dock post.'),
+    ('sign', lambda tot, sp: sp >= 8, 'Eight kinds of fish! You carved a little fish sign for the post.'),
+    ('rope', lambda tot, sp: tot >= 30, 'A proper coil of rope and a net, drying on the dock.'),
+    ('pots', lambda tot, sp: tot >= 50, 'Fifty fish! Flower pots for the dock, to celebrate.'),
+    ('chime', lambda tot, sp: tot >= 80, 'A wind chime of old lures now sings on the end post.'),
+)
+
+
+def _species(g):
+    from data import FISH_BY_ID
+    return sum(1 for k in g.journal if k in FISH_BY_ID)
+
+
+def dock_props(g):
+    tot, sp = g.total, _species(g)
+    return [d[0] for d in DOCK if d[1](tot, sp)]
+
+
+def dock_progress(g):
+    """After each catch: anything new for the dock gets one line, said once."""
+    have = dock_props(g)
+    if 'dock' not in g.stats:
+        g.stats['dock'] = list(have)       # an older save: what's already earned arrives quietly
+        return
+    for pid, _, line in DOCK:
+        if pid in have and pid not in g.stats['dock']:
+            g.stats['dock'].append(pid)
+            g.toast(line, (150, 120, 80))
+
+
+def draw_dock(near, g, t):
+    import pygame
+    import math as m
+    have = dock_props(g)
+    if not have:
+        return
+    deck = 286
+    if 'bucket' in have:
+        x = 190
+        pygame.draw.rect(near, (110, 120, 128), (x, deck - 6, 7, 6))
+        pygame.draw.rect(near, (80, 88, 96), (x, deck - 6, 7, 6), 1)
+        pygame.draw.line(near, (150, 160, 168), (x, deck - 6), (x + 6, deck - 6))
+        pygame.draw.arc(near, (70, 76, 84), (x, deck - 10, 7, 8), 0, m.pi)
+        near.set_at((x + 2, deck - 7), (200, 120, 110))           # a worm, peeking out
+    if 'board' in have:
+        bx, by = 106, 252
+        near.fill((150, 112, 74), (bx, by, 11, 8))
+        pygame.draw.rect(near, (96, 70, 48), (bx, by, 11, 8), 1)
+        marks = min(g.total, 40) // 5
+        for i in range(min(marks, 4)):                              # little groups of five tally marks
+            for j in range(4):
+                near.set_at((bx + 2 + i * 2 + (j % 2), by + 2 + j // 2 * 3 - (j // 2)), (60, 44, 30))
+        if g.total >= 25:
+            near.set_at((bx + 9, by + 4), (220, 180, 90))           # a gold star, for luck
+    if 'sign' in have:
+        sx, sy = 106, 264
+        pygame.draw.line(near, (80, 64, 50), (sx, sy - 2), (sx + 3, sy))
+        pygame.draw.ellipse(near, (196, 150, 96), (sx + 1, sy, 10, 5))
+        pygame.draw.polygon(near, (196, 150, 96), [(sx + 10, sy + 2), (sx + 14, sy), (sx + 14, sy + 5)])
+        near.set_at((sx + 3, sy + 1), (60, 44, 30))
+    if 'rope' in have:
+        rx = 124
+        for i, w in enumerate((9, 7, 5)):
+            pygame.draw.ellipse(near, (186, 156, 104) if i % 2 == 0 else (160, 130, 86),
+                                (rx - w // 2, deck - 3 - i, w, 3))
+        for i in range(5):                                          # a net hung over the left post
+            near.set_at((101 - i % 2, 258 + i * 2), (130, 140, 120))
+            near.set_at((100 - (i + 1) % 2, 259 + i * 2), (110, 120, 100))
+    if 'pots' in have:
+        for px, col in ((112, (230, 110, 120)), (250, (250, 200, 90))):
+            pygame.draw.polygon(near, (176, 96, 66), [(px - 3, deck - 5), (px + 3, deck - 5), (px + 2, deck), (px - 2, deck)])
+            pygame.draw.line(near, (110, 150, 80), (px, deck - 5), (px, deck - 8))
+            near.set_at((px - 1, deck - 9), col)
+            near.set_at((px + 1, deck - 9), col)
+            near.set_at((px, deck - 10), col)
+            near.set_at((px, deck - 9), (255, 236, 160))
+    if 'chime' in have:
+        cx, cy = 258, 245
+        wind = getattr(g.env, 'wind', 0.3)
+        pygame.draw.line(near, (110, 90, 70), (cx, cy), (cx + 5, cy))
+        for i in range(3):
+            sw = m.sin(t * (2.2 + i * 0.7) + i) * (0.6 + wind * 1.6)
+            x0 = cx + 1 + i * 2
+            x1 = x0 + sw
+            pygame.draw.line(near, (150, 150, 140), (x0, cy), (x1, cy + 4 + i))
+            near.set_at((int(round(x1)), cy + 5 + i), ((220, 90, 80), (90, 170, 210), (240, 200, 90))[i])
 
 
 def get(g):

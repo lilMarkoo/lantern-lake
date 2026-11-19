@@ -105,7 +105,8 @@ UI_SCALES = [50, 60, 67, 75, 85, 100, 110]      # interface size, percent (100 =
 DEFAULT_SETTINGS = dict(master=1.0, music=0.5, sfx=0.8, amb=0.8, assist=False, fullscreen=False, window=None,
                         fps=60, show_fps=False, shake=1.0, zoom=True, hints=True, clock24=False, speed=1.0,
                         bg_pause=True, ui_scale=100, mp_name='', mp_addr='', slot=1, prompts='auto',
-                        tutorial=True, binds={}, hud='calm', radio=None, rumble=True)
+                        tutorial=True, binds={}, hud='calm', radio=None, rumble=True,
+                        radio_vol=0.5)
 HUD_STYLES = ('full', 'calm', 'compact')
 PROMPTS = ['auto', 'keyboard', 'xbox', 'ps', 'switch']
 PROMPT_LABELS = ['Auto', 'Keyboard', 'Xbox', 'PS', 'Switch']
@@ -310,6 +311,7 @@ class Game:
         self.mouse_acc = 0           # how far the mouse has really travelled since the keys last steered
         self.bot_aim = None
         self.cam = [1.0, W / 2, H / 2]
+        self.cam_look = 0.35         # where the resting view looks along the shore (0 the cabin .. 1 the far side)
         self.cam_rect = pygame.Rect(0, 0, W, H)
         self.shake_amt = 0.0
         self._jcache = {}
@@ -420,7 +422,7 @@ class Game:
                     if k in st:
                         st[k] = v
                 break
-        for k in ('master', 'music', 'sfx', 'amb'):
+        for k in ('master', 'music', 'sfx', 'amb', 'radio_vol'):
             try:
                 st[k] = max(0.0, min(1.0, float(st[k])))
             except (TypeError, ValueError):
@@ -877,8 +879,19 @@ class Game:
     def has(self, item):
         return item in self.owned
 
-    def has_boat(self):
+    def owns_boat(self):
         return self.has('boat') or self.has('rowboat')
+
+    def has_boat(self):
+        """A boat to row out in: your own, or Wren's, lent to you for the day on her first visit."""
+        return self.owns_boat() or self.stats.get('boat_loan') == self.day
+
+    def toast_few(self, key, text, color=(120, 100, 80), limit=3):
+        """A toast that stops once it has been said a few times (the game shows it in other ways after that)."""
+        told = self.stats.setdefault('told', {})
+        if told.get(key, 0) < limit:
+            told[key] = told.get(key, 0) + 1
+            self.toast(text, color)
 
     def walk_scene(self):
         """The scene you are walking around right now (the aquarium hall or Saltmarsh harbour), if any."""
@@ -1519,7 +1532,16 @@ class Game:
             self.world.spot_cd = 0.5
         for kind, title, _ in almanac.events_on(d):
             if kind == 'wagon':
-                self.toast("Wren's Wagon has floated in! Click the houseboat to shop.", (70, 140, 150))
+                if not self.owns_boat() and not self.stats.get('boat_loan'):
+                    # her first visit: Wren lends you her rowboat for the day, so you see the rest of the lake
+                    self.stats['boat_loan'] = self.day
+                    self.queue.append(('letter', ('Ahoy there!', (
+                        "I've tied my old rowboat to the end of your dock. She's yours for today. Press B, or click "
+                        "the boat, and row out to Lily Cove, the Deep or Willow Creek: different water, different "
+                        "fish. I'll take her back at bedtime. And if you two get on, she's 500 coins at my wagon."),
+                        '- Wren')))
+                else:
+                    self.toast("Wren's Wagon has floated in! Click the houseboat to shop.", (70, 140, 150))
             elif kind == 'run':
                 self.toast('Fishday: the %s is on!' % title.lower().replace(' run', ' run'), (90, 140, 190))
             elif kind == 'meteor':
@@ -1535,7 +1557,7 @@ class Game:
         season = self.season_of(self.day)
         rng_ = ROD_BY_ID[self.rod]['range']
         top = 2 if self.rod == 'twig' else 3
-        boat = self.has_boat()
+        boat = self.owns_boat()
         pool = [f for f in FISH if f['rarity'] <= top and f['weather'] is None and not f['needs'] and not f.get('method')
                 and (f['seasons'] is None or season in f['seasons'])
                 and (not f['spot'] or boat)
@@ -1650,6 +1672,7 @@ class Game:
         entry['count'] += 1
         entry['best'] = max(entry['best'], size)
         self.total += 1
+        lakelife.dock_progress(self)
         goalmod.on_catch(self, spec)
         if not spec.get('junk'):
             if self.spot not in self.stats.setdefault('spots', []):
@@ -1737,7 +1760,7 @@ class Game:
             return
         self.tank.append(dict(id=c['spec']['id'], size=c['size']))
         self.audio.play('splash_small', 0.6)
-        self.toast('%s is settling into the cabin tank.' % c['spec']['name'], (90, 140, 190))
+        self.toast_few('tank', '%s is settling into the cabin tank.' % c['spec']['name'], (90, 140, 190))
         self.close_card()
         self.check_badges()
 
@@ -1992,6 +2015,9 @@ class Game:
                 self.finish_festival()
             else:
                 f['done'] = True
+        if self.stats.get('boat_loan') == self.day and not self.owns_boat():
+            self.toast("Wren rowed her boat home. She's 500 coins at the wagon whenever you're ready.",
+                       (70, 140, 150))
         if self.minute >= 300:
             self.day += 1
         self.minute = 360.0
@@ -2209,6 +2235,18 @@ class Game:
         self.ui.key_labels = b.labels
         self.save_settings()
         self.audio.play('ui', 0.6)
+
+    def cap_icon(self, key, button):
+        """A keycap to sit beside a button's label, or that controller's own button while a pad is in use."""
+        ui = self.ui
+        if ui.pad_layout:
+            surf = pygame.Surface((ui.pad_w(button), 24), pygame.SRCALPHA)
+            ui.padcap(surf, button, (0, 12), 'midleft')
+        else:
+            label = ui.key_labels.get(key, key)
+            surf = pygame.Surface((max(24, ui.fonts['tiny'].size(label)[0] + 12) + 2, 24), pygame.SRCALPHA)
+            ui.keycap(surf, key, (0, 12), 'midleft', pad=False)
+        return surf
 
     def hint(self, kb, pad):
         """Pick the keyboard or the controller version of a hint line."""
@@ -2597,6 +2635,8 @@ class Game:
                 self.save()
 
     # ------------------------------------------------------------ camera and input helpers
+    HOME_Z = 1.45          # how close the camera sits on you and the dock between casts
+
     def update_camera(self, dt):
         f = self.fishing
         z, fx, fy = 1.0, W / 2, H / 2
@@ -2608,19 +2648,36 @@ class Game:
             z = 1.08
             fx = W / 2 + (f.fly_pos[0] - W / 2) * 0.5
             fy = H / 2 + (f.fly_pos[1] - H / 2) * 0.5
-        slow = False
-        if (self.mode == 'play' and f.state in ('waiting', 'bite') and f.bob and self.overlay is None
-                and self.place != 'town'):
-            # waiting for a bite: the view leans gently in toward the bobber
-            slow = True
-            z = 1.1
-            fx = W / 2 + ((PLAYER_X + f.bob[0]) / 2 - W / 2) * 0.9
-            fy = H / 2 + (f.bob[1] - H / 2) * 0.6
+        rate = 3.0
+        st = f.state
+        if (self.mode == 'play' and self.place != 'town' and not self.walk_scene()
+                and self.overlay in (None, 'catch') and st not in ('fight', 'landing')):
+            rate = 1.4
+            if st == 'charging' or (st in ('casting', 'waiting', 'bite') and f.bob):
+                # a cast: frame you and where the line is going (or went)
+                if st == 'charging':
+                    rod = self.rod_spec()
+                    tx = cast_point(rod['range'], f.aim)[0]
+                else:
+                    tx = f.dst[0]
+                lo, hi = min(PLAYER_X - 70, tx - 50), max(PLAYER_X + 60, tx + 50)
+                z = clamp(W / max(1.0, hi - lo), 1.0, 1.6)
+                fx = (lo + hi) / 2
+                fy = H - H / z / 2 - 18
+                if st in ('waiting', 'bite'):
+                    rate = 0.8
+            else:
+                # at rest: in close on you and the dock, and the view drifts toward wherever you point
+                z = self.HOME_Z
+                w = W / z
+                self.cam_look += (self.ui.mouse[0] / SW - self.cam_look) * min(1.0, dt * 2.5)
+                fx = w / 2 + self.cam_look * (W - w)
+                fy = H - H / z / 2 - 18
         if not self.settings.get('zoom', True):
-            z = 1.0
+            z, fx, fy = 1.0, W / 2, H / 2
         if self.shake_amt > 0.05:
             z = max(z, 1.03)
-        k = min(1.0, dt * (0.7 if slow else 3))
+        k = min(1.0, dt * rate)
         c = self.cam
         c[0] += (z - c[0]) * k
         c[1] += (fx - c[1]) * k
@@ -3573,8 +3630,9 @@ class Game:
         if ticks > c.get('tape_n', 0):
             c['tape_n'] = ticks
             self.audio.play('click', 0.25 + 0.03 * ticks)
-        ui.blit_text(s, 'Click or Space to look closer', (rect.centerx, rect.bottom + 22), 'small',
-                     (250, 244, 232), 'center', (30, 20, 30))
+        tip = self.hint(['Click or', ('key', 'Space'), 'to look closer'], [('pad', 'A'), 'to look closer'])
+        tw = ui.rich(s, tip, (0, 0), measure=True)
+        ui.rich(s, tip, (rect.centerx - tw // 2, rect.bottom + 22), outline=(30, 20, 30))
 
     def draw_card(self, s):
         ui = self.ui
@@ -3647,16 +3705,19 @@ class Game:
             ui.blit_text(s, line, (rect.centerx, y), 'body', U.INK, 'midtop')
             y += 26
         by = rect.bottom - 100
+        keep = self.cap_icon('Space', 'A')
         if spec['id'] == 'bottle':
-            ui.button(s, (rect.centerx - 110, by, 220, 52), 'Read the note', self.keep_catch, 'primary')
+            ui.button(s, (rect.centerx - 120, by, 240, 52), 'Read the note', self.keep_catch, 'primary', icon=keep)
         elif spec.get('junk'):
-            ui.button(s, (rect.centerx - 110, by, 220, 52), 'Into the basket', self.keep_catch, 'primary')
+            ui.button(s, (rect.centerx - 120, by, 240, 52), 'Into the basket', self.keep_catch, 'primary', icon=keep)
         else:
+            # the buttons show the key, or the controller button, that picks them (A keep, X tank, Y release)
             full = len(self.tank) >= self.tank_size()
-            ui.button(s, (rect.centerx - 244, by, 156, 52), 'Keep  (Space)', self.keep_catch, 'primary')
-            ui.button(s, (rect.centerx - 78, by, 156, 52), 'Tank full' if full else 'To tank  (T)',
-                      self.tank_catch, 'normal', enabled=not full)
-            ui.button(s, (rect.centerx + 88, by, 156, 52), 'Release  (R)', self.release_catch, 'rose')
+            ui.button(s, (rect.centerx - 244, by, 156, 52), 'Keep', self.keep_catch, 'primary', icon=keep)
+            ui.button(s, (rect.centerx - 78, by, 156, 52), 'Tank full' if full else 'To tank',
+                      self.tank_catch, 'normal', enabled=not full, icon=None if full else self.cap_icon('T', 'X'))
+            ui.button(s, (rect.centerx + 88, by, 156, 52), 'Release', self.release_catch, 'rose',
+                      icon=self.cap_icon('R', 'Y'))
             ui.blit_text(s, 'Fish in your cabin tank: %d / %d' % (len(self.tank), self.tank_size()),
                          (rect.centerx, rect.bottom - 18), 'small', U.SOFT, 'midbottom')
 
@@ -4329,7 +4390,7 @@ class Game:
         ui.blit_text(s, "Wren's Wagon", (hdr.x + 90, hdr.y + 8), 'h3', U.INK)
         ui.blit_text(s, '"Fresh from up the river! Have a look, have a look."', (hdr.x + 90, hdr.y + 36), 'small', U.SOFT)
         stock = list(self.wagon_stock())
-        if not self.has_boat():
+        if not self.owns_boat():
             stock = [('boat', 'boat')] + stock[:3]
         for i, (kind, iid) in enumerate(stock):
             r = pygame.Rect(body.x, body.y + 80 + i * 100, body.w, 92)
@@ -5085,7 +5146,8 @@ class Game:
             return [('slider', 'master', 'Master volume', 'Everything at once'),
                     ('slider', 'music', 'Music', 'Kalimba and soft pads'),
                     ('slider', 'sfx', 'Sound effects', 'Splashes, reels and menus'),
-                    ('slider', 'amb', 'Ambience', 'Water, rain, birds and crickets')]
+                    ('slider', 'amb', 'Ambience', 'Water, rain, birds and crickets'),
+                    ('slider', 'radio_vol', 'Radio', 'The stations: their music and the hosts')]
         if tab == 'display':
             sizes = ["%dx%d" % wh for wh in self.win_sizes]
             sharp = self.ui_sharp_sizes()
@@ -5289,7 +5351,7 @@ class Game:
         self.audio.play('ui', 0.6)
 
     def reset_tab(self):
-        keys = {'audio': ('master', 'music', 'sfx', 'amb'),
+        keys = {'audio': ('master', 'music', 'sfx', 'amb', 'radio_vol'),
                 'display': ('fps', 'show_fps', 'shake', 'zoom', 'ui_scale', 'rumble'),
                 'game': ('assist', 'speed', 'clock24', 'hud', 'hints', 'bg_pause', 'tutorial')}.get(self.opt_tab, ())
         for k in keys:

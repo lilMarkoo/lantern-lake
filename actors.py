@@ -94,7 +94,20 @@ def draw_player(s, g, t):
     if st == 'caught':
         breathe = -1 if math.sin(t * 10) > 0 else 0
     shirt = SHIRT[season]
-    by = draw_person(s, x, fy, shirt, (112, 72, 52), getattr(g, 'hat', 'straw'), season, breathe, st == 'caught')
+    react = getattr(f, 'react', None)
+    hop = 0
+    if react and react[0] == 'hop':
+        hop = int(round(math.sin(math.pi * min(1.0, react[1] / 0.35)) * 3))      # a start: something bit!
+    elif react and react[0] == 'slump':
+        breathe = -1                                                               # shoulders drop
+    by = draw_person(s, x, fy - hop, shirt, (112, 72, 52), getattr(g, 'hat', 'straw'), season, breathe,
+                     st == 'caught')
+    if react and react[0] == 'slump' and react[1] > 0.3:
+        # a little sigh drifting up
+        k = react[1] - 0.3
+        for i in range(3):
+            if k > i * 0.25:
+                s.set_at((x + 4 + i * 2, by - 30 - int(k * 4) - i), (220, 224, 232))
     # arm reaching for the rod handle
     hx, hy = HAND
     pygame.draw.line(s, shirt, (x + 1, by - 13), (hx - 1, hy + breathe))
@@ -380,7 +393,7 @@ def draw_decor(s, g, t):
 def draw_extras(s, g, t):
     """Newer decorations: pinwheel, telescope and the birthday gifts."""
     env = g.env
-    if g.has('rowboat') or g.has('boat'):
+    if g.has_boat():
         bob = math.sin(t * 1.2) * 0.6
         x0, y0 = 156, 309 + bob
         hull = [(x0, y0), (x0 + 28, y0), (x0 + 24, y0 + 5), (x0 + 4, y0 + 5)]

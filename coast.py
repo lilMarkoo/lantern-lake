@@ -234,7 +234,7 @@ def fish_ok(g, f):
 # ---------------------------------------------------------------- the day
 def morning(g):
     st = g.coast
-    if not st['open'] and g.has_boat():
+    if not st['open'] and g.owns_boat():
         st['open'] = True
         g.queue.append(('letter', ('Dear angler,', (
             "The spring floods have cleared the old river channel, and a rowboat can get all the way down to the sea "

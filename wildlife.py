@@ -1291,9 +1291,9 @@ def update(g, dt):
 def spawn(g, cid):
     sp = SPECIES_BY_ID[cid]
     g.critter = Critter(sp, g, g.critter_rng)
-    day_key = '%s:%d' % (cid, g.day)
-    if g.nature.get(cid, {}).get('stars', 0) < 3 and g.critter_told != day_key:
-        g.critter_told = day_key
+    seen = g.stats.setdefault('critters_told', [])
+    if g.nature.get(cid, {}).get('stars', 0) < 3 and cid not in seen:
+        seen.append(cid)                 # said once per animal; after that the HUD's notes line does the job
         g.toast('%s nearby. Press %s for photo mode.' % (sp['name'] if cid in g.nature else 'Something is moving',
                                                         photo_key(g)), (110, 140, 120))
     return g.critter

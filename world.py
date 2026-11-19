@@ -136,6 +136,9 @@ class World:
         self.cloud_sprites = [art.make_cloud(rng) for _ in range(8)]
         self.clouds = [dict(x=rng.uniform(-120, W), y=rng.uniform(10, 105), spd=rng.uniform(2, 5),
                             spr=i % 8, th=rng.random(), par=rng.uniform(0.6, 1.0)) for i in range(14)]
+        self.gusts = []              # wind ruffling across the water (darker, broken patches drifting by)
+        self.gust_t = 2.0
+        self.sway = 0.0              # how hard the trees are swaying right now (0..1)
         self.shimmers = [dict(x=rng.uniform(0, W), y=rng.uniform(HORIZON + 2, H), ph=rng.random() * 6.28,
                               spd=rng.uniform(0.5, 1.5)) for _ in range(70)]
         self.lilies = []
@@ -322,6 +325,20 @@ class World:
                     fr['cd'] = rng.uniform(3, 9)
                     fr['puff'] = 0.6
                     g.audio.play('nibble', 0.25, self.lilies[fr['i']]['x'] / W)
+        # gusts of wind ruffle across the lake, left to right, and set the far trees swaying as they pass
+        self.gust_t -= dt * (0.5 + env.wind * 1.5)
+        if self.gust_t <= 0:
+            self.gust_t = rng.uniform(5, 11)
+            if env.season != 3 and spot not in art.COAST_LAMP:
+                y = rng.uniform(HORIZON + 14, H - 30)
+                p = 0.5 + (y - HORIZON) / 170
+                self.gusts.append(dict(x=-90.0, y=y, w=rng.uniform(70, 150) * p, h=rng.uniform(8, 16) * p,
+                                       vx=rng.uniform(16, 28) * (0.7 + env.wind), seed=rng.random() * 100))
+        for gu in self.gusts:
+            gu['x'] += gu['vx'] * dt
+        self.gusts = [gu for gu in self.gusts if gu['x'] - gu['w'] < W + 20]
+        want = min(1.0, sum(1 for gu in self.gusts if -40 < gu['x'] < W + 40) * 0.7) + env.wind * 0.3
+        self.sway += (want - self.sway) * min(1.0, dt * 0.8)
         for c in self.clouds:
             c['x'] += c['spd'] * dt * (0.5 + env.wind) * c['par']
             if c['x'] > W + 20:
@@ -590,6 +607,7 @@ class World:
         import wildlife
         if self.spot == 'dock':
             self._dock_dynamic(near, env, g)
+            lakelife.draw_dock(near, g, t)
             import goals
             goals.draw_dock(near, g, t)
             seasons.draw_pot(near, g, t)
@@ -756,11 +774,26 @@ class World:
         if env.fog > 0.01:
             tint = lerp_c(tint, (255, 255, 255), env.fog * 0.2)
         tl.fill((*tint, 255), special_flags=pygame.BLEND_RGBA_MULT)
-        frame.blit(tl, (0, HORIZON - 64))
+        self._trees(frame, tl)
         if env.fog > 0.01:
             fogl = pygame.Surface((W, 40), pygame.SRCALPHA)
             fogl.fill((*env.fog_color, int(env.fog * 150)))
             frame.blit(fogl, (0, HORIZON - 40))
+
+    def _trees(self, frame, tl):
+        """The far treeline, its tops swaying a pixel or two as the wind passes (tiles overlap, so no seams)."""
+        amp = 0.35 + self.sway * 1.9
+        if amp < 0.5:
+            frame.blit(tl, (0, HORIZON - 64))
+            return
+        t = self.t
+        th = tl.get_height()
+        for x0 in range(0, W, 32):
+            ph = t * 1.7 - x0 / 70
+            for row in range(0, th, 4):
+                off = int(round(math.sin(ph + row * 0.04) * amp * (1 - row / th) ** 1.5))
+                sx = max(0, x0 - 1)
+                frame.blit(tl, (sx + off, HORIZON - 64 + row), (sx, row, 34, 4))
 
     def _lighthouse(self, frame, env):
         """Fernwick's lighthouse on the far shore (drawn before the water, so the lake reflects it)."""
@@ -837,6 +870,27 @@ class World:
             ln = int(2 + 8 * persp * v)
             c = lerp_c(wc, hl, (v - 0.3) * (0.8 - env.rain * 0.5))
             pygame.draw.line(frame, c, (s['x'], s['y']), (s['x'] + ln, s['y']))
+        # wind ruffling the water: a patch of broken, darker little waves drifting across
+        ruff = darken(wc, 0.18)
+        glint = lerp_c(wc, hl, 0.6)
+        for gu in self.gusts:
+            gx, gy, gw, gh = gu['x'], gu['y'], gu['w'], gu['h']
+            p = 0.5 + (gy - HORIZON) / 170
+            sd = gu['seed']
+            for i in range(int(gw * gh / 9)):
+                u = (math.sin(i * 12.9898 + sd) * 43758.5453) % 1.0
+                v = (math.sin(i * 78.233 + sd * 1.7) * 12543.17) % 1.0
+                dx, dy = u * 2 - 1, v * 2 - 1
+                if dx * dx + dy * dy > 1:
+                    continue
+                if math.sin(t * 5 + i * 1.3) < -0.4:
+                    continue
+                x = gx + dx * gw / 2 + math.sin(t * 2 + i) * 1.5
+                y = int(gy + dy * gh / 2)
+                if y <= HORIZON + 1 or x < 0 or x >= W:
+                    continue
+                ln = 1 + int(2.5 * p * (1 - abs(dx)))
+                pygame.draw.line(frame, glint if i % 7 == 0 else ruff, (x, y), (x + ln, y))
         # sun / moon glitter path
         rng = self.rng
         if env.sun_vis and env.over < 0.85:

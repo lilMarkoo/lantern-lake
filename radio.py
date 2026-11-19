@@ -164,7 +164,7 @@ class Radio:
         if a.radio != st['style']:
             a.radio_on(st['style'])
         set_ = g.settings
-        a.radio_vol = set_.get('master', 1.0) * max(set_.get('music', 0.5), 0.35)
+        a.radio_vol = set_.get('master', 1.0) * set_.get('radio_vol', 0.5)     # its own slider (Options, Audio)
         if self.say is None and self.talk:
             text, dur = self.talk.pop(0)
             self.say = [text, dur, dur]

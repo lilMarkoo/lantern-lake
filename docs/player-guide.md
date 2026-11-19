@@ -80,7 +80,7 @@ button for capitals, and Menu / Options / + when you're done.
 Open Options from the title screen or the pause menu (Esc). Settings are kept in `settings.json`, separate from
 your save, so they stay the same when you start a new game.
 
-- **Audio**: master, music, sound effects and ambience volume sliders
+- **Audio**: master, music, sound effects, ambience and radio volume sliders
 - **Display**: fullscreen, window size, interface size (50% to 110% for the HUD and menus), frame rate limit
   (30 / 60 / 120 / 144), a frame rate counter, screen shake (off / gentle / full), the camera zoom while fishing
   and controller rumble.
@@ -123,8 +123,8 @@ and what the host is saying; click it to open the set.
 | Saltmarsh Shanty 96.1 | A squeezebox in six-eight with a stamping foot | Captain Dorrie |
 | Night Bells 103.7 | Glassy bells over slow pads | Moth |
 
-The volume follows your music setting (with music off, the radio still plays, quietly). The game remembers
-your station.
+The radio has its own volume slider in Options, Audio, so you can turn the usual music off and still have
+the radio, or the other way round. The game remembers your station.
 
 The **HUD** setting (Options > Gameplay) has three styles:
 
@@ -146,6 +146,16 @@ radishes (planted before you came) pop up ready to pick. Pick them, and a yarn b
 with her (Cabin, Biscuit tab), and she finds Grandma's old tool box under the dock. Click the loose plank
 sticking up on the dock to mend it: the dock gets a fresh plank and a pennant, and the tool box has 50 coins in
 it.
+
+The view sits close to you and Biscuit on the dock and drifts a little toward wherever you point. When you
+cast, it pulls back to keep both you and your bobber in view.
+
+Your dock fills up as you fish: a bait bucket after 5 catches, a tally board on the post after 15, a carved
+fish sign once you have 8 kinds of fish, a coil of rope and a drying net after 30, flower pots after 50 and a
+wind chime of old lures after 80.
+
+The same common fish turns up less often if you have just caught a few of them, and fish you've never caught
+come along more often.
 
 ## Reeling
 
@@ -177,6 +187,10 @@ or lunges, and a tight line starts to hum, higher and higher as the strain build
 feel it: a tick on a nibble, a thump on the bite, the weight of the fish growing with the strain, and a jolt
 when it lunges or splashes down (Options, Display, Controller rumble). The how-to lines under the ring show
 for your first ten catches.
+Small common fish come in quickly, so the long fights are saved for the good ones. The ring takes the fish's
+colours: lake blue for common fish, green for uncommon, deep blue for rare, violet for very rare and gold for a
+legend, with more sparkles the rarer it is. Your angler hops when a fish bites and slumps with a sigh when one
+gets away.
 The camera leans in during the fight. Better rods have a wider, faster arc. "Relaxed reeling" in the pause
 menu gives a wider arc, longer warnings and slower leaps. The arc has brackets and the strain bar is hatched,
 so it does not rely on colour.
@@ -190,7 +204,11 @@ it clean under with a bloop and a swirl: that's when to strike.
 
 While you wait the view leans gently in toward your bobber and the lake gets on with its day: a fish jumps far
 out, rings spread where one rises, the reeds rustle, and on a fine spring or summer day a damselfly may come
-and rest on your bobber (it's off at the first twitch or nibble).
+and rest on your bobber (it's off at the first twitch or nibble). The wind moves through the trees in gusts
+and you can see each gust ruffle across the water.
+
+**The evening rise**: at dusk on the lake (not in a storm, and not under ice), fish come up to feed. Fish jump
+and rise all over the water, bites come about a third quicker and the better fish are likelier.
 
 Two things on the water are worth casting at:
 
@@ -200,8 +218,10 @@ Two things on the water are worth casting at:
 
 ## The rowboat and fishing spots
 
-Wren's Wagon sells a rowboat for 500 coins. Fen's birthday gift, the Little Rowboat, works too. Once you have
-one, open the lake map (B) and row to one of three new places. Biscuit comes along. You row home
+Wren's Wagon sells a rowboat for 500 coins. Fen's birthday gift, the Little Rowboat, works too. On her very
+first visit (if you have no boat yet) Wren lends you her rowboat for the day, so you can try the other spots
+before you save up; she takes it back at bedtime. Once you have one, open the lake map (B) and row to one of
+three new places. Biscuit comes along. You row home
 automatically when you rest for the night.
 
 - **Lily Cove**: shallow water full of lily pads and frogs. Bites come quickly, but casts never reach deep water.

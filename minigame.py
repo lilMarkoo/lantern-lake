@@ -26,6 +26,14 @@ LEAPS = {1: 0, 2: 1, 3: 2, 4: 2, 5: 3}
 STYLE_NAMES = {'calm': 'A cruiser', 'darter': 'A darter', 'zigzag': 'A zigzagger', 'runner': 'A runner',
                'circler': 'A circler', 'diver': 'A diver', 'sulker': 'A sulker'}
 SECOND_WIND = 0.7                  # where a big fish finds its second wind
+# the reel ring by rarity: water, deep middle, outer rim, inner rim, sparkles
+RING_COLS = {
+    1: ((44, 86, 112), (30, 58, 80), (88, 140, 166), (70, 110, 136), (140, 196, 216)),       # common: lake blue
+    2: ((38, 100, 90), (24, 66, 62), (98, 172, 148), (74, 134, 116), (170, 236, 200)),       # uncommon: green
+    3: ((56, 68, 130), (34, 42, 90), (120, 136, 214), (94, 106, 176), (196, 206, 255)),      # rare: deep blue
+    4: ((108, 66, 124), (70, 40, 86), (196, 140, 214), (150, 104, 170), (255, 210, 250)),    # epic: violet
+    5: ((124, 88, 38), (82, 54, 22), (236, 196, 110), (190, 150, 80), (255, 236, 160)),      # legend: gold
+}
 
 
 def angdiff(a, b):
@@ -48,6 +56,8 @@ class ReelGame:
         self.arc = rod['arc'] + (24 if assist else 0)
         self.turn = rod['turn'] * (1.1 if assist else 1.0)
         self.rate = 0.11 * rod['reel'] / (1 + 1.4 * self.s) / (1 + 0.38 * (self.r - 1))
+        if self.r <= 1 and self.s < 0.35:
+            self.rate *= 1.6               # small fry come in quickly: the long fights are for the good fish
         self.base = 35 + self.a * 110 + (self.r - 1) * 7                # how fast the fish swims around the ring (deg/s)
         self.behavior = spec.get('behavior') or 'runner'
         self.t = 0.0
@@ -528,15 +538,18 @@ def draw(s, ui, mg, t, title, teach=True):
             ui.blit_text(s, 'Stage %d' % stage, (sw // 2, y - 34), 'bodyb', (255, 226, 140), 'center', (40, 24, 20),
                          alpha=255 * a)
             ui.blit_text(s, text, (sw // 2, y), 'h2', (255, 248, 230), 'center', (40, 24, 20), alpha=255 * a)
-    # water ring with drifting sparkles
-    pygame.draw.circle(s, (44, 86, 112), (CX, CY), R + 14)
-    pygame.draw.circle(s, (30, 58, 80), (CX, CY), R - 14)
-    pygame.draw.circle(s, (88, 140, 166), (CX, CY), R + 14, 2)
-    pygame.draw.circle(s, (70, 110, 136), (CX, CY), R - 14, 2)
-    for i in range(18):
-        a = i * 20 + t * 14 * (1 if i % 2 else -1)
+    # water ring with drifting sparkles, in the fish's own colours: a rare fish's ring looks rare
+    rar = spec.get('rarity', 1)
+    ring, deep, rim, rim2, spark = RING_COLS.get(rar, RING_COLS[1])
+    pygame.draw.circle(s, ring, (CX, CY), R + 14)
+    pygame.draw.circle(s, deep, (CX, CY), R - 14)
+    pygame.draw.circle(s, rim, (CX, CY), R + 14, 2)
+    pygame.draw.circle(s, rim2, (CX, CY), R - 14, 2)
+    n = 18 + 6 * max(0, rar - 1)
+    for i in range(n):
+        a = i * 360 / n + t * (10 + 6 * rar) * (1 if i % 2 else -1)
         x, y = _pt(a, R + math.sin(t * 2 + i) * 6)
-        s.fill((140, 196, 216), (int(x), int(y), 2, 2))
+        s.fill(spark, (int(x), int(y), 2, 2))
     # progress track inside the ring, with stars where the fish will leap
     pr = R - 30
     band(s, (58, 66, 84), pr - 5, pr + 5, -90, 270, 6)

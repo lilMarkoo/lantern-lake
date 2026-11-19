@@ -10,6 +10,7 @@ from data import FISH, JUNK, RARITY_WEIGHT, SPOT_FISH
 from minigame import ReelGame, LegendGame
 import coast
 import legends
+import lakelife
 import seasons
 
 PLAYER_X = 238
@@ -135,6 +136,7 @@ class Fishing:
         self.slowmo = 0.0            # a breath of slow motion as a catch clears the water
         self.drip_t = 0.0
         self.ring_t = 1.0            # the next little ring the resting bobber sends out
+        self.react = None            # [kind, seconds]: the angler hops on a bite, sighs when one gets away
         if not hasattr(self, 'aim'):
             self.aim = 0.33
 
@@ -194,7 +196,7 @@ class Fishing:
             self.nibbles = []
             if not junk and self.shadow is None:
                 self._spawn_shadow()
-            g.toast("A twitch on the nibble! Here it comes...", (90, 150, 190))
+            g.toast_few('twitch', "A twitch on the nibble! Here it comes...", (90, 150, 190))
         elif self.twitches <= len(TWITCH_CUT):
             self.bite_at = max(self.t + 0.7, self.bite_at - TWITCH_CUT[self.twitches - 1])
         else:
@@ -231,9 +233,9 @@ class Fishing:
         self.pressing = False
         self.twitches = 0
         if self.hot:
-            g.toast('Right on the bubbles! Something is down there...', (90, 150, 190))
+            g.toast_few('bubbles', 'Right on the bubbles! Something is down there...', (90, 150, 190))
         elif self.school:
-            g.toast("Into the school! They're feeding.", (90, 150, 190))
+            g.toast_few('school', "Into the school! They're feeding.", (90, 150, 190))
         self.catch = self.pick(self.d)
         spec = self.catch['spec']
         base = self.rng.uniform(2.5, 7.5)
@@ -256,6 +258,8 @@ class Fishing:
             base *= 0.45
         elif self.school:
             base *= 0.5
+        if lakelife.rising(g):
+            base *= 0.7                   # the evening rise: they're feeding
         self.bite_at = base
         self.nibbles = []
         if base > 1.8:
@@ -277,6 +281,9 @@ class Fishing:
         spot = getattr(g, 'spot', 'dock')
         d = spot_depth(spot, d)
         legend = None
+        rise = lakelife.rising(g)
+        if not hasattr(self, 'recent'):
+            self.recent = []          # the last few fish picked
         for f in FISH:
             if spot == 'dock':
                 if f['spot']:
@@ -328,7 +335,11 @@ class Fishing:
             if rod == 'starlight' and r == 5:
                 w *= 1.5
             if f['id'] not in g.journal:
-                w *= 1.3
+                w *= 2.0
+            if r <= 1:
+                w *= 0.55 ** self.recent.count(f['id'])     # the same common fish again and again? less so
+            if r >= 2 and rise:
+                w *= 1.5                  # the evening rise brings the better fish up
             if f.get('event'):
                 w *= 4
             if f['id'] == run:
@@ -379,6 +390,8 @@ class Fishing:
             if x <= 0:
                 spec = f
                 break
+        if not spec.get('junk'):
+            self.recent = (self.recent + [spec['id']])[-8:]
         lo, hi = spec['size']
         r = min(1.0, self.rng.random() ** 1.7 + g.luck * 0.03 + (0.12 if spot == 'deep' else 0)
                 + g.boost('size'))
@@ -396,6 +409,7 @@ class Fishing:
         g.world.ripple(x, y, 14)
         g.world.ripple(x, y, 8, 10)
         g.audio.play('bloop', 0.65, x / W)
+        self.react = ['hop', 0.0]
         g.audio.play('bite', 0.45, x / W)
         self._buzz(0.85, 0.5, 260)
         g.on_bite()
@@ -469,6 +483,7 @@ class Fishing:
 
     def fail(self, text, sound='sad'):
         g = self.g
+        self.react = ['slump', 0.0]
         g.toast(text, (200, 120, 100))
         g.audio.play(sound, 0.6)
         self.flee_shadow()
@@ -498,6 +513,10 @@ class Fishing:
         if self.slowmo > 0:
             self.slowmo -= dt
             dt *= 0.3
+        if self.react:
+            self.react[1] += dt
+            if self.react[1] > {'hop': 0.35, 'slump': 1.8}.get(self.react[0], 1.0):
+                self.react = None
         self.t += dt
         st = self.state
         target = -55.0
