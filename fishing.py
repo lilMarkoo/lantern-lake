@@ -122,6 +122,9 @@ class Fishing:
         self.fish_pos = None
         self.fly_pos = None
         self.leap_h = 0.0
+        self.snag = False            # Lily Cove: the hook caught in the lily stems
+        self.snag_rolled = False
+        self.drop_t = 0.0            # The Deep: a hooked fish bolts for the bottom first
         self.message = ''
         self.pressing = False
         self.hold_t = 0.0
@@ -150,6 +153,8 @@ class Fishing:
                 return
             if seasons.fly_on(g):
                 seasons.start_fly(self)          # the creek with a fly rod: cast in rhythm
+                return
+            if not g.bait_ready():
                 return
             self.fly_q = 0
             self.state = 'charging'
@@ -180,6 +185,18 @@ class Fishing:
         g = self.g
         x, y = self.dst
         persp = 0.5 + (y - HORIZON) / 170
+        if self.snag:
+            self.twitch_anim = 0.3
+            g.world.ripple(x, y, 3 + 3 * persp, 10, 150)
+            g.audio.play('plop', 0.25, x / W)
+            if self.rng.random() < 0.38:
+                self.snag = False
+                self.bite_at = self.t + self.rng.uniform(4.0, 9.0)
+                g.world.splash(x, y, 4, 0.4)
+                g.toast('It came free! Bait and all.', (90, 150, 110))
+            else:
+                g.toast_few('snag_tug', 'Still stuck in the stems...', (150, 140, 120), 2)
+            return
         if x > self.tip[0] + 30:
             x -= 2 + 2 * persp
             y = min(y + 0.8 * persp, 322)
@@ -232,6 +249,7 @@ class Fishing:
         self.school = not self.hot and w.take_school(x, y, persp)
         self.pressing = False
         self.twitches = 0
+        self.snag = self.snag_rolled = False
         if self.hot:
             g.toast_few('bubbles', 'Right on the bubbles! Something is down there...', (90, 150, 190))
         elif self.school:
@@ -296,6 +314,8 @@ class Fishing:
                 continue                   # legends only ever bite on their own lure...
             if f.get('tide') and not coast.fish_ok(g, f):
                 continue                   # at the sea, some fish come and go with the tide
+            if g.spooked(f['id']):
+                continue                   # it got away earlier: it won't come back today
             if f.get('year') and seasons.year(g) < f['year']:
                 continue                   # new arrivals in year two
             fw = seasons.fly_weight(self, f)
@@ -435,6 +455,11 @@ class Fishing:
             g.audio.play('warn', 0.8)
         else:
             self.mg = ReelGame(spec, g.rod_spec(), g.assist(), self.rng, size_k)
+        self.drop_t = 0.0
+        if getattr(g, 'spot', 'dock') == 'deep' and not isinstance(self.mg, LegendGame):
+            # deep water: it bolts straight for the bottom, heavy on the line, and you follow the bubbles
+            self.drop_t = self.mg.dive = (1.3 + 0.15 * spec['rarity']) * (1.2 if g.assist() else 1.0)
+            g.toast_few('deep_drop', 'Deep water! It bolts for the bottom. Follow the bubbles.', (80, 120, 170), 2)
         self.pressing = False
         self.fdir = 1.0 if self.rng.random() < 0.5 else -1.0
         if not self.shadow or self.shadow['mode'] != 'approach':
@@ -549,16 +574,35 @@ class Fishing:
                 self.land()
         elif st == 'waiting' and self.pressing and self.hold_t + dt >= HOLD_REEL:
             self.pressing = False
-            g.toast('You reel in the line.', (150, 140, 130))
+            if self.snag:
+                self.snag = False
+                g.use_bait()
+                g.world.splash(self.dst[0], self.dst[1], 6, 0.5, (120, 160, 90))
+                g.toast('It tears free, but the bait stays down in the weeds.', (150, 140, 120))
+            else:
+                g.toast('You reel in the line.', (150, 140, 130))
             self.flee_shadow()
             self.to_reel_back()
         elif st == 'waiting':
             target = -40
             if self.pressing:
                 self.hold_t += dt
-            if getattr(g, 'spot', 'dock') == 'creek':
+            spot = getattr(g, 'spot', 'dock')
+            if spot == 'creek':
                 # the current carries the bobber downstream (to the right) until the line pulls tight
                 self.dst = (min(self.dst[0] + CREEK_DRIFT * dt, min(628, self.drift_max)), self.dst[1])
+            elif (spot == 'cove' and not self.snag_rolled and self.t > 2.5 and self.t < self.bite_at - 2.6
+                  and self.shadow is None):
+                # the cove's lily stems: now and then the hook catches in them
+                self.snag_rolled = True
+                if self.rng.random() < 0.2 and not self.catch['spec'].get('junk'):
+                    self.snag = True
+                    self.bite_at = 1e9
+                    self.nibbles = []
+                    g.world.ripple(self.dst[0], self.dst[1], 5, 10, 140)
+                    g.audio.play('plop', 0.3, self.dst[0] / W)
+                    g.toast_few('snag', 'Snagged in the lily stems! Tap to work it loose, or hold to pull free '
+                                        '(the bait stays behind).', (120, 150, 90), 3)
             x, y = self.dst
             self.nib_anim = max(0, self.nib_anim - dt)
             self.twitch_anim = max(0.0, self.twitch_anim - dt)
@@ -566,7 +610,11 @@ class Fishing:
             hop = -math.sin(math.pi * self.twitch_anim / 0.3) * 2.0 if self.twitch_anim > 0 else 0
             if self.twitch_anim > 0:
                 target = -46
-            self.bob = [x, y + math.sin(self.t * 2.6) * 0.7 + dip + hop]
+            if self.snag:
+                target = -44                     # the line pulled tight to the weeds, the bobber leaning
+                self.bob = [x, y + 1.6 + hop * 0.5]
+            else:
+                self.bob = [x, y + math.sin(self.t * 2.6) * 0.7 + dip + hop]
             self.ring_t -= dt
             if self.ring_t <= 0:
                 # the bobber rocking on the water sends out little rings
@@ -588,7 +636,11 @@ class Fishing:
             x, y = self.dst
             self.bob = [x, y + min(9.0, self.t * 70)]       # yanked clean under
             if self.t > self.window:
-                self.fail('It got away... bites are quick!')
+                if g.bait == 'worm':
+                    g.use_bait()
+                    self.fail('It got away with the worm... bites are quick!')
+                else:
+                    self.fail('It got away... bites are quick!')
         elif st == 'fight':
             self._fight(dt)
             if self.state == 'fight':
@@ -738,6 +790,10 @@ class Fishing:
         g = self.g
         mg = self.mg
         aim, steer = g.reel_input()
+        if self.drop_t > 0:
+            self.drop_t -= dt
+            if mg.behavior != 'diver':
+                mg.dive = max(0.0, self.drop_t)
         mg.update(dt, g.holding, aim, steer)
         fx, fy = self.fish_pos
         w = g.world
@@ -818,6 +874,8 @@ class Fishing:
             self.start_landing(self.fish_pos)
             return
         legend = getattr(mg, 'stage', 0)
+        if mg.result in ('snap', 'escape') and not legend and mg.spec['rarity'] >= 3:
+            g.spook(mg.spec)
         if mg.result == 'snap':
             g.shake(3)
             g.audio.play('twang', 0.7, fx / W)
@@ -901,6 +959,9 @@ class Fishing:
                 x += math.sin(self.t * 50) * 1.2
         elif s['mode'] == 'approach':
             flip = (self.bob[0] if self.bob else x) < x
+        if mg and getattr(mg, 'dive', 0) <= 0 and self.leap_h <= 1:
+            self._draw_hooked(frame, spec, w, flip, x, y, mg)
+            return
         sil = silhouette(spec, w, flip)
         if self.state == 'fight' and getattr(mg, 'sulk', 0) <= 0:
             # the tail beats: squash the shadow a little in time
@@ -908,6 +969,33 @@ class Fishing:
             sil = pygame.transform.scale(sil, (max(2, int(sil.get_width() * k)), sil.get_height()))
         sil.set_alpha(int(alpha))
         frame.blit(sil, (int(x - sil.get_width() / 2), int(y - sil.get_height() / 2)))
+
+    def _draw_hooked(self, frame, spec, w, flip, x, y, mg):
+        """The hooked fish itself, big and in colour just under the surface: it rolls and thrashes on the line,
+        harder when it lunges, the water tinting it more toward its belly."""
+        import numpy as np
+        size = min(56.0, w * 2.3)
+        base = art.fish_sprite(spec, 1)
+        bw, bh = base.get_size()
+        sulk = getattr(mg, 'sulk', 0) > 0
+        busy = mg.lunge > 0 or mg.warn > 0
+        wag = 1 + (0.03 if sulk else 0.12) * math.sin(self.t * (22 if busy else 9))
+        sw = max(6, int(size * wag))
+        sh = max(3, int(bh * size / bw))
+        img = pygame.transform.scale(base, (sw, sh))
+        if flip:
+            img = pygame.transform.flip(img, True, False)
+        rgb = pygame.surfarray.pixels3d(img)
+        k = np.linspace(0.25, 0.7, sh, dtype=np.float32)[None, :, None]
+        water = np.array((52, 96, 116), dtype=np.float32)
+        rgb[:] = (rgb * (1 - k) + water * k).astype(np.uint8)
+        del rgb
+        ang = math.sin(self.t * (4 if sulk else 7)) * 6
+        if busy:
+            ang += math.sin(self.t * 31) * 16
+        img = pygame.transform.rotate(img, ang * (-1 if flip else 1))
+        img.set_alpha(225)
+        frame.blit(img, (int(x - img.get_width() / 2), int(y + 1 - img.get_height() / 2)))
 
     def draw_water(self, near):
         st = self.state

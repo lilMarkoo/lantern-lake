@@ -849,6 +849,29 @@ class AquariumScene:
             spr = f['spr'] if f['vx'] > 0 else f['flip']
             y = f['y'] + math.sin(t * 1.5 + f['ph']) * 1.5
             frame.blit(spr, spr.get_rect(center=(int(f['x'] - (e['rect'].x - r.x)), int(y))))
+        # the tanks' own little residents, so no tank is ever just empty water: a school of fry turning
+        # together, and a snail making its slow way along the glass
+        if st not in ('legend',):
+            n = 7 if st != 'pots' else 0
+            cx = r.x + r.w / 2 + math.sin(t * 0.23 + e['cx']) * (r.w / 2 - 22)
+            cy = r.y + r.h * 0.45 + math.sin(t * 0.41 + e['cx'] * 0.7) * (r.h * 0.22)
+            dirn = 1 if math.cos(t * 0.23 + e['cx']) > 0 else -1
+            fry = lerp_c(WATER.get(st, WATER['lake'])[0], (246, 236, 200), 0.75)
+            for i in range(n):
+                fx = cx + math.sin(i * 2.1 + t * 0.9) * 6 + (i % 3) * 3 * dirn
+                fy = cy + math.cos(i * 1.7 + t * 1.1) * 3 + (i // 3) * 2
+                frame.fill(fry, (int(fx), int(fy), 3, 2))
+                frame.set_at((int(fx) + (2 if dirn > 0 else -1), int(fy)), lerp_c(fry, (40, 40, 40), 0.5))
+            sx = r.x + 6 + int((t * 1.2 + e['cx']) % max(1, r.w - 12))
+            sy = r.bottom - 9
+            frame.fill((150, 110, 80), (sx, sy - 2, 3, 3))
+            frame.fill((200, 170, 120), (sx + 1, sy - 1, 1, 1))
+            frame.fill((120, 130, 110), (sx + 3, sy, 2, 1))
+            if st == 'pots':                                          # a hermit crab, sidling about
+                hx = r.x + 16 + int((math.sin(t * 0.3) * 0.5 + 0.5) * (r.w - 32))
+                frame.fill((210, 110, 80), (hx - 2, r.bottom - 10, 5, 3))
+                frame.fill((230, 210, 170), (hx - 3, r.bottom - 13, 4, 3))
+                frame.set_at((hx + 3, r.bottom - 11), (210, 110, 80))
         # moving water details
         if st == 'creek':
             for i in range(6):
@@ -887,9 +910,11 @@ class AquariumScene:
         sc = self.scroll
         ui.blit_text(s, 'Fernwick Aquarium', (sw // 2, 26), 'h3', (255, 250, 240), 'center', (30, 30, 50))
         done = finished(g)
-        ui.blit_text(s, '%d of %d fish on display    Exhibits complete %d / %d    Closes 5 PM'
-                     % (len(set(g.museum)), len(FISH), len(done), len(EXHIBITS)),
-                     (sw // 2, 58), 'small', (230, 240, 246), 'center', (20, 30, 40))
+        n_on = len(set(g.museum))
+        head = ('The tanks are ready for your first fish.    Closes 5 PM' if not n_on else
+                '%d of %d fish on display    Exhibits complete %d / %d    Closes 5 PM'
+                % (n_on, len(FISH), len(done), len(EXHIBITS)))
+        ui.blit_text(s, head, (sw // 2, 58), 'small', (230, 240, 246), 'center', (20, 30, 40))
         ui.blit_text(s, fmt_clock(g.minute), (24, 22), 'bodyb', (255, 250, 240), 'topleft', (30, 30, 50))
         # what neighbours say when you're near
         import town
@@ -901,7 +926,8 @@ class AquariumScene:
                 self._bubble(s, text, int((v['x'] - sc) * k), int((FLOOR - up) * k))
         if abs(self.x - DESK_X) < 50:
             n = len(set(g.museum))
-            text = ('Juniper: Welcome in! %d of %d fish on display.' % (n, len(FISH)) if n < len(FISH) else
+            text = ("Juniper: Welcome in! Bring me any fish you catch and it gets a tank of its own." if not n else
+                    'Juniper: Welcome in! %d of %d fish on display.' % (n, len(FISH)) if n < len(FISH) else
                     'Juniper: Every fish in the lake, under one roof. Thank you.')
             self._bubble(s, text, int((DESK_X - sc) * k), int((FLOOR - (66 if p else 54)) * k))
         if self.sitting is not None:

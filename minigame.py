@@ -19,7 +19,8 @@ import art
 import ui as U
 from data import RARITY_COLORS
 
-CX, CY, R = 204, 446, 88           # ring position on the 1280x720 interface layer
+CX, CY, R = 116, 552, 60           # ring position on the 1280x720 interface layer: a small readout in the
+K = R / 88                          # corner (the fish on the water is the show); K scales its insides
 TARGET = 40                        # leap timing: the radius the shrinking ring has to meet
 PERFECT, NICE = 9, 22              # leap timing windows in pixels
 LEAPS = {1: 0, 2: 1, 3: 2, 4: 2, 5: 3}
@@ -488,14 +489,19 @@ def band(dst, color, r0, r1, a0, a1, step=4):
     pygame.draw.polygon(dst, color, outer + inner)
 
 
+def _tx(ui, text, font):
+    """Centre x for words over the ring, kept on screen now that the ring sits in the corner."""
+    return max(CX, 16 + ui.fonts[font].size(text)[0] // 2)
+
+
 def _backdrop():
     s = _cache.get('bg')
     if s is None:
-        size = (R + 52) * 2
+        size = (R + 40) * 2
         s = pygame.Surface((size, size), pygame.SRCALPHA)
         c = size // 2
         for i in range(24):
-            r = R + 52 - i
+            r = R + 40 - i
             pygame.draw.circle(s, (22, 30, 46, min(140, 12 + i * 6)), (c, c), r)
         _cache['bg'] = s
     return s
@@ -513,15 +519,15 @@ def draw(s, ui, mg, t, title, teach=True):
     # title above the ring
     if mg.leap and not mg.leap['done']:
         title = 'It leaps! Click as the rings meet'
-    ui.blit_text(s, title, (CX, CY - R - 38), 'h3', (255, 246, 228), 'center', (30, 20, 30))
+    ui.blit_text(s, title, (_tx(ui, title, 'h3'), CY - R - 32), 'h3', (255, 246, 228), 'center', (30, 20, 30))
     if stage:
         for i in range(3):
-            px = CX - 30 + i * 30
+            px = CX - 24 + i * 24
             on = i < stage
-            pygame.draw.circle(s, (60, 40, 30), (px, CY - R - 62), 9)
-            pygame.draw.circle(s, (255, 214, 100) if on else (110, 100, 90), (px, CY - R - 62), 7)
+            pygame.draw.circle(s, (60, 40, 30), (px, CY - R - 58), 8)
+            pygame.draw.circle(s, (255, 214, 100) if on else (110, 100, 90), (px, CY - R - 58), 6)
             if i == stage - 1:
-                pygame.draw.circle(s, (255, 250, 230), (px, CY - R - 62), 11, 2)
+                pygame.draw.circle(s, (255, 250, 230), (px, CY - R - 58), 10, 2)
         if mg.banner:
             text, bt = mg.banner
             a = min(1.0, bt / 0.25, max(0.0, (2.8 - bt) / 0.5))
@@ -541,34 +547,34 @@ def draw(s, ui, mg, t, title, teach=True):
     # water ring with drifting sparkles, in the fish's own colours: a rare fish's ring looks rare
     rar = spec.get('rarity', 1)
     ring, deep, rim, rim2, spark = RING_COLS.get(rar, RING_COLS[1])
-    pygame.draw.circle(s, ring, (CX, CY), R + 14)
-    pygame.draw.circle(s, deep, (CX, CY), R - 14)
-    pygame.draw.circle(s, rim, (CX, CY), R + 14, 2)
-    pygame.draw.circle(s, rim2, (CX, CY), R - 14, 2)
-    n = 18 + 6 * max(0, rar - 1)
+    pygame.draw.circle(s, ring, (CX, CY), R + 11)
+    pygame.draw.circle(s, deep, (CX, CY), R - 11)
+    pygame.draw.circle(s, rim, (CX, CY), R + 11, 2)
+    pygame.draw.circle(s, rim2, (CX, CY), R - 11, 2)
+    n = 14 + 4 * max(0, rar - 1)
     for i in range(n):
         a = i * 360 / n + t * (10 + 6 * rar) * (1 if i % 2 else -1)
-        x, y = _pt(a, R + math.sin(t * 2 + i) * 6)
+        x, y = _pt(a, R + math.sin(t * 2 + i) * 4)
         s.fill(spark, (int(x), int(y), 2, 2))
     # progress track inside the ring, with stars where the fish will leap
-    pr = R - 30
-    band(s, (58, 66, 84), pr - 5, pr + 5, -90, 270, 6)
+    pr = R - 21
+    band(s, (58, 66, 84), pr - 4, pr + 4, -90, 270, 6)
     if mg.progress > 0.005:
-        band(s, (130, 206, 176), pr - 5, pr + 5, -90, -90 + 360 * mg.progress, 4)
+        band(s, (130, 206, 176), pr - 4, pr + 4, -90, -90 + 360 * mg.progress, 4)
         hx, hy = _pt(-90 + 360 * mg.progress, pr)
-        pygame.draw.circle(s, (240, 252, 244), (int(hx), int(hy)), 6)
-        pygame.draw.circle(s, (60, 110, 96), (int(hx), int(hy)), 6, 2)
+        pygame.draw.circle(s, (240, 252, 244), (int(hx), int(hy)), 5)
+        pygame.draw.circle(s, (60, 110, 96), (int(hx), int(hy)), 5, 2)
     if stage:
         for i, at in enumerate(mg.STAGE_AT[1:]):
             a = -90 + 360 * at
-            p0, p1 = _pt(a, pr - 10), _pt(a, pr + 10)
+            p0, p1 = _pt(a, pr - 7), _pt(a, pr + 7)
             pygame.draw.line(s, (255, 236, 170) if stage > i + 1 else (150, 140, 120), p0, p1, 3)
         if mg.floor > 0 and mg.floor_t > 0 and int(t * 8) % 2:
-            band(s, (240, 120, 100), pr - 7, pr + 7, -90 + 360 * mg.floor - 4, -90 + 360 * mg.floor + 4, 2)
+            band(s, (240, 120, 100), pr - 5, pr + 5, -90 + 360 * mg.floor - 4, -90 + 360 * mg.floor + 4, 2)
     for m in mg.all_marks:
         x, y = _pt(-90 + 360 * m, pr)
         done = m not in mg.leap_marks
-        U.star(s, (int(x), int(y)), 7, (200, 190, 170) if done else (255, 226, 120))
+        U.star(s, (int(x), int(y)), 5, (200, 190, 170) if done else (255, 226, 120))
     # glimmer
     g = mg.glim
     if g:
@@ -576,24 +582,24 @@ def draw(s, ui, mg, t, title, teach=True):
         tw = 0.7 + 0.3 * math.sin(t * 12)
         fade = min(1.0, g['life'] / 0.6)
         if fade > 0.3 or int(t * 10) % 2:
-            U.star(s, (int(x), int(y)), int(9 * tw + 2), (255, 222, 110))
+            U.star(s, (int(x), int(y)), int(6 * tw + 2), (255, 222, 110))
             pygame.draw.circle(s, (255, 244, 200), (int(x), int(y)), 3)
         if g['fill'] > 0:
-            pygame.draw.arc(s, (255, 250, 220), (int(x) - 15, int(y) - 15, 30, 30), math.pi / 2,
+            pygame.draw.arc(s, (255, 250, 220), (int(x) - 11, int(y) - 11, 22, 22), math.pi / 2,
                             math.pi / 2 + g['fill'] * 2 * math.pi, 3)
     # the golden player arc; brackets at both ends so it reads without colour
     a0, a1 = mg.pa - mg.arc / 2, mg.pa + mg.arc / 2
     on = mg.in_arc and not mg.leap
     glow = 0.5 + 0.5 * math.sin(t * 10) if on else 0
     col = art.lerp_c((206, 160, 70), (255, 226, 130), 0.5 + 0.5 * glow) if on else (190, 150, 80)
-    band(s, art.darken(col, 0.35), R - 18, R + 18, a0 - 1, a1 + 1)
-    band(s, col, R - 16, R + 16, a0, a1)
-    band(s, art.lerp_c(col, (255, 250, 230), 0.5), R + 10, R + 15, a0 + 2, a1 - 2)
+    band(s, art.darken(col, 0.35), R - 13, R + 13, a0 - 1, a1 + 1)
+    band(s, col, R - 11, R + 11, a0, a1)
+    band(s, art.lerp_c(col, (255, 250, 230), 0.5), R + 7, R + 10, a0 + 2, a1 - 2)
     for a, d in ((a0, 1), (a1, -1)):
-        p0, p1 = _pt(a, R - 22), _pt(a, R + 22)
-        pygame.draw.line(s, (72, 46, 32), p0, p1, 4)
-        pygame.draw.line(s, (72, 46, 32), p1, _pt(a + 6 * d, R + 22), 4)
-        pygame.draw.line(s, (72, 46, 32), p0, _pt(a + 6 * d, R - 22), 4)
+        p0, p1 = _pt(a, R - 15), _pt(a, R + 15)
+        pygame.draw.line(s, (72, 46, 32), p0, p1, 3)
+        pygame.draw.line(s, (72, 46, 32), p1, _pt(a + 6 * d, R + 15), 3)
+        pygame.draw.line(s, (72, 46, 32), p0, _pt(a + 6 * d, R - 15), 3)
     # bubbles where a diving fish is (it is out of sight)
     for a, age in getattr(mg, 'bubbles', ()):
         bx, by = _pt(a, R + math.sin(age * 9 + a) * 4)
@@ -608,19 +614,19 @@ def draw(s, ui, mg, t, title, teach=True):
     rc = RARITY_COLORS[spec['rarity']] if spec['rarity'] else (200, 200, 200)
     halo = _cache.get(('halo', rc))
     if halo is None:
-        halo = pygame.Surface((64, 64), pygame.SRCALPHA)
+        halo = pygame.Surface((48, 48), pygame.SRCALPHA)
         for i in range(8, 0, -1):
-            pygame.draw.circle(halo, (*rc, 16 + (8 - i) * 10), (32, 32), i * 4)
+            pygame.draw.circle(halo, (*rc, 16 + (8 - i) * 10), (24, 24), i * 3)
         _cache[('halo', rc)] = halo
     if not diving:
-        s.blit(halo, (int(fx) - 32, int(fy) - 32))
+        s.blit(halo, (int(fx) - 24, int(fy) - 24))
     cw = mg.fv >= 0
     heading = mg.fa + (90 if cw else -90)              # direction of travel on screen
     key = ('fm', spec['id'], int(round(heading / 15)) % 24)
     spr = _cache.get(key)
     if spr is None:
         base = art.fish_sprite(spec, 1)
-        base = pygame.transform.scale(base, (int(base.get_width() * 1.4), int(base.get_height() * 1.4)))
+        base = pygame.transform.scale(base, (int(base.get_width() * 1.0), int(base.get_height() * 1.0)))
         h = int(round(heading / 15)) * 15
         if 90 < h % 360 < 270:                          # keep the fish upright when it swims left
             base = pygame.transform.flip(base, False, True)
@@ -636,7 +642,7 @@ def draw(s, ui, mg, t, title, teach=True):
         s.blit(spr, spr.get_rect(center=(int(fx), int(fy))))
     if getattr(mg, 'sulk', 0) > 0:
         # sulking: a heavy little weight sign over it
-        bx, by = int(fx), int(fy) - 32
+        bx, by = int(fx), int(fy) - 26
         pygame.draw.circle(s, (70, 64, 70), (bx, by + 3), 10)
         pygame.draw.rect(s, (70, 64, 70), (bx - 4, by - 9, 8, 5))
         pygame.draw.circle(s, (150, 140, 140), (bx - 3, by + 1), 3)
@@ -646,44 +652,44 @@ def draw(s, ui, mg, t, title, teach=True):
             tx, ty = _pt(mg.fa - mg.lunge_dir * i * 7, R)
             pygame.draw.circle(s, (220, 240, 250), (int(tx), int(ty)), 4 - i // 2)
     if mg.warn > 0:
-        bx, by = int(fx), int(fy) - 34 - int(abs(math.sin(t * 14)) * 5)
-        pygame.draw.circle(s, (250, 160, 70), (bx, by), 15)
-        pygame.draw.circle(s, (130, 70, 30), (bx, by), 15, 2)
+        bx, by = int(fx), int(fy) - 26 - int(abs(math.sin(t * 14)) * 4)
+        pygame.draw.circle(s, (250, 160, 70), (bx, by), 12)
+        pygame.draw.circle(s, (130, 70, 30), (bx, by), 12, 2)
         ui.blit_text(s, '!', (bx, by), 'h2', (255, 255, 245), 'center')
     # centre: the reel, or the leap timing rings
     L = mg.leap
     if L:
-        dr = R - 37
+        dr = R - 25
         pygame.draw.circle(s, (250, 240, 214), (CX, CY), dr)
         pygame.draw.circle(s, (120, 82, 58), (CX, CY), dr, 3)
-        pygame.draw.circle(s, (240, 214, 150), (CX, CY), TARGET + PERFECT, 0)
-        pygame.draw.circle(s, (250, 240, 214), (CX, CY), TARGET - PERFECT, 0)
-        pygame.draw.circle(s, (200, 140, 50), (CX, CY), TARGET, 4)
+        pygame.draw.circle(s, (240, 214, 150), (CX, CY), int((TARGET + PERFECT) * K), 0)
+        pygame.draw.circle(s, (250, 240, 214), (CX, CY), int((TARGET - PERFECT) * K), 0)
+        pygame.draw.circle(s, (200, 140, 50), (CX, CY), int(TARGET * K), 3)
         if not L['done']:
-            r = max(2, int(L['r']))
-            pygame.draw.circle(s, (255, 255, 255), (CX, CY), r, 4)
+            r = max(2, int(L['r'] * K))
+            pygame.draw.circle(s, (255, 255, 255), (CX, CY), r, 3)
             pygame.draw.circle(s, (90, 60, 40), (CX, CY), r + 2, 1)
         else:
             word = {'perfect': 'Perfect!', 'nice': 'Nice!', 'miss': 'Missed'}[L['done']]
-            ui.blit_text(s, word, (CX, CY), 'h3', U.INK, 'center')
+            ui.blit_text(s, word, (CX, CY), 'bodyb', U.INK, 'center')
     else:
-        pygame.draw.circle(s, (120, 82, 58), (CX, CY), 32)
-        pygame.draw.circle(s, (232, 214, 182), (CX, CY), 28)
+        pygame.draw.circle(s, (120, 82, 58), (CX, CY), 23)
+        pygame.draw.circle(s, (232, 214, 182), (CX, CY), 20)
         for i in range(6):
             a = mg.spin + i * math.pi / 3
-            pygame.draw.line(s, (150, 112, 82), (CX, CY), (CX + math.cos(a) * 24, CY + math.sin(a) * 24), 3)
-        pygame.draw.circle(s, (120, 82, 58), (CX, CY), 7)
-        hx, hy = CX + math.cos(mg.spin) * 22, CY + math.sin(mg.spin) * 22
-        pygame.draw.circle(s, (210, 120, 90), (int(hx), int(hy)), 7)
-        pygame.draw.circle(s, (120, 60, 50), (int(hx), int(hy)), 7, 2)
+            pygame.draw.line(s, (150, 112, 82), (CX, CY), (CX + math.cos(a) * 17, CY + math.sin(a) * 17), 2)
+        pygame.draw.circle(s, (120, 82, 58), (CX, CY), 5)
+        hx, hy = CX + math.cos(mg.spin) * 16, CY + math.sin(mg.spin) * 16
+        pygame.draw.circle(s, (210, 120, 90), (int(hx), int(hy)), 5)
+        pygame.draw.circle(s, (120, 60, 50), (int(hx), int(hy)), 5, 2)
     # popups float up from the centre
     for text, col, pt in mg.popups:
         a = 1 - pt / 1.1
-        y = CY - 80 - pt * 40
-        ui.blit_text(s, text, (CX, y), 'bodyb', col, 'center', (30, 20, 30), alpha=255 * min(1, a * 2))
+        y = CY - R - 8 - pt * 40
+        ui.blit_text(s, text, (_tx(ui, text, 'bodyb'), y), 'bodyb', col, 'center', (30, 20, 30), alpha=255 * min(1, a * 2))
     # line strain: hatched danger end so it reads without colour
-    bw, bh = 210, 14
-    bx, by = CX - bw // 2, CY + R + 34
+    bw, bh = 168, 12
+    bx, by = max(16, CX - bw // 2), CY + R + 30
     ui.blit_text(s, 'Line strain', (bx, by - 22), 'smallb', (250, 244, 232), 'topleft', (30, 20, 30))
     if mg.coins:
         U.coin(s, (bx + bw - 54, by - 13), 8)
@@ -712,7 +718,7 @@ def draw(s, ui, mg, t, title, teach=True):
         elif getattr(mg, 'dive', 0) > 0:
             lines = ('It dived deep: follow the bubbles',)
         for i, line in enumerate(lines):
-            ui.blit_text(s, line, (CX, by + bh + 12 + i * 20), 'small', (240, 232, 220), 'midtop', (30, 20, 30))
+            ui.blit_text(s, line, (_tx(ui, line, 'small'), by + bh + 10 + i * 20), 'small', (240, 232, 220), 'midtop', (30, 20, 30))
         return
     if ui.pad_layout:
         lines = ('Steer with the left stick', 'Hold %s to reel faster, let go when it lunges' % ui.pad_label('A'))
@@ -723,4 +729,4 @@ def draw(s, ui, mg, t, title, teach=True):
     elif getattr(mg, 'dive', 0) > 0:
         lines = (lines[0], 'It dived deep: follow the bubbles')
     for i, line in enumerate(lines):
-        ui.blit_text(s, line, (CX, by + bh + 12 + i * 20), 'small', (240, 232, 220), 'midtop', (30, 20, 30))
+        ui.blit_text(s, line, (_tx(ui, line, 'small'), by + bh + 10 + i * 20), 'small', (240, 232, 220), 'midtop', (30, 20, 30))

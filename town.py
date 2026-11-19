@@ -114,6 +114,14 @@ PLACES = [
     dict(id='lookout', name='Lookout bench', x0=1790, x1=1910, door=1846, hours=None),
 ]
 PLACE_BY_ID = {p['id']: p for p in PLACES}
+LAKE_VIEW = (1764, GROUND - 34)  # where the lake opens up behind the lookout (x, the far shore's y)
+BENCH_X = 1846                   # the lookout bench: you sit here, Biscuit curls up just to your right
+BENCH_SEAT = GROUND - 10
+TOWN_Z = 1.75                    # how close the camera sits in the village
+# things along the front of the street, in front of everyone who walks past
+FRONT = [(168, 'barrel'), (300, 'crates'), (560, 'bike'), (938, 'churns'), (1012, 'crates'), (1236, 'barrel'),
+         (1478, 'bike'), (1664, 'churns')]
+PIGEON_SPOTS = (618, 690, 1004, 1460)
 
 SNACKS = [
     dict(id='bun', name='Honey Bun', price=30, desc='Sticky and warm. A little luck for today.'),
@@ -205,6 +213,70 @@ def walker(s, x, fy, face, step, shirt, hair, hat, season, kid=False, glasses=Fa
         pygame.draw.ellipse(s, umbrella, (x - 9 + 2 * face, top - 11, 19, 9))
         s.fill((0, 0, 0, 0), (x - 9 + 2 * face, top - 6, 19, 4))
         pygame.draw.line(s, darken(umbrella, 0.3), (x - 9 + 2 * face, top - 7), (x + 9 + 2 * face, top - 7))
+
+
+def sitter(s, x, seat, shirt, hair, hat, season, breathe=0):
+    """You on the lookout bench, seen from behind: looking out over the lake."""
+    pants = (72, 92, 140)
+    by = seat + 3 - breathe
+    s.fill(pants, (x - 4, seat - 3, 8, 3))                         # sitting on the plank
+    s.fill(shirt, (x - 4, by - 15, 8, 10))                          # your back
+    s.fill(darken(shirt, 0.18), (x - 4, by - 15, 1, 10))
+    s.fill(darken(pants, 0.15), (x - 3, by - 15, 1, 7))            # braces
+    s.fill(darken(pants, 0.15), (x + 2, by - 15, 1, 7))
+    if season == 3:
+        s.fill((200, 70, 70), (x - 4, by - 16, 9, 2))
+    s.fill((240, 202, 172), (x - 4, by - 19, 1, 2))                # ears
+    s.fill((240, 202, 172), (x + 3, by - 19, 1, 2))
+    s.fill(hair, (x - 3, by - 21, 7, 6))                            # the back of your head
+    s.fill(darken(hair, 0.15), (x - 3, by - 16, 7, 1))
+    actors.draw_hat(s, hat, x, by, season, hair)
+    s.fill((236, 186, 156), (x + 4, by - 9, 3, 2))                  # a hand resting by Biscuit
+
+
+def draw_front(s, sc, season, t):
+    """Barrels, crates, bikes and milk churns along the front of the street (drawn over everyone's feet)."""
+    y = GROUND + 7
+    for x0, kind in FRONT:
+        x = x0 - sc
+        if not -30 < x < W + 30:
+            continue
+        ground_shadow(s, x, y - 1, 16, 60)
+        if kind == 'barrel':
+            s.fill((128, 84, 54), (x - 6, y - 11, 12, 11))
+            s.fill((96, 62, 40), (x - 6, y - 8, 12, 1))
+            s.fill((96, 62, 40), (x - 6, y - 3, 12, 1))
+            s.fill((150, 102, 66), (x - 5, y - 11, 2, 11))
+            cols = [(250, 160, 190), (250, 120, 110), (230, 140, 60), (230, 236, 244)][season]
+            for j in range(6):
+                s.fill((80, 140, 70) if season != 3 else (60, 100, 70), (x - 5 + j * 2, y - 14, 1, 3))
+                s.fill(cols, (x - 6 + j * 2, y - 16 + (j % 2), 2, 2))
+        elif kind == 'crates':
+            for dx, dy, fruit in ((-9, 0, (210, 70, 60)), (1, 0, (240, 180, 60)), (-4, -8, (120, 170, 70))):
+                s.fill((176, 136, 90), (x + dx, y - 8 + dy, 9, 8))
+                s.fill((136, 100, 64), (x + dx, y - 5 + dy, 9, 1))
+                s.fill((136, 100, 64), (x + dx, y - 8 + dy, 1, 8))
+                for j in range(4):
+                    s.fill(fruit, (x + dx + 1 + j * 2, y - 10 + dy, 2, 2))
+        elif kind == 'bike':
+            fr = (70, 120, 150)
+            for wx in (x - 7, x + 7):
+                pygame.draw.circle(s, (50, 46, 50), (wx, y - 5), 5, 1)
+                s.set_at((wx, y - 5), (120, 120, 120))
+            pygame.draw.line(s, fr, (x - 7, y - 5), (x - 1, y - 11))
+            pygame.draw.line(s, fr, (x - 1, y - 11), (x + 5, y - 11))
+            pygame.draw.line(s, fr, (x + 5, y - 11), (x + 7, y - 5))
+            pygame.draw.line(s, fr, (x - 1, y - 11), (x + 1, y - 5))
+            pygame.draw.line(s, fr, (x + 1, y - 5), (x - 7, y - 5))
+            s.fill((60, 50, 44), (x - 3, y - 13, 4, 1))              # saddle
+            s.fill((150, 110, 70), (x + 4, y - 16, 6, 4))             # a basket of bread on the handlebars
+            s.fill((220, 170, 100), (x + 5, y - 17, 4, 2))
+        elif kind == 'churns':
+            for dx in (-5, 3):
+                s.fill((186, 192, 198), (x + dx - 3, y - 12, 7, 12))
+                s.fill((150, 156, 164), (x + dx - 2, y - 15, 5, 3))
+                s.fill((220, 226, 230), (x + dx - 2, y - 11, 1, 10))
+                s.fill((130, 136, 144), (x + dx - 3, y - 6, 7, 1))
 
 
 def _ridge(w, base, amps, seed):
@@ -1100,6 +1172,25 @@ def build_street(season, projects):
             _wreath(s, hx + 30, GROUND - 19)
         _festoon(s, hx + 2, hx + 56, GROUND - 52, season, lights, 3)
     # --- east end: a grassy lookout over the lake, with a bench
+    # the lake it looks out on: a far shore, then water all the way down to the grass
+    wat_hi = [(150, 190, 206), (136, 182, 204), (156, 168, 170), (206, 220, 232)][season]
+    wat_lo = [(84, 134, 160), (74, 126, 156), (96, 118, 128), (170, 190, 210)][season]
+    shore = [(84, 124, 84), (70, 112, 66), (156, 108, 62), (214, 222, 232)][season]
+    pine = [(56, 92, 68), (48, 84, 58), (78, 92, 62), (120, 140, 150)][season]
+    for x in range(LAKE_VIEW[0], TOWN_W):
+        k = min(1.0, (x - LAKE_VIEW[0]) / 26.0)                 # the hedge thins out into open water
+        top = GROUND - 34 + int(round((1 - k) * 22))
+        for y in range(top, GROUND + 2):
+            c = lerp_c(wat_hi, wat_lo, (y - (GROUND - 34)) / 36.0)
+            s.set_at((x, y), c)
+        s.fill(shore, (x, top - 2, 1, 2))
+        if k >= 1 and (x * 7) % 11 < 4:
+            h = 3 + (x * 13) % 5
+            s.fill(pine, (x, top - 2 - h, 1, h))                   # a far treeline on the other side
+    for x in range(LAKE_VIEW[0] - 4, LAKE_VIEW[0] + 30, 2):          # the hedge the view opens out of
+        h = 30 - (x - LAKE_VIEW[0] + 4)
+        if h > 0:
+            s.fill(darken(shore, 0.2), (x, GROUND - h, 3, h))
     for x in range(1774, TOWN_W, 3):
         hgt = 8 + int(5 * math.sin(x * 0.27))
         col = [(96, 150, 86), (90, 140, 72), (170, 120, 64), (220, 226, 236)][season]
@@ -1196,12 +1287,20 @@ class Town:
         self.lib_page = 0
         self.year = 0                   # which year it is (kept up to date in update)
         self.bake_tab = 'treats'
+        self.bake_anim = None           # Mabel fetching what you bought: dict(id, t0)
+        self.bake_say = None            # (what she's saying, when she started)
         self.hall_tab = 'town'
         self.rt = dict(rings=0, t=0.0, fly=None, marks=[], won=0, msg='', speed=1.6)
         self.near = pygame.Surface((W, H), pygame.SRCALPHA)
         self._fx = None
         import biscuit
         self.cat = biscuit.Follower()   # Biscuit, when she comes along
+        self.sitting = None             # on the lookout bench: dict(t, cat) where cat is 'walk', 'hop' or 'curl'
+        self.pigeons = []
+        for i, px in enumerate(PIGEON_SPOTS):
+            for j in range(2 + i % 2):
+                self.pigeons.append(dict(home=px, x=px + j * 7 - 5.0, y=0.0, vx=0.0, vy=0.0, fly=False,
+                                         face=1 if j % 2 else -1, ph=random.uniform(0, 6), away=0.0))
 
     # ------------------------------------------------------------ helpers
     def to_screen_x(self, x):
@@ -1248,6 +1347,8 @@ class Town:
         return best
 
     def prompt(self, g):
+        if self.sitting is not None:
+            return 'Stand up'
         n = self.nearest(g)
         if not n:
             return None
@@ -1278,8 +1379,12 @@ class Town:
             keys_walk = 0
             if self.target is not None and g.rest_phase is not None:
                 self.target, self.on_arrive = None, None
+        if self.sitting is not None and (keys_walk or self.target is not None or g.overlay not in (None,)):
+            self.stand_up(g)
         if g.overlay is not None:
             pass
+        elif self.sitting is not None:
+            self.sitting['t'] += dt
         elif keys_walk:
             self.target, self.on_arrive = None, None
             moving = keys_walk
@@ -1306,8 +1411,30 @@ class Town:
         self.scroll += (max(0.0, min(TOWN_W - W, want)) - self.scroll) * min(1.0, dt * 6)
         import biscuit
         import discover
-        if biscuit.follows(g) and not discover.drive(g, self, dt):
+        st = self.sitting
+        if st is not None and biscuit.follows(g):
+            # Biscuit trots over, hops up beside you and curls up
+            cat = self.cat
+            spot = BENCH_X + 9
+            if cat.x is None:
+                cat.x = spot - 20
+            if st['cat'] == 'walk':
+                d = spot - cat.x
+                if abs(d) > 1.5:
+                    cat.x += math.copysign(min(abs(d) * 4, 60.0) * dt, d)
+                    cat.face = 1 if d > 0 else -1
+                    cat.step += dt * 12
+                else:
+                    cat.x, cat.step = float(spot), 0.0
+                    st['cat'], st['ct'] = 'hop', 0.0
+            elif st['cat'] == 'hop':
+                st['ct'] += dt
+                if st['ct'] > 0.35:
+                    st['cat'] = 'curl'
+                    g.audio.play('purr', 0.3)
+        elif biscuit.follows(g) and not discover.drive(g, self, dt):
             self.cat.update(dt, self.x, self.face)
+        self._pigeons(dt, g)
         # townsfolk
         m = g.minute
         band = 'bandstand' in g.projects and 1020 <= m < 1260
@@ -1397,7 +1524,61 @@ class Town:
         self.target = float(x)
         self.on_arrive = then
 
+    def _pigeons(self, dt, g):
+        """Pigeons pecking on the pavement; they clatter up when you walk right through them."""
+        for p in self.pigeons:
+            if p['fly']:
+                p['x'] += p['vx'] * dt
+                p['y'] += p['vy'] * dt
+                p['vy'] += 18 * dt
+                p['away'] += dt
+                if p['away'] > 14 and abs(self.x - p['home']) > 120:
+                    p.update(fly=False, x=p['home'] + random.uniform(-8, 8), y=0.0, away=0.0)   # back again
+            else:
+                p['ph'] += dt
+                if self.sitting is None and abs(self.x - p['x']) < 16 and self.step:
+                    side = 1 if p['x'] >= self.x else -1
+                    p.update(fly=True, vx=side * random.uniform(40, 70), vy=-random.uniform(50, 80), face=side,
+                             away=0.0)
+                    g.audio.play('rustle', 0.2, max(0.0, min(1.0, (p['x'] - self.scroll) / W)))
+                elif random.random() < dt * 0.3:
+                    p['face'] = -p['face']
+
+    def draw_pigeons(self, s, sc, t):
+        for p in self.pigeons:
+            x = int(p['x'] - sc)
+            if not -10 < x < W + 10:
+                continue
+            body, dark = (150, 154, 168), (110, 112, 128)
+            d = p['face']
+            if p['fly']:
+                y = int(GROUND - 2 + p['y'])
+                if y < -10:
+                    continue
+                s.fill(body, (x - 2, y - 2, 4, 2))
+                up = int(t * 18 + p['ph']) % 2
+                s.fill(dark, (x - 4, y - 3 - up * 2, 3, 1))
+                s.fill(dark, (x + 1, y - 3 - up * 2, 3, 1))
+            else:
+                peck = 1 if math.sin(p['ph'] * 3) > 0.7 else 0
+                y = GROUND + 2
+                s.fill(body, (x - 2, y - 3, 5, 3))
+                s.fill(dark, (x - 2 - d, y - 3, 2, 2))            # tail
+                s.fill((120, 140, 150), (x + 2 * d, y - 5 + peck * 2, 2, 2))   # head, bobbing down to peck
+                s.set_at((x + 3 * d, y - 4 + peck * 2), (230, 160, 80))
+                s.set_at((x, y), (200, 110, 100))
+
+    def stand_up(self, g):
+        if self.sitting is None:
+            return
+        self.sitting = None
+        self.cat.sit = 0.0
+        self.face = 1
+
     def interact(self, g):
+        if self.sitting is not None:
+            self.stand_up(g)
+            return
         n = self.nearest(g)
         if not n:
             g.toast('Nothing here. Walk up to a door or a neighbour.', (150, 140, 130))
@@ -1497,13 +1678,22 @@ class Town:
         if self.can_stargaze(g):
             self.stargaze(g)
             return
+        if abs(self.x - BENCH_X) > 1:
+            self.walk_to(BENCH_X, lambda: self.sit_down(g))
+        else:
+            self.sit_down(g)
+
+    def sit_down(self, g):
+        """Sit on the lookout bench, facing the lake; Biscuit comes and curls up beside you."""
+        self.x = float(BENCH_X)
+        self.target, self.on_arrive = None, None
+        self.step = 0.0
+        self.sitting = dict(t=0.0, cat='walk', ct=0.0)
+        g.audio.play('creak', 0.35)
         if g.town_day.get('sit') != g.day:
             g.town_day['sit'] = g.day
             g.luck = min(3.0, g.luck + 0.3)
-            g.toast('You sit a while and watch the light on the lake. It is good to be here.', (110, 150, 100))
-        else:
-            g.toast('You sit and watch the lake for a while.', (110, 150, 100))
-        self.walk_to(1846, None)
+            g.toast('A quiet moment by the lake. Luck +', (110, 150, 100))
 
     def open_talk(self, g, k):
         import scenes
@@ -1812,19 +2002,45 @@ class Town:
                        actors.PEER_HAIR[pid % 4], v['hat'], season, umbrella=(110, 140, 190) if rain else None)
                 if v['em']:
                     actors.draw_bubble(s, x + 1, GROUND - 32, v['em'], t + pid)
+        # the lake below the lookout glitters
+        lx0 = LAKE_VIEW[0] + 26 - sc
+        if lx0 < W + 10:
+            for i in range(14):
+                a = (t * 0.12 + i * 0.37) % 1.0
+                px = lx0 + (i * 53 + int(t * 3)) % (TOWN_W - LAKE_VIEW[0] - 30)
+                py = GROUND - 30 + (i * 11) % 22
+                if math.sin(t * 2.4 + i * 1.7) > 0.2 and -4 < px < W + 4:
+                    s.fill(lighten(lerp_c((150, 190, 206), (240, 246, 250), 0.6), 0.1) + (int(200 * a),),
+                           (int(px), py, 2 + (i % 3), 1))
+        self.draw_pigeons(s, sc, t)
         import biscuit
+        st = self.sitting
         if biscuit.follows(g):
-            if self.cat.x is not None:
-                ground_shadow(s, self.cat.x - sc, GROUND, 14, 60)
-            self.cat.draw(s, g, t, sc, GROUND)
-            import discover
-            discover.draw_town(s, g, t, sc, GROUND)
+            if st is not None and st['cat'] in ('hop', 'curl'):
+                k = min(1.0, st['ct'] / 0.35) if st['cat'] == 'hop' else 1.0
+                cx = int(BENCH_X + 9 - sc)
+                cy = int(GROUND - (GROUND - BENCH_SEAT) * k - math.sin(math.pi * k) * 6)
+                actors.draw_cat(s, g, t, cx, cy + 1, bed=False, sleep=False, face=1, trick=False, look=0)
+            else:
+                if self.cat.x is not None:
+                    ground_shadow(s, self.cat.x - sc, GROUND, 14, 60)
+                self.cat.draw(s, g, t, sc, GROUND)
+                import discover
+                discover.draw_town(s, g, t, sc, GROUND)
         x = int(self.x - sc)
-        ground_shadow(s, x, GROUND, 13)
-        walker(s, x, GROUND, self.face, self.step, actors.SHIRT[season], (112, 72, 52), g.hat, season,
-               umbrella=(90, 130, 110) if rain else None)
+        if st is not None:
+            breathe = 1 if math.sin(st['t'] * 1.6) > 0.6 else 0
+            sitter(s, x, BENCH_SEAT, actors.SHIRT[season], (112, 72, 52), g.hat, season, breathe)
+            # the bench's back rail is between us and you now
+            s.fill((150, 100, 66), (BENCH_X - 14 - sc, GROUND - 17, 28, 2))
+            s.fill((120, 80, 56), (BENCH_X - 14 - sc, GROUND - 15, 28, 1))
+        else:
+            ground_shadow(s, x, GROUND, 13)
+            walker(s, x, GROUND, self.face, self.step, actors.SHIRT[season], (112, 72, 52), g.hat, season,
+                   umbrella=(90, 130, 110) if rain else None)
         if g.emote:
             actors.draw_bubble(s, x + 1, GROUND - 32, g.emote[0], t)
+        draw_front(s, sc, season, t)
 
     def town_peers(self, g):
         n = getattr(g, 'net', None)
@@ -1983,33 +2199,189 @@ def draw_panel(g, s, ov):
      'library': draw_library, 'talk': draw_talk}[ov](g, s)
 
 
+# ---------------------------------------------------------------- the bakery: Mabel behind her counter
+BAKE_W, BAKE_H = 200, 64                     # the little shop scene
+BAKE_VIEW, BAKE_K = (20, 8, 160, 52), 5      # the part of it you see, drawn at 5x
+BAKE_SHELF = {'bun': 40, 'tea': 172, 'pie': 62, 'cookie': 150}     # where each treat sits behind her
+BAKE_SERVE = {'bun': 'Still warm from the oven, dear. Mind your fingers!',
+              'tea': "Steeped just right. The fish won't know what hit them.",
+              'pie': 'Blueberries from the hill, picked this very morning.',
+              'cookie': 'Make a wish on the star before the first bite.'}
+BAKE_HOVER = {'bun': 'Honey buns are my mother\'s recipe. Sticky, sweet and lucky.',
+              'tea': 'A pot of Lakeside Tea, and the fish practically queue up.',
+              'pie': 'The pie? Big fish can smell it from the dock, I swear.',
+              'cookie': 'Star cookies bring the rare ones up. Old Tom swears by them.'}
+
+
+def _mabel_line(g):
+    m = g.minute
+    return ("Morning, dear! The buns are still warm." if m < 600 else
+            "Back for more? I saved you the good ones." if g.stats.get('snacks_bought', 0) >= 3 else
+            "Afternoon, love. What'll it be?" if m < 960 else "Nearly closing time. Last of the day's baking!")
+
+
+def bakery_scene(g, t, hover=None):
+    """Mabel's shop, 200x64 pixels: shelves of bread, the counter, the oven, and Mabel herself.
+    When you buy something she fetches it from the shelf and sets it down on the counter for you."""
+    tn = g.town
+    s = pygame.Surface((BAKE_W, BAKE_H))
+    s.fill((238, 222, 196))
+    for x in range(0, BAKE_W, 8):                                    # striped wallpaper
+        s.fill((230, 210, 182), (x, 0, 4, 40))
+    s.fill((196, 150, 104), (0, 38, BAKE_W, 2))                       # dado rail
+    # a window onto the street, and a hanging lamp
+    s.fill((150, 112, 80), (84, 4, 32, 22))
+    s.fill(lerp_c((150, 196, 226), (40, 50, 90), g.env.nf), (86, 6, 28, 18))
+    s.fill((150, 112, 80), (99, 6, 2, 18))
+    s.fill((226, 120, 130), (84, 4, 32, 3))
+    pygame.draw.line(s, (90, 70, 60), (100, 0), (100, 2))
+    # shelves of baking on both sides
+    for sx0, sx1 in ((6, 78), (122, 194)):
+        for sy in (14, 30):
+            s.fill((150, 104, 70), (sx0, sy, sx1 - sx0, 2))
+            s.fill((120, 82, 56), (sx0, sy + 2, sx1 - sx0, 1))
+        for i, x in enumerate(range(sx0 + 3, sx1 - 6, 9)):
+            kind = (i + sx0) % 3
+            if kind == 0:
+                pygame.draw.ellipse(s, (206, 146, 80), (x, 9, 8, 5))          # loaves
+                s.fill((236, 190, 120), (x + 2, 10, 4, 1))
+            elif kind == 1:
+                s.fill((196, 176, 150), (x + 1, 7, 6, 7))                    # jars
+                s.fill((200, 80, 80) if i % 2 else (230, 170, 60), (x + 1, 9, 6, 4))
+                s.fill((150, 110, 80), (x + 1, 6, 6, 1))
+            else:
+                s.fill((220, 160, 90), (x, 11, 9, 3))                         # baguettes
+            if i % 2 == 0:
+                pygame.draw.ellipse(s, (226, 176, 100), (x, 25, 7, 5))      # buns
+            else:
+                s.fill((240, 232, 220), (x + 1, 24, 6, 6))                   # little cakes
+                s.fill((240, 150, 170), (x + 1, 24, 6, 2))
+    # the oven, glowing
+    s.fill((110, 100, 104), (176, 32, 22, 22))
+    s.fill((60, 52, 56), (180, 40, 14, 8))
+    glow = 0.6 + 0.4 * math.sin(t * 3)
+    s.fill(lerp_c((180, 80, 40), (255, 170, 80), glow), (182, 42, 10, 4))
+    # Mabel
+    an = tn.bake_anim
+    mx, face, carry, reach = 100.0, 1, None, False
+    if an:
+        k = t - an['t0']
+        shelf = BAKE_SHELF.get(an['id'], 60)
+        if k < 0.6:                                   # off to the shelf
+            mx = 100 + (shelf - 100) * (k / 0.6)
+            face = 1 if shelf > 100 else -1
+        elif k < 1.0:                                 # reaching up for it
+            mx, face, reach = shelf, (1 if shelf > 100 else -1), True
+            carry = an['id'] if k > 0.8 else None
+        elif k < 1.6:                                 # and back to the counter
+            mx = shelf + (100 - shelf) * ((k - 1.0) / 0.6)
+            face = -1 if shelf > 100 else 1
+            carry = an['id']
+        else:
+            face = 1
+    elif hover:
+        face = 1 if BAKE_SHELF.get(hover, 100) > 100 else -1                   # she looks toward it
+    step = 0.0 if (not an or t - an['t0'] >= 1.6 or 0.6 <= t - an['t0'] < 1.0) else t * 9
+    sp = FOLK['mabel']
+    walker(s, int(mx), 47, face, step, sp['shirt'], sp['hair'], sp['hat'], g.env.season)
+    if reach:
+        pygame.draw.line(s, (240, 202, 172), (int(mx) + 2 * face, 33), (int(mx) + 5 * face, 24))
+    if carry:
+        ic = pygame.Surface((48, 40), pygame.SRCALPHA)
+        snack_icon(ic, carry, (24, 22))
+        ic = pygame.transform.smoothscale(ic, (16, 13))
+        hy = 23 if reach else 34
+        s.blit(ic, (int(mx) + 4 * face - 8, hy - 7))
+    # the counter, in front of her
+    s.fill((166, 116, 76), (20, 44, 160, 20))
+    s.fill((196, 146, 98), (18, 42, 164, 3))
+    for x in range(26, 176, 26):
+        pygame.draw.rect(s, (140, 96, 62), (x, 48, 20, 12), 1)
+    # a cake under glass, and the till
+    s.fill((240, 232, 220), (30, 35, 12, 7))
+    s.fill((240, 150, 170), (30, 35, 12, 2))
+    s.fill((250, 70, 80), (35, 33, 2, 2))
+    pygame.draw.arc(s, (214, 230, 236), (27, 28, 18, 18), 0, math.pi)
+    s.fill((150, 140, 140), (152, 34, 14, 8))
+    s.fill((110, 100, 100), (154, 31, 10, 3))
+    s.fill((240, 220, 120), (156, 36, 6, 2))
+    # what she just served, steaming on the counter
+    if an and t - an['t0'] >= 1.6:
+        ic = pygame.Surface((48, 40), pygame.SRCALPHA)
+        snack_icon(ic, an['id'], (24, 22))
+        ic = pygame.transform.smoothscale(ic, (20, 17))
+        drop = max(0.0, 1 - (t - an['t0'] - 1.6) / 0.15) * 4
+        s.blit(ic, (100 - 10, int(43 - 15 - drop)))
+        for i in range(3):
+            a = (t * 0.7 + i * 0.33) % 1.0
+            s.fill((246, 240, 236), (96 + i * 4 + int(math.sin(a * 6 + i) * 1.5), int(28 - a * 12), 1, 2))
+    return s
+
+
+def buy_at_bakery(g, sn):
+    if g.coins < sn['price'] or g.buff(sn['id']):
+        return
+    g.buy_snack(sn, quiet=True)
+    if g.buff(sn['id']):
+        g.town.bake_anim = dict(id=sn['id'], t0=g.t)
+        g.town.bake_say = (BAKE_SERVE[sn['id']], g.t)
+        g.stats['snacks_bought'] = g.stats.get('snacks_bought', 0) + 1
+
+
 def draw_bakery(g, s):
     ui = g.ui
     tn = g.town
-    rect = _panel(g, s, 860, 610, "Mabel's Bakery")
+    rect = _panel(g, s, 860, 640, "Mabel's Bakery")
     for i, (key, label) in enumerate((('treats', 'Treats'), ('recipes', 'Recipes'))):
         ui.button(s, (rect.x + 420 + i * 140, rect.y + 24, 130, 40), label, lambda k=key: setattr(tn, 'bake_tab', k),
                   'tab_on' if tn.bake_tab == key else 'tab')
     if tn.bake_tab == 'recipes':
         return draw_recipe_cards(g, s, rect)
-    ui.blit_text(s, '"Everything is baked fresh this morning. One treat at a time, dear."', (rect.x + 36, rect.y + 92),
-                 'small', U.SOFT, maxw=rect.w - 72)
+    t = g.t
+    # which card the pointer (or the pad's focus) is on: Mabel turns toward it and talks about it
+    cards = []
+    cw = (rect.w - 60 - 3 * 12) // 4
     for i, sn in enumerate(SNACKS):
-        r = pygame.Rect(rect.x + 30, rect.y + 128 + i * 92, rect.w - 60, 82)
-        ui.tile(s, r, (246, 236, 216), (196, 170, 140))
+        cards.append((pygame.Rect(rect.x + 30 + i * (cw + 12), rect.y + 368, cw, 222), sn))
+    hover = next((sn['id'] for r, sn in cards if r.collidepoint(ui.mouse)), None)
+    # the shop itself
+    scene = bakery_scene(g, t, hover).subsurface(BAKE_VIEW)        # in close on Mabel and her counter
+    sr = pygame.Rect(rect.x + 30, rect.y + 84, BAKE_VIEW[2] * BAKE_K, BAKE_VIEW[3] * BAKE_K)
+    pygame.draw.rect(s, (120, 80, 54), sr.inflate(12, 12), border_radius=10)
+    s.blit(pygame.transform.scale(scene, sr.size), sr)
+    # what Mabel is saying
+    said = tn.bake_say
+    if said and t - said[1] < 5.0:
+        line = said[0]
+    elif hover:
+        line = BAKE_HOVER[hover]
+    else:
+        line = _mabel_line(g)
+    bw = min(sr.w - 60, ui.fonts['small'].size(line)[0] + 40)
+    bub = pygame.Rect(sr.centerx - bw // 2, sr.y + 14, bw, 40)
+    pygame.draw.rect(s, (255, 252, 244), bub, border_radius=12)
+    pygame.draw.rect(s, (150, 120, 96), bub, 2, border_radius=12)
+    pygame.draw.polygon(s, (255, 252, 244), [(bub.centerx - 8, bub.bottom - 2), (bub.centerx + 8, bub.bottom - 2),
+                                             (bub.centerx, bub.bottom + 10)])
+    ui.blit_text(s, line, bub.center, 'small', U.INK, 'center')
+    # the treats, on cards under the counter
+    for r, sn in cards:
+        hov = r.collidepoint(ui.mouse)
+        ui.tile(s, r, (252, 246, 232) if hov else (246, 236, 216), (196, 170, 140))
         ic = pygame.Surface((48, 40), pygame.SRCALPHA)
         snack_icon(ic, sn['id'], (24, 22))
         ic = pygame.transform.scale(ic, (96, 80))
-        s.blit(ic, ic.get_rect(center=(r.x + 50, r.centery)))
-        ui.blit_text(s, sn['name'], (r.x + 100, r.y + 14), 'bodyb', U.INK)
-        ui.blit_text(s, sn['desc'], (r.x + 100, r.y + 46), 'small', U.SOFT, maxw=r.w - 300)
-        eaten = g.buffs.get(sn['id']) == g.day
-        if eaten:
-            ui.blit_text(s, 'Eaten today', (r.right - 110, r.centery), 'smallb', (80, 130, 70), 'center')
+        s.blit(ic, ic.get_rect(center=(r.centerx, r.y + 40)))
+        ui.blit_text(s, sn['name'], (r.centerx, r.y + 74), 'bodyb', U.INK, 'midtop')
+        for j, ln in enumerate(ui.wrap(sn['desc'], 'tiny', r.w - 20)[:3]):
+            ui.blit_text(s, ln, (r.centerx, r.y + 104 + j * 18), 'tiny', U.SOFT, 'midtop')
+        if g.buff(sn['id']):
+            ui.blit_text(s, 'Eaten today', (r.centerx, r.bottom - 34), 'smallb', (80, 130, 70), 'center')
         else:
-            g.price_button(s, (r.right - 180, r.y + 18, 150, 46), sn['price'], lambda sn=sn: g.buy_snack(sn),
-                           g.coins >= sn['price'])
-    ui.blit_text(s, 'Snacks last until bedtime.', (rect.centerx, rect.bottom - 34), 'small', U.SOFT, 'center')
+            g.price_button(s, (r.centerx - 70, r.bottom - 56, 140, 44), sn['price'],
+                           lambda sn=sn: buy_at_bakery(g, sn), g.coins >= sn['price'])
+    ui.blit_text(s, 'One treat of each kind a day. They last until bedtime.', (rect.centerx, rect.bottom - 28),
+                 'small', U.SOFT, 'center')
 
 
 def draw_recipe_cards(g, s, rect):

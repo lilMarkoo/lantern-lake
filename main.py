@@ -187,12 +187,8 @@ WEATHER_TABLE = {
 INTRO = ("Dear little minnow,",
          "The cabin by Lantern Lake is yours now. The kettle still works, the dock creaks in all the right "
          "places, and the cat came with the house. She answers to Biscuit, mostly.\n"
-         "Hold the mouse (or Space) to wind up a cast, point where it should land, and let go. Bubbles on the "
-         "water mean hungry fish. Wait for a real bite, not a nibble, then click!\n"
-         "To reel in, keep the golden arc on the fish as it circles. Hold to reel faster, but let go when it "
-         "lunges or the line snaps. When it leaps, click as the rings meet.\n"
-         "Sell your catch at the trading post (S), keep a journal (J), check the calendar (K) for festivals and "
-         "birthdays, and rest (Z) when the stars come out.\n"
+         "I've left my rocking chair and a few bits and pieces inside. Make it yours. The rest you'll pick up as "
+         "you go: the lake is a good teacher.\n"
          "Take it slow. The lake isn't going anywhere.",
          "- Grandma Rosie")
 
@@ -225,6 +221,11 @@ class Game:
         self._hud_layer = None
         self._hud_t = 0.0
         self._dock_n = 6
+        self.show_help = False       # F1 / ?: the key hints and tips come back after day one
+        self.menu_open = False       # calm HUD: the menu tile is unfolded into the full toolbar
+        self._goal_slim = False      # the objective card shrinks to one line while a cast is out
+        self._hud_wake = 0.0         # calm HUD: when something last changed (it wakes the cards)
+        self._wake_sig = None
         self._bufs = {}
         self._ui_pct = None
         self._small = pygame.Surface((W, H), 0, 32)
@@ -612,7 +613,7 @@ class Game:
         self.cat_day = {}
         self.cat_gift = None
         self.cat_follow = False
-        self.home = homemod.new()    # the cabin room (home.py)
+        self.home = homemod.starter()   # the cabin room (home.py), with a few of Grandma's things in it
         self.home_sel = ('wall', 0)
         self.home_tab = 'wall'
         self.home_page = 0
@@ -851,7 +852,7 @@ class Game:
         SW, SH = ui_grid(pct)
         almanac.SW, almanac.SH = SW, SH
         U.LOGICAL = (SW, SH)
-        minigame.CY = min(SH - 200, max(SH - 296, 400))      # 424 at 100%; keeps the ring clear of the cards
+        minigame.CY = SH - 168                                # the reel ring sits in the bottom-left corner
         # at 100% the world is drawn straight into the canvas (fastest); other sizes keep the world at its own
         # pixel size and lay the interface over it as a separate see-through layer
         self.layered = (SW, SH) != (1280, 720)
@@ -1185,7 +1186,8 @@ class Game:
                 self.toast('%s now counts you as a friend: %d hearts!' % (name, hearts), (220, 120, 140))
                 self.audio.play('jingle3', 0.6)
 
-    def buy_snack(self, sn):
+    def buy_snack(self, sn, quiet=False):
+        """quiet: the bakery shows Mabel serving it instead of a pop-up."""
         if self.coins < sn['price'] or self.buff(sn['id']):
             return
         self.coins -= sn['price']
@@ -1195,7 +1197,8 @@ class Game:
             self.luck = min(3.0, self.luck + 1.0)
         self.add_friend('mabel', 1)
         self.audio.play('coin', 0.6)
-        self.toast('%s. Delicious! %s' % (sn['name'], sn['desc'].split('.')[-2].strip() + '.'), (200, 140, 90))
+        if not quiet:
+            self.toast('%s. Delicious! %s' % (sn['name'], sn['desc'].split('.')[-2].strip() + '.'), (200, 140, 90))
         self.save()
 
     def donate(self, fid):
@@ -1274,7 +1277,7 @@ class Game:
             r = ui.panel(s, r, fill=(255, 250, 238), radius=14)
             ui.keycap(s, 'E', (r.x + 10, r.centery))
             ui.blit_text(s, p, (r.x + 46, r.centery), 'smallb', U.INK, 'midleft')
-        if self.settings.get('hints', True) and self.typing != 'chat':
+        if self.help_on() and self.typing != 'chat':
             hint = self.hint([('key', 'A'), ('key', 'D'), 'or', ('key', 'Click'), 'to walk.   ', ('key', 'E'),
                               'go in or talk   ', ('key', 'T'), 'back to the lake'],
                              [('pad', 'STICK'), 'walk   ', ('pad', 'X'), 'go in or talk   ', ('pad', 'RS'),
@@ -1449,7 +1452,29 @@ class Game:
         actors.draw_all(near, self, self.world.t)
 
     def request_flag(self):
-        return self.request is not None and not self.request.get('done')
+        return bool(self.mail()) or self.request is not None and not self.request.get('done')
+
+    def mail(self):
+        """Letters waiting in the mailbox: news that can wait until you go and look (the flag goes up)."""
+        return self.stats.setdefault('mail', [])
+
+    def post(self, letters):
+        """Put letters in the mailbox instead of opening them on top of whatever you're doing."""
+        if not letters:
+            return
+        box = self.mail()
+        box.extend(letters)
+        who = letters[0][2].lstrip('- ').strip() if len(letters) == 1 else None
+        self.toast('Mail! A letter from %s is in the mailbox.' % who if who else
+                   'Mail! %d letters are in the mailbox.' % len(box), (180, 110, 90))
+
+    def open_mailbox(self):
+        box = self.mail()
+        if box:
+            self.open_letter(tuple(box.pop(0)))
+            self.release_holds()
+        else:
+            self.read_request()
 
     def season_of(self, day):
         return ((day - 1) // DAYS_PER_SEASON) % 4
@@ -1458,9 +1483,55 @@ class Game:
         self.toasts.append([text, 3.6, color])
         self.toasts = self.toasts[-4:]
 
+    WORM_TIN = 30                    # the worm tin fills back up to this every morning
+    WORM_PACK, WORM_PRICE = 15, 20
+
+    def worms(self):
+        return self.baits.setdefault('worm', self.WORM_TIN)
+
+    def bait_ready(self):
+        """Can you cast? With an empty worm tin you switch to other bait, or wait for morning (or buy more)."""
+        if self.bait != 'worm' or self.worms() > 0:
+            return True
+        other = [b['id'] for b in BAITS[1:] if self.baits.get(b['id'], 0) > 0]
+        if other:
+            self.bait = other[0]
+            self.toast('The worm tin is empty. On with the %s.' % BAIT_BY_ID[other[0]]['name'], (150, 130, 100))
+            return True
+        self.toast("The worm tin is empty! More at the shop, or fresh ones dug in the morning.", (200, 120, 100))
+        self.audio.play('nibble', 0.5)
+        return False
+
+    def buy_worms(self):
+        if self.coins < self.WORM_PRICE:
+            self.toast('Not enough coins yet.', (200, 120, 100))
+            return
+        self.coins -= self.WORM_PRICE
+        self.baits['worm'] = self.worms() + self.WORM_PACK
+        self.bait = 'worm'
+        self.audio.play('coin', 0.7)
+        self.toast('+%d worms in the tin.' % self.WORM_PACK, (150, 120, 90))
+
+    def spook(self, spec):
+        sp = getattr(self, '_spooked', None)
+        if not sp or sp.get('day') != self.day:
+            sp = self._spooked = dict(day=self.day, ids=[])
+        if spec['id'] not in sp['ids']:
+            sp['ids'].append(spec['id'])
+            self.toast('The %s is spooked. It won\'t come back today.' % spec['name'], (150, 130, 170))
+
+    def spooked(self, fid):
+        sp = getattr(self, '_spooked', None)
+        return bool(sp and sp.get('day') == self.day and fid in sp['ids'])
+
     def use_bait(self):
         if BAIT_BY_ID[self.bait].get('legend'):
             return                           # a legend's lure lasts until the legend is landed
+        if self.bait == 'worm':
+            self.baits['worm'] = max(0, self.worms() - 1)
+            if self.baits['worm'] == 5:
+                self.toast_few('worms_low', 'Only five worms left in the tin today.', (150, 130, 100), 3)
+            return
         if self.bait != 'worm':
             self.baits[self.bait] = max(0, self.baits.get(self.bait, 0) - 1)
             if self.baits[self.bait] <= 0:
@@ -1501,6 +1572,16 @@ class Game:
         return ('The %s almanac' % SEASONS[self.season_of(day)], body, '- Grandma Rosie')
 
     def start_day(self):
+        """Morning: everything that happens overnight. Its letters go in the mailbox rather than popping up."""
+        n = len(self.queue)
+        self._start_day()
+        news = [q for q in self.queue[n:] if q[0] == 'letter']
+        if news:
+            self.queue[n:] = [q for q in self.queue[n:] if q[0] != 'letter']
+            self.post([q[1] for q in news])
+
+    def _start_day(self):
+        self.baits['worm'] = max(self.worms(), self.WORM_TIN)      # a fresh tin of worms dug every morning
         story.morning(self)
         legends.morning(self)
         biscuit.morning(self)
@@ -1519,7 +1600,7 @@ class Game:
                 self.toast("It's %s's birthday! Check the mailbox." % b['who'], (200, 120, 160))
             else:
                 self.new_request()
-                self.toast('A new letter in the mailbox!', (180, 110, 90))
+                self.toast_few('request', 'A neighbour wrote asking for a fish. Check the mailbox.', (180, 110, 90))
         if b and not b['fish'] and self.stats.get('rosie_day') != d:
             self.stats['rosie_day'] = d
             self.give_gift(b['gift'])
@@ -1834,7 +1915,7 @@ class Game:
             items.append(('Pet Biscuit', self.pet_cat))
             if self.has('pot'):
                 items.append(('Crab pot', lambda: seasons.pot_action(self)))
-            items.append(('Mailbox', self.read_request))
+            items.append(('Mailbox', self.open_mailbox))
             if self.shore.get('told') and self.visit_shore is None:
                 items.append(('The Shore', lambda: shoremod.open_panel(self)))
             if self.wagon_here():
@@ -1926,7 +2007,7 @@ class Game:
             self.open_map()
             return True
         if pygame.Rect(73, 220, 16, 22).collidepoint(wx, wy):
-            self.read_request()
+            self.open_mailbox()
             return True
         if art.CABIN_DOOR.inflate(4, 4).collidepoint(wx, wy) or art.CABIN_WINDOW.inflate(4, 4).collidepoint(wx, wy):
             self.toggle('cabin')
@@ -2318,6 +2399,10 @@ class Game:
         if k == pygame.K_F12:
             self.screenshot()
             return
+        if self.mode == 'play' and not self.typing and (
+                k == pygame.K_F1 or (k == pygame.K_SLASH and pygame.key.get_mods() & pygame.KMOD_SHIFT)):
+            self.toggle_help()
+            return
         ov = self.overlay
         if self.mode == 'title' or ov in ('pause', 'options', 'quick'):
             ui = self.ui
@@ -2506,7 +2591,7 @@ class Game:
             self.fishing.reset()
             self.queue.append(('letter', INTRO))
             self.stats['almanac_day'] = 1
-            self.queue.append(('letter', self.almanac_letter(1)))
+            self.mail().append(self.almanac_letter(1))     # waits in the mailbox; the flag is up
             self.has_save = True
             self.save()
         self.mode = 'play'
@@ -2635,15 +2720,20 @@ class Game:
                 self.save()
 
     # ------------------------------------------------------------ camera and input helpers
-    HOME_Z = 1.45          # how close the camera sits on you and the dock between casts
+    HOME_Z = 2.0           # how close the camera sits on you and the dock between casts
 
     def update_camera(self, dt):
         f = self.fishing
         z, fx, fy = 1.0, W / 2, H / 2
         if self.mode == 'play' and f.state == 'fight' and f.fish_pos:
-            z = 1.3 if (f.mg and f.mg.leap) else 1.12
-            fx = W / 2 + (f.fish_pos[0] - W / 2) * 0.7
-            fy = H / 2 + (f.fish_pos[1] - f.leap_h - H / 2) * 0.7
+            # in close on the fight: you at one edge, the fish thrashing on the line at the other
+            fxp, fyp = f.fish_pos[0], f.fish_pos[1] - f.leap_h
+            lo, hi = min(PLAYER_X - 40, fxp - 50), max(PLAYER_X + 30, fxp + 50)
+            z = clamp(W / max(1.0, hi - lo), 1.35, 2.1)
+            if f.mg and f.mg.leap:
+                z = min(2.3, z * 1.12)
+            fx = (lo + hi) / 2
+            fy = (fyp + DECK_Y - 30) / 2 + 10
         elif f.state == 'landing' and f.fly_pos:
             z = 1.08
             fx = W / 2 + (f.fly_pos[0] - W / 2) * 0.5
@@ -2671,8 +2761,24 @@ class Game:
                 z = self.HOME_Z
                 w = W / z
                 self.cam_look += (self.ui.mouse[0] / SW - self.cam_look) * min(1.0, dt * 2.5)
-                fx = w / 2 + self.cam_look * (W - w)
-                fy = H - H / z / 2 - 18
+                # you and Biscuit a third of the way in, the open lake ahead; pointing pans a little
+                fx = clamp(PLAYER_X + w * 0.17 + (self.cam_look - 0.5) * w * 0.55, w / 2, W - w / 2)
+                fy = H - H / z / 2 - 2          # down on the water: most of the sky is cropped away
+        elif self.mode == 'play' and self.place == 'town' and self.overlay is None:
+            # Fernwick: in close on the street and the people on it, not on the sky
+            tn = self.town
+            rate = 2.5
+            if tn.sitting is not None:
+                z = 2.3                    # sitting on the lookout bench: just you, Biscuit and the lake
+                px = townmod.BENCH_X + 6 - tn.scroll
+                fy = townmod.GROUND - 30
+                rate = 0.9
+            else:
+                z = townmod.TOWN_Z
+                px = tn.x - tn.scroll
+                fy = townmod.GROUND + 36 - H / z / 2     # the street low on screen, with a little sky over the roofs
+            w = W / z
+            fx = clamp(px, w / 2, W - w / 2)
         if not self.settings.get('zoom', True):
             z, fx, fy = 1.0, W / 2, H / 2
         if self.shake_amt > 0.05:
@@ -2693,7 +2799,7 @@ class Game:
         y = fy - h / 2 + random.uniform(-1, 1) * self.shake_amt
         f = self.fishing
         if f.state == 'fight':
-            x = min(x, actors.CAT_X - 10 - 350 * w / SW)       # keep Biscuit and you clear of the reel ring
+            x = min(x, actors.CAT_X - 10 - 250 * w / SW)       # keep Biscuit and you clear of the reel ring
             if f.fish_pos:
                 x = max(x, f.fish_pos[0] + 24 - w)              # ...but never lose sight of the fish
         return pygame.Rect(int(clamp(x, 0, W - w)), int(clamp(y, 0, H - h)), w, h)
@@ -3019,6 +3125,19 @@ class Game:
         U.weather_icon(s, (x, y), self.weather, night, int(r * 0.52), sky)
 
     # ---------------- HUD
+    def help_on(self):
+        """Key hints and tips: all through the first day (and the first few fish), then only on F1 / ?."""
+        if not self.settings.get('hints', True):
+            return False
+        first = self.tut_day or 1
+        return self.show_help or self.day <= first or self.total < 3
+
+    def toggle_help(self):
+        self.show_help = not self.show_help
+        self.audio.play('ui', 0.5)
+        self.toast('Hints on. F1 or ? hides them again.' if self.show_help else 'Hints tucked away. F1 or ? for help.',
+                   (120, 140, 170))
+
     def hud_style(self):
         v = self.settings.get('hud', 'calm')
         return v if v in HUD_STYLES else 'calm'
@@ -3036,10 +3155,13 @@ class Game:
         st = f.state
         if st in ('fight', 'landing'):
             return True
-        if st not in ('waiting', 'bite') or (st == 'waiting' and f.t < 1.6):
+        idle = (st == 'idle' and self.hud_style() == 'calm' and self.total >= 3 and not self.help_on()
+                and self.t - self._hud_wake > 5.0)
+        if not idle and (st not in ('waiting', 'bite') or (st == 'waiting' and f.t < 1.6)):
             return False
         mx, my = self.ui.mouse
-        if (mx < 16 + 372 + 24 and my < getattr(self, '_hud_left', 300) + 16) or (mx > SW - 16 - 320 and my < 190):
+        if (8 <= mx < 16 + 372 + 24 and 6 <= my < getattr(self, '_hud_left', 300) + 16) or (
+                mx > SW - 16 - 320 and my < 190):
             return False
         return True
 
@@ -3051,7 +3173,7 @@ class Game:
         if st == 'idle':
             return False
         # pointing at the corner while you wait brings the toolbar back
-        if st == 'waiting' and self.ui.mouse[0] > SW - 16 - (20 + self._dock_n * 72) and self.ui.mouse[1] > SH - 130:
+        if st == 'waiting' and self.ui.mouse[0] > SW - 16 - (20 + max(2, self._dock_n) * 72) and self.ui.mouse[1] > SH - 130:
             return False
         return True
 
@@ -3114,10 +3236,25 @@ class Game:
 
     GOAL_H = 84                  # the tracker card: what to do, where, and when
 
+    def goal_h(self):
+        return 46 if self._goal_slim else self.GOAL_H
+
     def _hud_lines(self, s, r, extra, top, where, when, prog=None):
         """The words on a tracker card, with a progress pill beside the first line."""
         ui = self.ui
         right = r.right - 14 - extra
+        if self._goal_slim:          # one line while a cast is out: what, and how far along
+            tw1 = right - r.x - 58
+            if prog:
+                a, b = prog
+                pill = U.snap_rect(pygame.Rect(right - 52, r.centery - 12, 52, 24))
+                s.blit(ui._button_skin(pill.w, pill.h, U.SAGE if a >= b else (234, 220, 194),
+                                       U.SAGE_D if a >= b else U.BROWN, 1), pill)
+                ui.blit_text(s, '%d/%d' % (a, b), (pill.centerx, pill.centery - 1), 'small',
+                             (255, 255, 250) if a >= b else U.INK, 'center')
+                tw1 = pill.x - 6 - r.x - 58
+            ui.blit_text(s, top, (r.x + 58, r.centery), 'smallb', U.INK, 'midleft', maxw=tw1)
+            return
         tw = right - r.x - 58
         if prog:
             a, b = prog
@@ -3139,13 +3276,14 @@ class Game:
         req = self.request
         f = FISH_BY_ID[req['fish']]
         bday = req.get('birthday')
-        r2 = ui.panel(s, (16, y, CW, self.GOAL_H), fill=(252, 236, 240) if bday else U.PAPER, radius=16)
+        r2 = ui.panel(s, (16, y, CW, self.goal_h()), fill=(252, 236, 240) if bday else U.PAPER, radius=16)
+        cy = r2.centery if self._goal_slim else r2.y + 34
         if bday:
-            U.cake(s, (r2.x + 30, r2.y + 34), 1.1)
+            U.cake(s, (r2.x + 30, cy), 0.8 if self._goal_slim else 1.1)
         else:
-            U.envelope(s, (r2.x + 16, r2.y + 24, 30, 22))
+            U.envelope(s, (r2.x + 16, cy - 11 if self._goal_slim else r2.y + 24, 30, 22))
         ui.hotspot(r2, self.read_request)
-        extra = self._hud_switch(s, r2, objs, 'request') if len(objs) > 1 else 0
+        extra = self._hud_switch(s, r2, objs, 'request') if len(objs) > 1 and not self._goal_slim else 0
         who = req['who'].split(' (')[0]
         where, when = goalmod.fish_where(self, f)
         self._hud_lines(s, r2, extra, ("%s's birthday: %s" if bday else '%s needs: %s') % (who, f['name']),
@@ -3160,12 +3298,15 @@ class Game:
         if not gl:
             return
         if gid == 'welcome':
-            r = ui.panel(s, (16, y, CW, self.GOAL_H), fill=(240, 246, 232), border=(120, 160, 110), radius=16)
+            r = ui.panel(s, (16, y, CW, self.goal_h()), fill=(240, 246, 232), border=(120, 160, 110), radius=16)
         else:
-            r = ui.panel(s, (16, y, CW, self.GOAL_H), radius=16)
-        almanac.event_icon(s, gl['icon'], (r.x + 30, r.y + 34), 1.0)
+            r = ui.panel(s, (16, y, CW, self.goal_h()), radius=16)
+        if self._goal_slim:
+            almanac.event_icon(s, gl['icon'], (r.x + 30, r.centery), 0.8)
+        else:
+            almanac.event_icon(s, gl['icon'], (r.x + 30, r.y + 34), 1.0)
         ui.hotspot(r, gl['act'] or (lambda: self.toggle('goals')))
-        extra = self._hud_switch(s, r, objs, gid) if len(objs) > 1 else 0
+        extra = self._hud_switch(s, r, objs, gid) if len(objs) > 1 and not self._goal_slim else 0
         self._hud_lines(s, r, extra, gl['next'], gl['where'] or gl['title'], gl['when'], gl.get('pill'))
         if self.goals.get('pinned') == gid:
             goalmod.draw_pin(s, (r.x + 10, r.y + 6))
@@ -3225,6 +3366,9 @@ class Game:
         if meal:
             r_ = kitchenmod.RECIPE_BY_ID[meal]
             lines.append(('snack', '%s: %s' % (r_['name'], r_['effect'].lower())))
+        if self.mail():
+            n_ = len(self.mail())
+            lines.append(('mail', 'A letter in the mailbox' if n_ == 1 else '%d letters in the mailbox' % n_))
         if self.wagon_here():
             lines.append(('wagon', "Wren's Wagon until %s" % fmt_clock(1200)))
         sl = story.hud_line(self)
@@ -3291,6 +3435,13 @@ class Game:
         if abs(target - self.hud_tuck) < 0.01:
             self.hud_tuck = target
         tuck = 1 - (1 - self.hud_tuck) ** 3
+        sig = (self.coins, self.place, self.overlay, self.fishing.state if self.fishing.state == 'idle' else 'out',
+               self.tracked_objective()[0], self.bait, len(self.toasts) > 0)
+        if sig != self._wake_sig:
+            self._wake_sig = sig
+            self._hud_wake = now
+        self._goal_slim = style != 'full' and self.hud_tuck > 0.5
+        calm_card = style == 'calm'
         want = 1.0 if self.hud_quiet() else 0.0
         self.hud_calm += (want - self.hud_calm) * min(1.0, dt * (1.3 if want > self.hud_calm else 7))
         if abs(want - self.hud_calm) < 0.01:
@@ -3314,6 +3465,19 @@ class Game:
             ui.blit_text(s, almanac.weekday(self.day), (r.right - 16, r.centery), 'small', U.SOFT, 'midright',
                          maxw=100)
             y = 70
+        elif calm_card:
+            # one card for the time, the day and your purse
+            r = ui.panel(s, (16, 14, CW, 72), radius=20)
+            self._dial(s, (r.x + 38, r.centery), 25)
+            ui.blit_text(s, fmt_clock(self.minute), (r.x + 76, r.y + 6), 'big', U.INK)
+            sub = '%s, %s %d' % (almanac.weekday(self.day), SEASONS[env.season], almanac.dow(self.day))
+            ui.blit_text(s, sub, (r.x + 78, r.y + 46), 'small', U.SOFT, maxw=CW - 196)
+            cw_ = ui.fonts['bodyb'].size('{:,}'.format(self.coins))[0]
+            ui.blit_text(s, '{:,}'.format(self.coins), (r.right - 16, r.y + 24), 'bodyb', U.INK, 'midright')
+            U.coin(s, (r.right - 30 - cw_, r.y + 24), 11)
+            if env.full_moon and env.nf > 0.4:
+                U.moon_phase(s, (r.right - 26, r.y + 52), 0, 8)
+            y = 94
         else:
             r = ui.panel(s, (16, 14, CW, 88), radius=20)
             self._dial(s, (r.x + 46, r.y + 44), 30)
@@ -3329,7 +3493,7 @@ class Game:
         cur, objs = self.tracked_objective()
         if cur == 'request':
             self._hud_request(s, y, CW, objs)
-            y += self.GOAL_H + 8
+            y += self.goal_h() + 8
         elif cur == 'festival':
             self._hud_festival(s, y, CW, objs)
             y += 72
@@ -3338,7 +3502,7 @@ class Game:
             y += 72
         elif cur:
             self._hud_goal(s, y, CW, objs, cur)
-            y += self.GOAL_H + 8
+            y += self.goal_h() + 8
         # today's other notes: they step aside while a cast is out (and always while reeling)
         quiet = (self.hud_tuck > 0.5) if style != 'full' else self.fishing.state in ('fight', 'landing')
         if not quiet:
@@ -3365,8 +3529,14 @@ class Game:
         self._hud_left = y           # the chat sits under the left-hand cards
         # coins, bait and luck down the right-hand side
         b = BAIT_BY_ID[self.bait]
-        label = b['name'] if self.bait == 'worm' else '%s x%d' % (b['name'], self.baits.get(self.bait, 0))
-        if compact:
+        label = '%s x%d' % (b['name'], self.worms() if self.bait == 'worm' else self.baits.get(self.bait, 0))
+        if calm_card:
+            bw = min(300, ui.fonts['small'].size(label)[0] + 64)
+            r4 = ui.panel(s, (SW - 16 - bw, 14, bw, 44), radius=21)
+            s.blit(art.item_icon(self.bait, 2), (r4.x + 8, r4.centery - 16))
+            ui.blit_text(s, label, (r4.x + 46, r4.centery), 'small', U.INK, 'midleft', maxw=r4.w - 56)
+            ry = 66
+        elif compact:
             r3 = ui.panel(s, (SW - 16 - 164, 14, 164, 48), radius=22)
             U.coin(s, (r3.x + 26, r3.centery), 11)
             ui.blit_text(s, '{:,}'.format(self.coins), (r3.x + 46, r3.centery), 'bodyb', U.INK, 'midleft',
@@ -3414,9 +3584,30 @@ class Game:
             if self.has_boat():
                 slots.insert(5, ('Boat', 'B', self.open_map))
         n = len(slots)
-        self._dock_n = n
+        fold = False
+        if calm_card:
+            full = pygame.Rect(SW - 16 - (20 + n * 72), SH - 16 - 92, 20 + n * 72, 92)
+            near_dock = full.inflate(24, 40).collidepoint(ui.mouse) if self._dock_n > 1 else (
+                pygame.Rect(SW - 16 - 92, SH - 16 - 92, 92, 92).collidepoint(ui.mouse))
+            if self.overlay is not None or self.fishing.state != 'idle':
+                self.menu_open = False       # a click on the tile keeps it open until you pick or cast
+            fold = not (self.menu_open or near_dock)
+        self._dock_n = 1 if fold else n
         drop = int(tuck * 124)
-        if drop < 120:
+        if fold and drop < 120:
+            rr = pygame.Rect(SW - 16 - 82, SH - 16 - 82 + drop, 82, 82)
+            hover = rr.collidepoint(ui.mouse) and not drop
+            dock = ui.panel(s, rr, radius=24)
+            slot = pygame.Rect(dock.x + 8, dock.y + 8 - (2 if hover else 0), 66, 66)
+            s.blit(ui._frame(slot.w, slot.h, (255, 250, 238) if hover else (236, 222, 196),
+                             (196, 160, 120) if hover else (170, 134, 100), 2), slot)
+            cx, cy = slot.centerx, slot.y + 26
+            for i in (-8, 0, 8):
+                pygame.draw.line(s, U.INK, (cx - 12, cy + i), (cx + 12, cy + i), 3)
+            ui.blit_text(s, 'Menu', (slot.centerx, slot.bottom - 14), 'tiny', U.INK, 'center')
+            if not drop:
+                ui.hotspot(rr, self.toggle_menu)
+        elif drop < 120:
             dock = ui.panel(s, (SW - 16 - (20 + n * 72), SH - 16 - 92 + drop, 20 + n * 72, 92), radius=24)
             tip = None
             for i, (label, key, act) in enumerate(slots):
@@ -3461,6 +3652,19 @@ class Game:
             self.draw_friends(s, ry)
         self.draw_chat(s)
 
+    def draw_help_chip(self, s):
+        """A small '?' in the corner once the hints have gone: click it (or F1) for them back."""
+        ui = self.ui
+        r = pygame.Rect(16, SH - 16 - 40, 40, 40)
+        hov = r.collidepoint(ui.mouse)
+        r = ui.glass(s, r, 170 if hov else 90, 20)
+        ui.blit_text(s, '?', r.center, 'bodyb', (255, 250, 238), 'center')
+        ui.hotspot(r, self.toggle_help)
+
+    def toggle_menu(self):
+        self.menu_open = not self.menu_open
+        self.audio.play('ui', 0.5)
+
     def draw_fishing_ui(self, s):
         if self.place == 'town':
             self.draw_town_ui(s)
@@ -3487,7 +3691,7 @@ class Game:
                              [('pad', 'A'), 'to start a fly cast'])
         if st == 'waiting' and f.t > 7 and self.total >= 3:
             hint = None                  # it has been said: let the water have the screen
-        if hint and self.overlay is None and self.settings.get('hints', True) and self.typing != 'chat':
+        if hint and self.overlay is None and self.help_on() and self.typing != 'chat':
             w = ui.rich(s, hint, (0, 0), measure=True) + 40
             room = SW - 16 - (0 if self.hud_tuck > 0.5 else 20 + self._dock_n * 72) - 16 - 16
             if w > room:
@@ -3496,6 +3700,8 @@ class Game:
                 w = ui.rich(s, hint, (0, 0), measure=True) + 40
             r = ui.glass(s, (16, SH - 16 - 46, w, 46), 150, 23)
             ui.rich(s, hint, (r.x + 20, r.centery))
+        elif self.overlay is None and st == 'idle' and self.settings.get('hints', True) and self.typing != 'chat':
+            self.draw_help_chip(s)
         if st == 'fly':
             px, py = self.w2s(PLAYER_X, DECK_Y)
             seasons.draw_fly(s, ui, f, (px + 130, py - 170))
@@ -4140,6 +4346,23 @@ class Game:
 
         def section(title, items, owned, current, prefix, kind, y):
             ui.blit_text(s, title, (x0, y), 'h3', U.INK)
+            # what you own, then just the next couple still to find, then how many more are out there
+            have_ = [it for it in items if it['id'] in owned]
+            locked = [it for it in items if it['id'] not in owned]
+            show = have_ + locked[:max(1, 4 - len(have_) // 3)]
+            rest = len(items) - len(show)
+            if rest > 0 and len(show) % 5 == 0:
+                show, rest = show[:-1], rest + 1
+            items = show
+            if rest > 0:
+                i = len(items)
+                tr = pygame.Rect(x0 + (i % 5) * 120, y + 34 + (i // 5) * 116, 110, 106)
+                ui.tile(s, tr, (236, 226, 206), (206, 190, 170))
+                ui.blit_text(s, '+%d' % rest, (tr.centerx, tr.y + 26), 'h2', U.SOFT, 'midtop')
+                ui.blit_text(s, 'more to find', (tr.centerx, tr.bottom - 30), 'small', U.SOFT, 'midtop')
+                if tr.collidepoint(ui.mouse):
+                    self.ward_hover_now = dict(id='', name='More to find',
+                                               where='Wren\'s wagon, festivals, friends and Biscuit all have some.')
             for i, it in enumerate(items):
                 col, row = i % 5, i // 5
                 tr = pygame.Rect(x0 + col * 120, y + 34 + row * 116, 110, 106)
@@ -4165,7 +4388,7 @@ class Game:
         section('Biscuit', CAT_ITEMS, self.cat_items, self.cat_item, 'cat_', 'cat', rect.y + 86 + 34 + 2 * 116 + 6)
         it = self.ward_hover_now
         if it:
-            have = it['id'] in self.hats or it['id'] in self.cat_items
+            have = it['id'] in self.hats or it['id'] in self.cat_items or not it['id']
             ui.blit_text(s, it['name'] if have else 'Not found yet', (x0, rect.bottom - 70), 'bodyb', U.INK)
             ui.blit_text(s, it['where'], (x0, rect.bottom - 44), 'small', U.SOFT)
         else:
@@ -4332,7 +4555,8 @@ class Game:
         ui = self.ui
         for i, b in enumerate([b for b in BAITS if not b.get('merchant')]):
             r = pygame.Rect(body.x, body.y + i * 104, body.w, 94)
-            owned = 'Always in stock' if b['id'] == 'worm' else 'In your box:  %d' % self.baits.get(b['id'], 0)
+            owned = ('In the tin:  %d  (it fills to %d each morning)' % (self.worms(), self.WORM_TIN)
+                     if b['id'] == 'worm' else 'In your box:  %d' % self.baits.get(b['id'], 0))
 
             def right(br, b=b):
                 if self.bait == b['id']:
@@ -4344,6 +4568,11 @@ class Game:
                     bb.w = 170
                     ui.button(s, bb, '+%d  for %d' % (b['pack'], b['price']), lambda: self.buy('bait', b), 'gold',
                               enabled=self.coins >= b['price'])
+                elif b['id'] == 'worm':
+                    bb = br.move(-180, 0)
+                    bb.w = 170
+                    ui.button(s, bb, '+%d  for %d' % (self.WORM_PACK, self.WORM_PRICE), self.buy_worms, 'gold',
+                              enabled=self.coins >= self.WORM_PRICE)
             self.item_row(s, r, art.item_icon(b['id'], 3), b['name'], b['desc'] + '      ' + owned, right, 350)
 
     def shop_decor(self, s, body):
@@ -6340,6 +6569,10 @@ def run_bot(seconds):
             pass
         elif f.state == 'idle':
             stats['casts'] += 1
+            if g.bait == 'worm' and g.worms() <= 0:
+                stats['empty_tin'] = stats.get('empty_tin', 0) + 1
+                g.coins = max(g.coins, g.WORM_PRICE)
+                g.buy_worms()                         # an empty tin: buy more
             f.aim = rng.uniform(-1, 1)
             if rng.random() < 0.1:
                 g.cycle_bait()

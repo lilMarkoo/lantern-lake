@@ -1,5 +1,6 @@
 """Little lives around your line while you fish: a fish jumping far out, rings where one rises to take a fly,
-a damselfly that comes to rest on your bobber on a still summer day, the reeds rustling.
+a damselfly that comes to rest on your bobber on a still summer day, the reeds rustling, a kingfisher that
+comes to sit on the dock post and sometimes dives, and Biscuit pricking up at every nibble.
 
 Nothing here changes what bites. It's only there so the lake feels alive while you wait."""
 import math
@@ -25,6 +26,9 @@ class LakeLife:
         self.rustle_t = 8.0
         self.fly = None          # the damselfly: dict(state, x, y, t, side)
         self.fly_cast = None     # the cast it already decided about (one roll per cast)
+        self.kf = None           # the kingfisher: dict(state, x, y, t, ...)
+        self.kf_t = 40.0         # seconds until it might come by
+        self.nib_seen = False
 
     # ------------------------------------------------------------ update
     def update(self, g, dt):
@@ -80,6 +84,135 @@ class LakeLife:
             if not frozen:
                 g.audio.play('rustle', 0.2 + 0.2 * min(1.0, env.wind), rng.uniform(0.6, 0.95))
         self._damselfly(g, dt)
+        self._kingfisher(g, dt, frozen, rain)
+        self._biscuit(g)
+
+    def _biscuit(self, g):
+        """Biscuit watches the bobber too: a nibble makes her sit up, tail going."""
+        f = g.fishing
+        nib = f.state == 'waiting' and f.nib_anim > 0
+        if nib and not self.nib_seen and getattr(g, 'spot', 'dock') == 'dock':
+            c = g.cat
+            if not c.get('sleep'):
+                c['excited'] = max(c['excited'], 0.9)
+        self.nib_seen = nib
+
+    PERCH = (257, 242)
+
+    def _kingfisher(self, g, dt, frozen, rain):
+        rng = self.rng
+        env = g.env
+        f = g.fishing
+        k = self.kf
+        home = getattr(g, 'spot', 'dock') == 'dock' and g.overlay in (None, 'catch')
+        if k is None:
+            quiet = f.state in ('idle', 'waiting')
+            self.kf_t -= dt * (1.6 if f.state == 'waiting' else 1.0)
+            if self.kf_t <= 0:
+                self.kf_t = rng.uniform(70, 150)
+                if (home and quiet and not frozen and not rain and env.nf < 0.35 and env.season != 3
+                        and g.mode == 'play'):
+                    side = rng.choice((1, 1, -1))
+                    self.kf = dict(state='in', t=0.0, x=self.PERCH[0] + side * 170, y=HORIZON + 6, side=side,
+                                   x0=self.PERCH[0] + side * 170, y0=HORIZON + 6, stay=rng.uniform(7, 14),
+                                   dives=0, fish=False)
+                    g.audio.play('bird%d' % rng.randrange(4), 0.35, 0.7)
+            return
+        k['t'] += dt
+        st = k['state']
+        px, py = self.PERCH
+        if st != 'out' and (not home or f.state in ('fight', 'landing') or g.mode != 'play'):
+            k.update(state='out', t=0.0, x0=k['x'], y0=k['y'])
+            return
+        if st == 'in':
+            q = min(1.0, k['t'] / 2.4)
+            e = q * q * (3 - 2 * q)
+            k['x'] = k['x0'] + (px - k['x0']) * e
+            k['y'] = k['y0'] + (py - k['y0']) * e - math.sin(math.pi * q) * 14 + math.sin(k['t'] * 9) * 1.2
+            if q >= 1:
+                k.update(state='perch', t=0.0, x=px, y=py)
+                g.toast_few('kingfisher', 'A kingfisher has come to sit on your dock post.', (60, 120, 170), 2)
+        elif st == 'perch':
+            if k['t'] > k['stay']:
+                if k['dives'] < 2 and rng.random() < 0.65:
+                    tx = rng.uniform(270, 330)
+                    ty = rng.uniform(296, 330)
+                    k.update(state='dive', t=0.0, x0=px, y0=py, tx=tx, ty=ty)
+                else:
+                    k.update(state='out', t=0.0, x0=k['x'], y0=k['y'])
+                    g.audio.play('bird%d' % rng.randrange(4), 0.3, 0.7)
+        elif st == 'dive':
+            q = min(1.0, k['t'] / 0.45)
+            k['x'] = k['x0'] + (k['tx'] - k['x0']) * q
+            k['y'] = k['y0'] + (k['ty'] - k['y0']) * q * q
+            if q >= 1:
+                w = g.world
+                w.splash(k['tx'], k['ty'], 6, 0.6)
+                w.ripple(k['tx'], k['ty'], 6, 12, 150)
+                g.audio.play('plip', 0.35, k['tx'] / W)
+                g.audio.play('splash_small', 0.2, k['tx'] / W)
+                k.update(state='under', t=0.0, fish=rng.random() < 0.6)
+                c = g.cat
+                if not c.get('sleep'):
+                    c['excited'] = max(c['excited'], 1.4)
+        elif st == 'under':
+            if k['t'] > 0.35:
+                g.world.splash(k['tx'], k['ty'], 4, 0.45)
+                k.update(state='up', t=0.0, x0=k['tx'], y0=k['ty'], dives=k['dives'] + 1)
+        elif st == 'up':
+            q = min(1.0, k['t'] / 0.9)
+            k['x'] = k['x0'] + (px - k['x0']) * q
+            k['y'] = k['y0'] + (py - k['y0']) * q - math.sin(math.pi * q) * 10
+            if q >= 1:
+                k.update(state='perch', t=0.0, x=px, y=py, stay=rng.uniform(4, 9))
+        else:  # out
+            k['x'] += k['side'] * 80 * dt
+            k['y'] -= 26 * dt
+            if k['t'] > 2.5:
+                self.kf = None
+
+    def draw_bird(self, near, t):
+        """The kingfisher (drawn over the dock, so it can sit on top of the post)."""
+        k = self.kf
+        if not k or k['state'] == 'under':
+            return
+        import pygame
+        x, y = int(round(k['x'])), int(round(k['y']))
+        blue, blue_d, orange, white, beak = (40, 150, 210), (26, 96, 160), (236, 132, 56), (246, 240, 228), (40, 34, 36)
+        st = k['state']
+        if st == 'perch':
+            d = -1                                   # faces out over the water
+            bob = 1 if int(t * 1.5) % 4 == 0 else 0  # a little head bob now and then
+            near.fill(blue_d, (x - 1, y - 2, 2, 2))            # tail down the back
+            near.fill(blue, (x - 1, y - 5, 3, 3))              # back and wing
+            near.fill(orange, (x - 1 + (1 if d < 0 else 0), y - 3, 2, 2))   # chest
+            near.fill(blue, (x - 1, y - 7 + bob, 3, 2))        # head
+            near.set_at((x + d, y - 6 + bob), white)           # cheek
+            near.fill(beak, (x + 2 * d - (2 if d < 0 else 0), y - 6 + bob, 3, 1))
+            if k.get('fish') and k['dives']:
+                near.set_at((x + 3 * d, y - 5 + bob), (200, 210, 220))   # a minnow in its beak
+            near.set_at((x, y), (170, 60, 50))                # feet
+            return
+        d = 1 if (st == 'out' and k['side'] > 0) or (st == 'in' and k['side'] < 0) else -1
+        if st in ('dive',):
+            near.fill(blue, (x - 1, y - 3, 2, 3))
+            near.set_at((x, y), beak)
+            near.set_at((x, y + 1), beak)
+            near.set_at((x - 1, y - 4), blue_d)
+            return
+        flap = int(t * 16) % 2
+        near.fill(blue, (x - 2, y - 1, 5, 2))
+        near.fill(orange, (x - 1, y, 3, 1))
+        near.fill(beak, (x + 3 * d - (1 if d < 0 else 0), y - 1, 2, 1))
+        near.set_at((x - 3 * d, y - 1), blue_d)
+        if flap:
+            near.set_at((x, y - 2), blue_d)
+            near.set_at((x - d, y - 3), blue_d)
+        else:
+            near.set_at((x, y + 1), blue_d)
+            near.set_at((x - d, y + 2), blue_d)
+        if k.get('fish') and st == 'up':
+            near.set_at((x + 4 * d, y), (200, 210, 220))
 
     def _damselfly(self, g, dt):
         f = g.fishing
@@ -268,3 +401,9 @@ def draw(near, g, t):
     ll = getattr(g, 'lakelife', None)
     if ll is not None and g.place != 'town':
         ll.draw(near, t)
+
+
+def draw_bird(near, g, t):
+    ll = getattr(g, 'lakelife', None)
+    if ll is not None and g.place != 'town':
+        ll.draw_bird(near, t)

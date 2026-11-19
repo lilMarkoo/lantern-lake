@@ -155,17 +155,49 @@ def light(g, lan):
         g.toast(why, (150, 140, 130))
         return
     g.overlay = None
+    who, heard = REACTIONS[lan['id']]
+    x = lan['x']
     beats = [
-        ('fade', 'You row close to the far shore. The %s stands in the reeds, cold and rusted shut.' % lan['name']),
+        ('fade', 'You row out across the still water to the far shore. The %s stands in the reeds, cold and '
+                 'rusted shut.' % lan['name']),
+        ('focus', (x, HORIZON - 12), 104, 3.0),               # in close: the old lantern on its post
         ('say', 'you', 'There\'s a little brass plate on the post. "%s"' % lan['line'].split('"')[1]),
+        ('say', 'you', 'A twist of dry reed, a match from the tin... Steady now.'),
+        ('ritual', 'light the wick'),
         ('call', lambda g, lid=lan['id']: _do_light(g, lid)),
-        ('wait', 2.2),
+        ('wait', 2.4),
+        ('focus', (320, HORIZON + 20), 640, 3.6),             # right back out: the whole lake, and its light
+        ('call', _town_wakes),
+        ('wait', 3.0),
+        ('say', who, heard),
         ('say', 'you', lambda g, lan=lan: _light_reply(g, lan)),
     ]
     g.scene = scenes.Cutscene(g, beats, 'lake', title=lan['name'], on_end=_after_light)
-    g.scene.focus = (lan['x'], HORIZON - 8)
+    g.scene.focus = (x, HORIZON + 10)
+    g.scene.zoom_w = 448
+    g.scene.fx = {'lantern': lan['id']}
     g.overlay = 'scene'
     g.release_holds()
+    g.audio.play('wish', 0.35)
+
+
+# who calls across the water when each lantern catches
+REACTIONS = {
+    'dock': ('pip', "(from the shore path) I SAW IT! I saw it from my window! Is it magic? It's magic, isn't it!"),
+    'cove': ('juniper', "(rowing past) The whole cove's gone gold. The fish are all coming up to have a look."),
+    'deep': ('tom', "(on the jetty, very quietly) Fifty years I've waited to see a light out on the Deep. "
+                    "Don't mind me. Something in my eye."),
+    'creek': ('librarian', "(from the footbridge) All four. Rosie... they're burning again. Come up to the village "
+                           "tonight, dear. Everyone's coming down to the dock."),
+}
+
+
+def _town_wakes(g):
+    """Up in Fernwick, windows light one by one and somebody rings the old bell on the hill."""
+    sc = getattr(g, 'scene', None)
+    if sc is not None:
+        sc.fx['town'] = sc.t
+    g.audio.play('townbell', 0.6)
 
 
 def _light_reply(g, lan):
@@ -179,8 +211,13 @@ def _light_reply(g, lan):
 def _do_light(g, lid):
     if lid not in g.story['lit']:
         g.story['lit'].append(lid)
-    g.world.sparkles(LANTERN_BY_ID[lid]['x'], HORIZON - 8, 24, (255, 220, 140), 14)
-    g.audio.play('jingle5', 0.7)
+    g.world.sparkles(LANTERN_BY_ID[lid]['x'], HORIZON - 15, 34, (255, 220, 140), 16)
+    g.world.ripple(LANTERN_BY_ID[lid]['x'], HORIZON + 3, 10, 18, 160)
+    sc = getattr(g, 'scene', None)
+    if sc is not None:
+        sc.fx['lit_at'] = sc.t
+    g.audio.play('lantern', 0.8)
+    g.shake(0.6)
     g.stats['lanterns'] = len(g.story['lit'])
     g.luck = min(3.0, g.luck + 1.0)
 
@@ -286,20 +323,54 @@ def draw_far(g, frame, env, world):
 
     def c(col):
         return mul_c(col, amb)
+    sc = g.scene if (getattr(g, 'overlay', None) == 'scene' and getattr(g, 'scene', None)) else None
+    fx = sc.fx if sc is not None and sc.fx.get('lantern') == lan['id'] else None
+    _village(g, frame, world, sc)
+    # the post, a little cross-arm, and the lantern: a glass box under a peaked brass cap
     frame.fill(c((70, 60, 54)), (x, base - 12, 1, 12))
     frame.fill(c((70, 60, 54)), (x - 2, base - 13, 5, 1))
-    frame.fill(c((60, 56, 50)), (x - 1, base - 17, 3, 4))
-    frame.fill(c((90, 80, 70)), (x - 2, base - 18, 5, 1))
+    frame.fill(c((60, 56, 50)), (x - 2, base - 18, 5, 5))
+    frame.fill(c((44, 40, 40)), (x - 1, base - 17, 3, 3))                 # dark glass
+    frame.fill(c((110, 92, 64)), (x - 2, base - 19, 5, 1))
+    frame.set_at((x, base - 20), c((110, 92, 64)))
+    frame.set_at((x, base - 21), c((90, 80, 70)))                         # the ring on top
+    catching = fx is not None and not lit
+    if catching and sc.ritual > 0.01:
+        k = sc.ritual
+        frame.fill((255, 200, 120), (x, base - 16, 1, 1 + int(k * 1.5)))
+        add_glow(frame, world.g_mid, (x, base - 15), 0.15 + 0.5 * k * (0.9 + 0.1 * math.sin(world.t * 23)))
     if lit:
         fl = 0.85 + 0.15 * math.sin(world.t * 7 + x)
-        frame.fill((255, 220, 140), (x, base - 16, 1, 2))
-        add_glow(frame, world.g_mid, (x, base - 15), (0.35 + 0.55 * env.nf) * fl)
+        frame.fill((255, 236, 170), (x - 1, base - 17, 3, 3))
+        frame.fill((255, 250, 220), (x, base - 16, 1, 2))
+        boost = 0.0
+        if fx is not None and 'lit_at' in fx:
+            boost = max(0.0, 1.6 - (sc.t - fx['lit_at']) * 0.5)          # the flare as it catches
+        add_glow(frame, world.g_mid, (x, base - 15), (0.35 + 0.55 * env.nf) * fl + boost)
+        if boost > 0.4:
+            add_glow(frame, world.g_mid, (x, base - 15), boost * 0.6)
     elif not can_light(g, lan)[0] and current(g) is lan and tasks_done(g, lan) and awake(g, lan):
         pass
     if not lit and current(g) is lan and awake(g, lan) and tasks_done(g, lan):
         # ready: a faint pulse to say "come and light me"
         k = 0.5 + 0.5 * math.sin(world.t * 3)
         add_glow(frame, world.g_mid, (x, base - 15), 0.12 + 0.15 * k)
+
+
+VILLAGE = [(18 + i * 9 + (i * 7) % 5, (i * 5) % 4) for i in range(13)]
+
+
+def _village(g, frame, world, sc):
+    """Fernwick's windows along the far left shore, lighting one by one when a lantern catches."""
+    if sc is None or 'town' not in sc.fx:
+        return
+    k = (sc.t - sc.fx['town']) / 2.2
+    for i, (vx, dy) in enumerate(VILLAGE):
+        if k * len(VILLAGE) < i + 1:
+            break
+        y = HORIZON - 3 - dy
+        frame.fill((255, 214, 140), (vx, y, 2, 1))
+        add_glow(frame, world.g_mid, (vx, y), 0.22)
 
 
 def draw_near(g, near):

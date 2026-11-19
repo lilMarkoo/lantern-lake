@@ -11,6 +11,8 @@ A Cutscene runs a list of beats while Game.overlay is 'scene':
   ('call', fn)                run fn(g) (rewards, story flags); also run when the scene is skipped
   ('wait', seconds)
   ('sound', name)
+  ('focus', (x, y), zoom_w, secs)  lake scenes: glide the camera to a new point and closeness, then go on
+  ('ritual', text)            hold Space / the mouse (or keep tapping) until the light catches
 Town scenes move your walker and the neighbours on the street; lake scenes just play over the lake.
 """
 import math
@@ -54,6 +56,9 @@ class Cutscene:
         self.held = False
         self.focus = None            # lake scenes: the world point the camera closes in on
         self.zoom_w = 320
+        self.glide = None            # ('focus' beat) where the camera came from and is going to
+        self.ritual = 0.0            # ('ritual' beat) how far the light has caught, 0..1
+        self.fx = {}                 # anything a story wants to draw along with the scene
         self.cast = set()
         for b in self.beats:
             if b[0] in ('walk', 'say', 'face', 'emote') and b[1] not in ('you', None):
@@ -135,6 +140,11 @@ class Cutscene:
             elif kind == 'fade':
                 self.fade_beat = 'out'
                 self.caption = b[1]
+            elif kind == 'focus':
+                f0 = self.focus or (b[1][0], b[1][1])
+                self.glide = (f0, self.zoom_w, b[1], b[2], b[3])
+            elif kind == 'ritual':
+                self.ritual = 0.0
             return
 
     def update(self, dt):
@@ -173,6 +183,32 @@ class Cutscene:
         elif kind == 'wait':
             if self.bt >= b[1]:
                 self.next()
+        elif kind == 'focus' and self.glide:
+            (x0, y0), w0, (x1, y1), w1, secs = self.glide
+            q = min(1.0, self.bt / max(0.01, secs))
+            e = q * q * (3 - 2 * q)
+            self.focus = (x0 + (x1 - x0) * e, y0 + (y1 - y0) * e)
+            self.zoom_w = w0 + (w1 - w0) * e
+            if q >= 1.0:
+                self.glide = None
+                self.next()
+        elif kind == 'ritual':
+            try:
+                held = pygame.mouse.get_pressed()[0] or pygame.key.get_pressed()[pygame.K_SPACE]
+            except pygame.error:
+                held = False
+            pad = getattr(self.g, 'pad', None)
+            if pad is not None and getattr(pad, 'held', None):
+                try:
+                    held = held or pad.held('a')
+                except Exception:
+                    pass
+            if held and self.bt > 0.3:
+                self.ritual = min(1.0, self.ritual + dt / 2.4)
+            else:
+                self.ritual = max(0.0, self.ritual - dt * 0.12)      # it gutters if you let go, but slowly
+            if self.ritual >= 1.0:
+                self.next()
         elif kind == 'fade':
             if self.fade_beat == 'out':
                 self.fade = min(1.0, self.fade + dt / 0.6)
@@ -210,6 +246,10 @@ class Cutscene:
             self.next()
         elif kind == 'fade' and self.fade_beat == 'hold' and self.bt > 0.5:
             self.fade_beat = 'in'
+        elif kind == 'ritual' and self.bt > 0.3:
+            self.ritual = min(1.0, self.ritual + 0.12)      # tapping works too
+            if self.ritual >= 1.0:
+                self.next()
 
     def key(self, k):
         if k == pygame.K_ESCAPE:
@@ -255,6 +295,10 @@ class Cutscene:
             self.press()
         elif kind == 'fade' and self.fade_beat == 'hold' and self.bt > 1.0:
             self.press()
+        elif kind == 'ritual':
+            self.ritual = min(1.0, self.ritual + dt / 2.4)
+            if self.ritual >= 1.0:
+                self.next()
 
     # ------------------------------------------------------------ camera
     def cam(self, default):
@@ -309,6 +353,8 @@ class Cutscene:
             self._dialogue(s, SW, SH)
         if self.picture:
             self._picture(s, SW, SH)
+        if self.i < len(self.beats) and self.beats[self.i][0] == 'ritual':
+            self._ritual(s, SW, SH, self.beats[self.i][1])
         if self.fade > 0.005:
             buf = getattr(self, '_fadebuf', None)
             if buf is None or buf.get_size() != (SW, SH):
@@ -324,6 +370,25 @@ class Cutscene:
         parts = [('key', 'Space'), 'next    ', ('key', 'Esc'), 'skip']
         w = ui.rich(s, parts, (0, 0), measure=True)
         ui.rich(s, parts, (SW - 22 - w, SH - 30), (170, 160, 150))
+
+    def _ritual(self, s, SW, SH, text):
+        """The prompt for lighting a lantern: a ring that fills with warm light as you hold."""
+        ui = self.g.ui
+        a = int(255 * min(1.0, self.bt / 0.5))
+        cx, cy = SW // 2, SH - 132
+        pygame.draw.circle(s, (30, 22, 26), (cx, cy), 34)
+        pygame.draw.circle(s, (90, 70, 56), (cx, cy), 34, 3)
+        if self.ritual > 0.01:
+            ang = self.ritual * 2 * math.pi
+            pts = [(cx, cy)] + [(cx + math.sin(ang * i / 40) * 31, cy - math.cos(ang * i / 40) * 31) for i in range(41)]
+            pygame.draw.polygon(s, lerp_c((240, 160, 80), (255, 230, 160), self.ritual), pts)
+        fl = 6 + int(10 * self.ritual)
+        pygame.draw.polygon(s, (255, 244, 210), [(cx, cy - fl), (cx - 5, cy + 4), (cx + 5, cy + 4)])
+        hint = self.g.hint([('key', 'Hold'), ('key', 'Space'), 'or click:', text],
+                           [('pad', 'A'), 'hold:', text]) if hasattr(self.g, 'hint') else [text]
+        w = ui.rich(s, hint, (0, 0), measure=True)
+        ui.rich(s, hint, (cx - w // 2, cy + 58), (250, 236, 210))
+        del a
 
     def _dialogue(self, s, SW, SH):
         g = self.g

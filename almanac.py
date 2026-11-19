@@ -120,6 +120,11 @@ def event_icon(s, kind, center, scale=1.0):
             pygame.draw.line(s, (96, 150, 76), (x + dx, y + 8), (x + dx + 1, y + 8 - h), 2)
         s.fill((120, 80, 52), (x - 2, y - 9, 3, 6))
         pygame.draw.line(s, (120, 170, 200), (x - 10, y + 9), (x + 10, y + 9), 2)
+    elif kind == 'mail':                       # an envelope
+        s.fill((250, 244, 230), (x - 10, y - 6, 20, 14))
+        pygame.draw.rect(s, (150, 120, 96), (x - 10, y - 6, 20, 14), 2)
+        pygame.draw.lines(s, (150, 120, 96), False, [(x - 9, y - 5), (x, y + 2), (x + 9, y - 5)], 2)
+        s.fill((220, 80, 80), (x - 2, y, 4, 3))
     elif kind == 'snack':
         pygame.draw.ellipse(s, (214, 150, 80), (x - 11, y - 5, 22, 12))
         pygame.draw.ellipse(s, (236, 190, 110), (x - 8, y - 5, 15, 5))

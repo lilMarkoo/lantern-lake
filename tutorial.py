@@ -16,7 +16,8 @@ DONE = len(STEPS)
 
 
 def active(g):
-    return (g.mode == 'play' and g.tut < DONE and g.settings.get('tutorial', True) and not g.net.online)
+    return (g.mode == 'play' and g.tut < DONE and g.settings.get('tutorial', True) and not g.net.online
+            and (not g.tut_day or g.day <= g.tut_day or getattr(g, 'show_help', False)))
 
 
 def _done(g, sid):

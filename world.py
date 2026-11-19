@@ -605,9 +605,11 @@ class World:
         lakelife.draw(near, g, t)
         near.blit(self.fg, (0, 0))
         import wildlife
+        import actors
         if self.spot == 'dock':
             self._dock_dynamic(near, env, g)
             lakelife.draw_dock(near, g, t)
+            lakelife.draw_bird(near, g, t)
             import goals
             goals.draw_dock(near, g, t)
             seasons.draw_pot(near, g, t)
@@ -618,22 +620,30 @@ class World:
             if hasattr(g, 'shore'):
                 import shore
                 shore.draw_world(near, g, t)
+        actors.contact_shadows(near, g, env)
         wildlife.draw(near, g, t)
         g.draw_actors(near)
+        actors.rim_light(near, g, env)
         if hasattr(g, 'story'):
             story.draw_near(g, near)
         g.fishing.draw_line(near)
         self._particles(near, lit=True)
         self._reeds(near, env)
+        self._foreground(near, env)
         na = env.near_amb
         near.fill((na[0], na[1], na[2], 255), special_flags=pygame.BLEND_RGBA_MULT)
-        # wobbly reflection of the dock end, cat and angler
+        # wobbly reflection of the dock end, cat and angler: broken up by the ripples (some rows drop out,
+        # it fades with depth and comes and goes along its length), under a dark waterline with foam
         src = near.subsurface((136, 236, 134, 52))
-        refl = pygame.transform.flip(src, False, True)
-        refl.set_alpha(70)
+        refl = pygame.transform.flip(src, False, True).convert_alpha()
+        refl.blit(self._refl_mask(), (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
         for row in range(0, 52, 2):
-            off = int(math.sin(row * 0.5 - t * 2.2) * (1 + row * 0.04))
+            if (row // 2 + int(t * 2.5)) % 5 == 0 or (row > 20 and (row // 2 + int(t * 3.3)) % 3 == 0):
+                continue                                 # a ripple breaks it here
+            off = int(math.sin(row * 0.5 - t * 2.2) * (1 + row * 0.06))
             frame.blit(refl, (136 + off, DECK_Y + 8 + row), (0, row, 134, 2))
+        if self.spot == 'dock':
+            self._waterline(frame, env, t)
         frame.blit(near, (0, 0))
         self._lights(frame, env, g)
         wildlife.draw_lights(frame, g, env)
@@ -1238,6 +1248,65 @@ class World:
                 pygame.draw.rect(near, b['col'], (int(bx) - 2, int(by) - 3 - hop, 4, 3))
                 near.set_at((int(bx) + (2 if b['side'] < 0 else -3), int(by) - 3 - hop), b['col'])
                 near.set_at((int(bx) + (3 if b['side'] < 0 else -4), int(by) - 3 - hop), (240, 180, 60))
+
+    def _refl_mask(self):
+        """Alpha for the dock's reflection: fading with depth, and patchy along its length."""
+        m = getattr(self, '_rmask', None)
+        if m is None:
+            m = self._rmask = pygame.Surface((134, 52), pygame.SRCALPHA)
+            rng = random.Random(5)
+            cols = [0.55 + 0.45 * (0.5 + 0.5 * math.sin(x * 0.11 + 1.3) * math.sin(x * 0.037)) for x in range(134)]
+            for y in range(52):
+                depth = max(0.0, 1 - y / 52) ** 1.2
+                for x in range(134):
+                    a = 120 * depth * cols[x] * (0.85 + 0.15 * rng.random())
+                    m.set_at((x, y), (255, 255, 255, int(a)))
+        return m
+
+    def _waterline(self, frame, env, t):
+        """A dark line of shade right under the deck, and a little foam where the posts meet the water."""
+        sh = getattr(self, '_wline', None)
+        if sh is None:
+            sh = self._wline = pygame.Surface((168, 3), pygame.SRCALPHA)
+            for y, a in ((0, 120), (1, 80), (2, 40)):
+                sh.fill((14, 24, 34, a), (0, y, 168, 1))
+        frame.blit(sh, (96, DECK_Y + 7))
+        foam = lerp_c((220, 232, 240), env.amb, 0.3)
+        for i, px in enumerate((110, 150, 190, 230, 260)):
+            for j in range(3):
+                ph = t * 2.0 + i * 1.3 + j * 2.1
+                if math.sin(ph) > -0.3:
+                    fx = px - 2 + j * 3 + int(math.sin(ph * 0.7) * 1.5)
+                    frame.fill(foam, (fx, DECK_Y + 20 + (j % 2), 2, 1))
+
+    def _foreground(self, near, env):
+        """Dark rocks and reeds right across the bottom edge, in front of everything: it gives the shot depth."""
+        if self.spot not in ('dock', 'cove', 'creek'):
+            return                   # out on open water (the Deep, the coast) there's no near shore
+        season = env.season
+        fg = getattr(self, '_fg', None)
+        if fg is None or self._fg_season != season:
+            rng = random.Random(11)
+            fg = self._fg = pygame.Surface((W, 40), pygame.SRCALPHA)
+            self._fg_season = season
+            rock = [(40, 46, 42), (38, 46, 40), (52, 44, 36), (70, 74, 82)][season]
+            for x in list(range(-10, 140, 14)) + list(range(300, W + 10, 17)):
+                w_ = rng.randint(14, 30)
+                h_ = rng.randint(6, 14)
+                pygame.draw.ellipse(fg, rock + (255,), (x, 40 - h_, w_, h_ * 2))
+                pygame.draw.ellipse(fg, lighten(rock, 0.12) + (255,), (x + 3, 40 - h_, w_ // 2, 3))
+                if season == 3:
+                    pygame.draw.ellipse(fg, (226, 232, 242, 255), (x + 2, 40 - h_ - 1, w_ - 4, 4))
+            self._fg_reeds = [(rng.choice([rng.randint(0, 120), rng.randint(330, W)]), rng.randint(16, 34),
+                               rng.uniform(0, 6)) for _ in range(26)]
+        reed = [(36, 58, 40), (34, 56, 36), (74, 60, 34), (90, 92, 96)][season]
+        t = self.t
+        for x, h_, ph in self._fg_reeds:
+            sway = math.sin(t * 1.3 + ph) * (1.5 + env.wind * 3)
+            pygame.draw.line(near, reed, (x, H), (x + sway, H - h_), 2)
+            if h_ > 28 and season != 3:
+                pygame.draw.rect(near, darken(reed, 0.3), (int(x + sway) - 1, H - h_ - 5, 3, 6))
+        near.blit(fg, (0, H - 40))
 
     def _reeds(self, near, env):
         t = self.t

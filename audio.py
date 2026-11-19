@@ -279,6 +279,18 @@ class Audio:
         S['jingle4'] = self._snd(arp([C5, E5, G5, C6, E6, G6], 0.08, 3.2, lambda f: self._bell(f, 2.2, 2.6)), 0.5)
         S['jingle5'] = self._snd(arp([C5, G5, C6, E6, G6, C6 * 2, G6, C6 * 2], 0.1, 4, lambda f: self._bell(f, 2.6, 2.2)), 0.5)
         S['wish'] = self._snd(arp([G6, E6 * 1.5, D6 * 2, G6 * 2], 0.07, 2.6, lambda f: self._bell(f, 2.0, 3)), 0.35)
+        # a lantern catching: a warm chord swelling under a slow bell tune
+        t = self._t(6.5)
+        swell = (1 - np.exp(-t * 1.1)) * np.exp(-t * 0.42)
+        pad = sum(np.sin(2 * np.pi * f * t) * k for f, k in ((261.63, 0.5), (392.0, 0.35), (659.25, 0.28),
+                                                              (523.25, 0.2))) * swell * 0.55
+        mel = arp([G5, C6, E6, D6, C6, G5, E6, C6 * 1.0], 0.36, 6.5, lambda f: self._bell(f, 2.6, 2.0))
+        n = min(len(pad), len(mel))
+        S['lantern'] = self._snd(mel[:n] + pad[:n], 0.55)
+        # the old bell on Fernwick hill, far off across the water
+        S['townbell'] = self._snd(self._mix([(0, self._bell(196.0, 5.0, 0.7), 1.0), (0, self._bell(466.2, 4.0, 1.1), 0.35),
+                                             (1.5, self._bell(196.0, 5.0, 0.7), 0.8),
+                                             (1.5, self._bell(466.2, 4.0, 1.1), 0.3)], 6.5), 0.35)
         S['hook'] = self._snd(arp([G5, D6], 0.05, 1.2), 0.45)
         S['sad'] = self._snd(arp([E5, C5, A5 / 2], 0.14, 2.0), 0.4)
         for i in range(5):

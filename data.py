@@ -457,7 +457,7 @@ RODS = [
 ROD_BY_ID = {r['id']: r for r in RODS}
 
 BAITS = [
-    dict(id='worm', name='Garden Worms', price=0, pack=0, desc='Free and wriggly. Fish like them fine.'),
+    dict(id='worm', name='Garden Worms', price=0, pack=0, desc='Free and wriggly: a fresh tin dug every morning.'),
     dict(id='corn', name='Sweet Corn', price=40, pack=10, desc='Fish bite much sooner.'),
     dict(id='glow', name='Glow Grubs', price=60, pack=10, desc='Night fish can see it from far away.'),
     dict(id='golden', name='Golden Lure', price=220, pack=5, desc='Rare fish find it irresistible.'),

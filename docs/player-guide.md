@@ -31,6 +31,7 @@
 | Photo mode / save a picture | P / F12 |
 | Take a photo (in photo mode) | Space or click. Esc or P puts the camera away |
 | Fullscreen, mute music, pause | F11, M, Esc |
+| Show or hide the key hints and tips | F1 or ? |
 | Move through menus | Arrow keys (or W / S), Enter to choose, Esc to go back |
 | Cooking and cutscenes | Space or click (hold it when the dish asks), Esc to skip a scene |
 | Cabin tabs | Tab (Shift+Tab goes back), or LB / RB on a controller |
@@ -88,12 +89,14 @@ your save, so they stay the same when you start a new game.
   and also the fastest to draw (on a 1080p screen: 67% and 100%)
 - **Gameplay**: relaxed reeling, day length (slow, normal or quick days), 12 or 24-hour clock, the HUD style
   (see below), hints, pausing when you switch to another window, and the first-day tips (seven short tips at the top of the screen
-  in a new game, each gone once you've done it, with a Skip button)
+  in a new game, each gone once you've done it, with a Skip button). The key hints at the bottom of the screen
+  and the tips show through your first day (and your first few fish). After that they tuck away: press **F1**
+  or **?**, or click the small ? in the bottom-left corner, to bring them back
 - **Controls**: rebind the keyboard keys, or see the controller buttons when a pad is in use
 
 ### The HUD
 
-The top left shows the clock and **one tracked goal**: what to do next, where to go, and when (for a fish: the
+The top left shows one card with the clock, the day and your coins, and under it **one tracked goal**: what to do next, where to go, and when (for a fish: the
 spots it swims at, and the hours, seasons, weather and tide it wants). When there's more than one, a small arrow
 on the card switches between them (dots show which one you're on). A live festival comes first, then the
 request. At the sea, the harbour's jobs (the lighthouse, Morwen's orders, Kit's shells) come before a letter
@@ -101,7 +104,9 @@ asking for a lake fish. Under it are the day's notes: snacks, visitors, fish run
 the lake's chores (the garden, the wagon, the crab pot) stay at home.
 
 With the Calm or Compact HUD, the cards fade nearly away once your bobber has settled and all through the
-fight, so it's just you and the water. Point at them and they come back.
+fight, so it's just you and the water. With the Calm HUD they also fade when nothing has changed for a few
+seconds. Point at them, or earn some coins, and they come back. While a cast is out the goal card shrinks to a
+single line.
 
 ### Goals (Q)
 
@@ -128,9 +133,10 @@ the radio, or the other way round. The game remembers your station.
 
 The **HUD** setting (Options > Gameplay) has three styles:
 
-- **Calm** (the default): while a cast is out, the menu toolbar slides away and the day's notes step aside, so
-  it's just you and the water. The keys (J, S, C, K...) still work, and pointing at the bottom-right corner while
-  you wait for a bite brings the toolbar back
+- **Calm** (the default): the menu toolbar is folded into one **Menu** button in the bottom-right corner.
+  Point at it (or click it) and it opens into the Journal, Shop, Cabin, Calendar, Town and Rest buttons. While
+  a cast is out it slides away and the day's notes step aside, so it's just you and the water. The keys (J, S,
+  C, K...) still work. Your bait sits in a small label at the top right
 - **Compact**: like Calm, with a small clock, coin and bait display
 - **Full**: everything stays on screen, as before
 
@@ -146,6 +152,10 @@ radishes (planted before you came) pop up ready to pick. Pick them, and a yarn b
 with her (Cabin, Biscuit tab), and she finds Grandma's old tool box under the dock. Click the loose plank
 sticking up on the dock to mend it: the dock gets a fresh plank and a pennant, and the tool box has 50 coins in
 it.
+
+Letters that can wait go in the **mailbox** instead of popping up: the flag on the mailbox goes up, a line
+under your goals says how many are waiting, and you read them when you like (click the mailbox, or Mailbox in
+the menu). Only Grandma's welcome on your very first morning opens by itself.
 
 The view sits close to you and Biscuit on the dock and drifts a little toward wherever you point. When you
 cast, it pulls back to keep both you and your bobber in view.
@@ -175,7 +185,9 @@ Big fish get a **second wind** near the end: they change how they fight and come
 also leap out of the water for a timing challenge (Perfect gives a big boost, a miss costs you), and golden
 glimmers on the ring are worth a few coins.
 
-You can watch the fight in the lake too: the fish's dark shape fights at the end of the line, its fin cuts the
+The ring is a small readout in the bottom-left corner: the fish is the show. The camera closes in on the
+fight, and the hooked fish itself thrashes just under the surface at the end of your line, big and in its own
+colours, rolling harder when it lunges. Its fin cuts the
 water when it runs, it slaps the surface when it lunges, and a tight line shivers and flicks off drops. When it
 comes in, it bursts out of the water and you hold it up for a moment (with its name, its size and a NEW or
 Record tag) before the catch card. The world holds its breath for a moment as a fish breaks the surface,
@@ -204,7 +216,9 @@ it clean under with a bloop and a swirl: that's when to strike.
 
 While you wait the view leans gently in toward your bobber and the lake gets on with its day: a fish jumps far
 out, rings spread where one rises, the reeds rustle, and on a fine spring or summer day a damselfly may come
-and rest on your bobber (it's off at the first twitch or nibble). The wind moves through the trees in gusts
+and rest on your bobber (it's off at the first twitch or nibble). Biscuit watches the bobber too and sits
+up, tail going, at every nibble. Every so often a kingfisher comes to sit on the dock post; now and then it
+dives for a minnow and flies back up with it (it's off as soon as you hook something). The wind moves through the trees in gusts
 and you can see each gust ruffle across the water.
 
 **The evening rise**: at dusk on the lake (not in a storm, and not under ice), fish come up to feed. Fish jump
@@ -216,6 +230,16 @@ Two things on the water are worth casting at:
 - **Feeding schools**: a dark patch with little fins breaking the surface, drifting slowly across the water.
   Cast into one for quick bites (a school is good for a couple of fish before it moves on)
 
+### The worm tin
+
+Garden worms are free, but you get one tin a day: **30 worms**, dug fresh every morning. A worm goes when a
+fish takes your bait (hooked, or one that got away with it because you struck too late). When the tin is empty
+you switch to whatever other bait you have, or buy another 15 worms at the shop for 20 coins (extras you buy
+carry over). The bait label at the top right shows how many are left.
+
+**Spooked fish**: a rare fish (rare, very rare or legendary) that snaps your line or gets away is spooked. It
+won't bite again until tomorrow.
+
 ## The rowboat and fishing spots
 
 Wren's Wagon sells a rowboat for 500 coins. Fen's birthday gift, the Little Rowboat, works too. On her very
@@ -225,8 +249,12 @@ three new places. Biscuit comes along. You row home
 automatically when you rest for the night.
 
 - **Lily Cove**: shallow water full of lily pads and frogs. Bites come quickly, but casts never reach deep water.
+  The hook sometimes **snags in the lily stems**: tap to try to work it loose (it keeps your bait), or hold to
+  tear it free (the bait stays in the weeds)
   Home of the Mud Bullhead, the Lily Gourami and the Velvet Tench
-- **The Deep**: the middle of the lake. Bites are slow, but there are few small fish and more rare ones,
+- **The Deep**: the middle of the lake, marked by a red buoy. A fish hooked here **bolts for the bottom**
+  first: it's heavy on the line and out of sight, so follow its bubbles. Bites are slow, but there are few small
+  fish and more rare ones,
   bigger catches and more pearl clams. Home of the Silver Cisco, the Midnight Burbot and the legendary Mossback
   Muskie
 - **Willow Creek**: where the river comes in. The current carries your bobber downstream while you wait.
@@ -301,12 +329,15 @@ off Kelp Rocks.
 Press T (or the Town button) to walk up the lane to Fernwick, a little village street three screens long.
 Walk with A and D or click where you want to go. Clicking a shop or a neighbour walks you there and goes
 in. Seven townsfolk keep their own day: they open their shops, wander the street, shelter under umbrellas
-in the rain and gather in the square in the evening. Shops keep opening hours.
+in the rain and gather in the square in the evening. Shops keep opening hours. The view stays close on the
+street and the people in it, with barrels, crates, bikes and milk churns along the front, and pigeons that
+clatter up when you walk through them.
 
 - **Old Tom's Tackle**: the shop you know, inside a real building now
-- **Mabel's Bakery**: one treat a day each, lasting until bedtime. Honey Bun (luck), Lakeside Tea (fish bite
-  sooner), Blueberry Pie (bigger fish) and Star Cookie (rare fish come more often). The *Recipes* tab sells
-  her recipe cards for your kitchen
+- **Mabel's Bakery**: Mabel stands behind her counter. Point at a treat and she tells you about it; buy one and
+  she fetches it from the shelf and sets it down, still steaming. One treat a day each, lasting until bedtime:
+  Honey Bun (luck), Lakeside Tea (fish bite sooner), Blueberry Pie (bigger fish) and Star Cookie (rare fish come
+  more often). The *Recipes* tab sells her recipe cards for your kitchen
 - **Notice board**: three odd jobs every morning, such as a certain fish, a big one, any few fish or a piece of
   junk for the clean-up. Hand them in from your basket for coins and friendship
 - **Wishing fountain**: toss in 10 coins once a day for luck, and sometimes a surprise
@@ -319,7 +350,9 @@ in the rain and gather in the square in the evening. Shops keep opening hours.
 - **Pip's Ring Toss**: 15 coins for five rings. Throw (Space or click) as the arrow sweeps under a bottle. The
   gold bottle is worth three tickets. Trade tickets for bait, coins, a Party Hat and a Top Hat
 - **Library**: Ms. Alder's notes on every fish you haven't caught yet, with when and where to look
-- **Lookout bench**: sit at the east end and watch the lake for a little luck. On a clear night, lie back and look
+- **Lookout bench**: at the east end the street opens out onto the lake. Sit on the bench and you settle down
+  facing the water, Biscuit hops up beside you if she's along, and the view comes in close on the two of you
+  (a little luck, once a day). Walk, click or press E to stand up. On a clear night, lie back and look
   at the stars instead: each season has its own constellation, and if Fen is out painting they come and sit
   with you (once a night, +1 luck)
 - **Mabel's Cocoa Cart**: from 8:30 PM to midnight Mabel wheels a cart out next to the fountain. Hot Cocoa makes
@@ -347,7 +380,10 @@ summer, pumpkin pie in autumn and a gingerbread house in winter.
 
 Press E at the aquarium door (open 9 AM to 5 PM) to walk inside. Walk the hall with A and D or click, and press E
 to look, sit or talk. Esc leaves. The clock keeps running while you look around, and Juniper sees everyone out
-at closing time.
+at closing time. Even before you donate anything, the tanks have their own little residents: a school of fry
+turning together, a snail on the glass and a hermit crab in Crab Pot Corner.
+
+The cabin **Wardrobe** shows what you own, the next few things still to find, and how many more are out there.
 
 Every fish you donate swims in one of twelve themed exhibits: Lantern Lake, Lily Cove, Willow Creek, The Deep,
 Legends of the Lake (a round brass porthole), Under the Ice, Crab Pot Corner, Spring & Summer, Autumn & Winter,
@@ -441,8 +477,11 @@ things done first. Press L to see them:
 | Deep Lantern | Autumn | 3 kinds of rare fish, cook 5 different recipes, 5 hearts with 3 neighbours |
 | Creek Lantern | Winter | 20 kinds of fish, a home upgrade, cook 15 dishes |
 
-When a lantern is ready it pulses on the far shore. Row to its spot and light it from the lanterns window, which
-plays a short scene and gives you some luck. Once all four burn, come down to the dock one evening (after 7:30 PM) for
+When a lantern is ready it pulses on the far shore. Row to its spot and light it from the lanterns window. You
+row across and the view closes in on the old lantern; **hold Space or the mouse** (or keep tapping) to light the
+wick, and the flame catches and flares with its own little tune. Then the view pulls back over the whole lake,
+the windows of Fernwick light up one by one along the far shore, the old bell rings on the hill, and someone
+calls across the water. Each lantern gives you some luck. Once all four burn, come down to the dock one evening (after 7:30 PM) for
 the Night of Four Lanterns: the whole village comes to the water, with paper lanterns and fireworks, and you get
 a keepsake (the Lantern Hat, 1,000 coins and friendship with everyone).
 
@@ -506,7 +545,8 @@ she leads you somewhere new at the end of the street. After that she still turns
 
 ## Your cabin
 
-The cabin's **Home** tab shows your room. Click a spot on the wall or floor, then pick something from the
+The cabin's **Home** tab shows your room. Grandma left her rocking chair, a braided rug, a potted fern, an old
+lake map and a flower garland behind, so it never starts bare. Click a spot on the wall or floor, then pick something from the
 catalogue on the right: paintings, a clock that keeps the lake's time, shelves, an armchair, a wood stove, lamps
 that glow in the evening, a cat basket and three toys for Biscuit, four rugs and five wallpapers. Moving things
 around is free. Any fish you've caught at 70% of its biggest size can be mounted on the wall as a trophy.

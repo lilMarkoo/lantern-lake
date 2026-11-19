@@ -79,6 +79,16 @@ def new():
     return {'owned': [], 'wall': [None] * 4, 'floor': [None] * 4, 'rug': None, 'paper': 'pine', 'tank': 'classic'}
 
 
+def starter():
+    """A new cabin isn't bare: Grandma Rosie left a few of her things behind."""
+    h = new()
+    h['owned'] = ['rocker', 'fern', 'garland', 'lakemap', 'rug_round']
+    h['wall'] = [None, 'lakemap', 'garland', None]
+    h['floor'] = ['rocker', None, None, 'fern']
+    h['rug'] = 'rug_round'
+    return h
+
+
 def clean(h):
     base = new()
     if not isinstance(h, dict):
@@ -696,9 +706,14 @@ def draw_tab(g, s, rect):
             on = sel == (kind, i)
             empty = g.home[kind][i] is None
             hov = r.collidepoint(ui.mouse)
-            if on or hov or empty:
-                col = U.GOLD if on else (250, 244, 230) if hov else (230, 214, 190)
+            if on or hov:
+                col = U.GOLD if on else (250, 244, 230)
                 _dashed(s, r, col, 3 if on else 2)
+            elif empty:
+                # a quiet little + where something could go, not a blueprint of dashed boxes
+                c = (226, 206, 176)
+                s.fill(c, (r.centerx - 7, r.centery - 1, 14, 3))
+                s.fill(c, (r.centerx - 1, r.centery - 7, 3, 14))
             ui.hotspot(r, lambda k=kind, i=i: _select(g, (k, i)))
     # under the room: what's selected
     iy = ry + RH * 2 + 18

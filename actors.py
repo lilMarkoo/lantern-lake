@@ -638,6 +638,79 @@ def draw_bubbles(s, g, t):
             draw_bubble(s, x + 1, y - (29 if k == 'dock' else int(14 * sc) + 2), kind, t + pid)
 
 
+_SOFT = {}
+
+
+def soft_shadow(w):
+    """A soft oval of shade, darkest in the middle (cached per width)."""
+    sh = _SOFT.get(w)
+    if sh is None:
+        sh = _SOFT[w] = pygame.Surface((w, 4), pygame.SRCALPHA)
+        for i in range(4):
+            k = i / 3
+            iw, ih = int(w * (1 - 0.45 * k)), max(1, int(4 * (1 - 0.5 * k)))
+            pygame.draw.ellipse(sh, (20, 14, 18, 40 + 24 * i), ((w - iw) // 2, 0, iw, ih))
+    return sh
+
+
+def key_light(env):
+    """(strength 0..1, side +1 sun on the right / -1 on the left, how low the sun is 0..1)."""
+    if not getattr(env, 'sun_vis', False):
+        return 0.0, 1, 0.0
+    st = getattr(env, 'sun_t', 0.5)
+    low = 1 - math.sin(math.pi * max(0.0, min(1.0, st)))
+    k = (0.28 + 0.4 * low) * (1 - 0.8 * getattr(env, 'over', 0.0)) * (1 - getattr(env, 'nf', 0.0))
+    side = 1 if env.sun[0] > PLAYER_X else -1
+    return max(0.0, k), side, low
+
+
+def contact_shadows(near, g, env):
+    """Shade under you, Biscuit, the posts and the things on the dock, cast away from the sun."""
+    if getattr(g, 'spot', 'dock') != 'dock':
+        return
+    k, side, low = key_light(env)
+    dx = -side * int(1 + 4 * low * (k > 0.05))
+    alpha = int(255 * (0.55 + 0.45 * min(1.0, k * 2)))
+    import lakelife
+    props = lakelife.dock_props(g)
+    spots = [(PLAYER_X, DECK_Y, 16), (CAT_X, DECK_Y, 18), (104, DECK_Y, 8), (258, DECK_Y, 8)]
+    spots += [(x, DECK_Y, 9) for pid, x in (('bucket', 193), ('pots', 112), ('pots', 250), ('rope', 124))
+              if pid in props]
+    for x, y, w in spots:
+        sh = soft_shadow(w + int(4 * low))
+        sh.set_alpha(alpha)
+        near.blit(sh, (x - sh.get_width() // 2 + dx, y - 1))
+
+
+def rim_light(near, g, env):
+    """A warm rim of sunlight on the sun side of you and Biscuit, so you sit in the scene, not on it."""
+    k, side, low = key_light(env)
+    if k < 0.05:
+        return
+    import numpy as np
+    col = np.array(lerp_c((255, 246, 220), (255, 190, 120), low), dtype=np.float32)
+    amt = min(0.9, k * 1.7)
+    boat = getattr(g, 'spot', 'dock') != 'dock'
+    rects = [(PLAYER_X - 10, DECK_Y - 38 - (4 if boat else 0), 24, 38), (CAT_X - 13, DECK_Y - 24, 28, 22)]
+    for rect in rects:
+        r = pygame.Rect(rect).clip(near.get_rect())
+        if r.w < 3 or r.h < 3:
+            continue
+        sub = near.subsurface(r)
+        a = pygame.surfarray.pixels_alpha(sub)
+        rgb = pygame.surfarray.pixels3d(sub)
+        solid = a > 200
+        if side > 0:
+            edge = solid[:-1, :] & ~solid[1:, :]
+            px = rgb[:-1, :]
+        else:
+            edge = solid[1:, :] & ~solid[:-1, :]
+            px = rgb[1:, :]
+        if edge.any():
+            px[edge] = (px[edge] * (1 - amt) + col * amt).astype(np.uint8)
+        del a, rgb, px
+
+
 def draw_all(s, g, t):
     if getattr(g, 'spot', 'dock') == 'dock':
         draw_decor(s, g, t)
