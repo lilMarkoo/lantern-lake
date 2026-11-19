@@ -5,6 +5,7 @@ import random
 import pygame
 
 import art
+import atmos
 from art import W, H, HORIZON, DECK_Y, lerp_c, mul_c, darken, lighten, add_glow
 from data import phase_of
 from fishing import cast_point
@@ -157,7 +158,8 @@ class Env:
         st = (m - 330) / (1140 - 330)
         self.sun_vis = 0 <= st <= 1
         self.sun_t = st
-        self.sun = (30 + st * 580, HORIZON + 8 - math.sin(math.pi * max(0, min(1, st))) * 165)
+        # it comes up over the far shore on the left and goes down behind the trees on the right, both in view
+        self.sun = (130 + st * 300, HORIZON + 8 - math.sin(math.pi * max(0, min(1, st))) * 165)
         mt = ((m - 1150) % 1440) / 620.0
         self.moon_vis = mt <= 1
         self.moon = (40 + mt * 560, HORIZON + 8 - math.sin(math.pi * min(1, mt)) * 150)
@@ -278,6 +280,7 @@ class World:
         self.g_cool = art.glow(16, (130, 220, 255))
         self.g_star = art.glow(12, (200, 220, 255))
         self.vig = art.vignette(W, H)
+        self.atmos = atmos.Atmos()           # sunbeams, glow, mist, cloud shadows, glints, the Milky Way
         self.near = pygame.Surface((W, H), pygame.SRCALPHA)
         self.fx = pygame.Surface((W, H), pygame.SRCALPHA)
         self.sky_strip = pygame.Surface((1, HORIZON))
@@ -293,6 +296,14 @@ class World:
             sp = self.rng.uniform(15, 45) * power
             self.particles.append(dict(x=x, y=y, vx=math.cos(a) * sp, vy=math.sin(a) * sp * 1.4, g=110, life=0.7,
                                        max=0.7, col=color, kind='drop', floor=y + 1))
+        if power >= 0.8 and color[2] > 200:
+            self.atmos.burst(x, y, power)
+            for _ in range(int(n * 0.6)):
+                a = self.rng.uniform(-math.pi * 0.8, -math.pi * 0.2)
+                sp = self.rng.uniform(25, 60) * power
+                self.particles.append(dict(x=x, y=y, vx=math.cos(a) * sp, vy=math.sin(a) * sp * 1.5, g=120,
+                                           life=0.9, max=0.9, col=(255, 250, 230), kind='gdrop', floor=y + 1,
+                                           ph=self.rng.uniform(0, 6.3)))
 
     def hearts(self, x, y, n=3):
         for i in range(n):
@@ -334,6 +345,7 @@ class World:
     # ------------------------------------------------------------ update
     def update(self, dt, env, g):
         self.t += dt
+        self.atmos.update(dt, env)
         rng = self.rng
         spot = getattr(g, 'spot', 'dock')
         if self.season_built != (env.season, spot):
@@ -402,7 +414,7 @@ class World:
             p['vy'] += p['g'] * dt
             p['x'] += p['vx'] * dt
             p['y'] += p['vy'] * dt
-            if p['kind'] == 'drop' and p['y'] > p['floor'] and p['vy'] > 0:
+            if p['kind'] in ('drop', 'gdrop') and p['y'] > p['floor'] and p['vy'] > 0:
                 p['life'] = 0
             if p['kind'] == 'smoke':
                 p['vx'] += env.wind * 6 * dt
@@ -642,6 +654,7 @@ class World:
             self._draw_crossing(frame, env, g, g.crossing)
             return
         self._sky(frame, env)
+        self.atmos.draw_sky(frame, env, g)
         import seasons
         seasons.draw_aurora(frame, env, self, g)
         self._far(frame, env)
@@ -713,13 +726,16 @@ class World:
             frame.blit(refl, (136 + off, DECK_Y + 8 + row), (0, row, 134, 2))
         if self.spot == 'dock':
             self._waterline(frame, env, t)
+        self.atmos.draw_water(frame, env, g)
         frame.blit(near, (0, 0))
+        self.atmos.draw_air(frame, env, g)
         self._lights(frame, env, g)
         wildlife.draw_lights(frame, g, env)
         if hasattr(g, 'story'):
             story.draw_lights(g, frame, self)
         self._particles(frame, lit=False)
         self._weather(frame, env)
+        self.atmos.post(frame, env, g)
         if self.flash > 0:
             v = int(self.flash * 120)
             frame.fill((v, v, v + 10), special_flags=pygame.BLEND_ADD)
@@ -823,6 +839,7 @@ class World:
     def _draw_crossing(self, frame, env, g, c):
         """Rowing between spots: the whole lake from a little way back, and your boat pulling across it."""
         self._sky(frame, env)
+        self.atmos.draw_sky(frame, env, g)
         self._far(frame, env, plain=True)
         if 'lighthouse' in getattr(g, 'projects', ()):
             self._lighthouse(frame, env)
@@ -842,6 +859,7 @@ class World:
         frame.blit(near, (0, 0))
         self._particles(frame, lit=False)
         self._weather(frame, env)
+        self.atmos.post(frame, env, g)
         frame.blit(self.vig, (0, 0))
 
     def _cross_marks(self, near, env):
@@ -1733,7 +1751,7 @@ class World:
     def _particles(self, surf, lit):
         for p in self.particles:
             k = p['kind']
-            unlit = k in ('heart', 'spark', 'z', 'fw')
+            unlit = k in ('heart', 'spark', 'z', 'fw', 'gdrop')
             if unlit == lit:
                 continue
             a = max(0.0, min(1.0, p['life'] / p['max']))
@@ -1762,6 +1780,15 @@ class World:
                 for q, kk in ((0.05, 0.5), (0.1, 0.3), (0.15, 0.15)):
                     surf.fill(lerp_c((0, 0, 0), c, a * kk), (int(x - p['vx'] * q), int(y - p['vy'] * q), 1, 1),
                               special_flags=pygame.BLEND_ADD)
+            elif k == 'gdrop':
+                # a drop of spray catching the light: it flashes as it turns
+                fl = 0.55 + 0.45 * math.sin(self.t * 30 + p['ph'])
+                col = tuple(int(v * fl * min(1.0, a * 1.6)) for v in c)
+                surf.fill(col, (x, y, 1, 1), special_flags=pygame.BLEND_ADD)
+                if fl > 0.85 and a > 0.4:
+                    dim = tuple(v // 3 for v in col)
+                    surf.fill(dim, (x - 1, y, 3, 1), special_flags=pygame.BLEND_ADD)
+                    surf.fill(dim, (x, y - 1, 1, 3), special_flags=pygame.BLEND_ADD)
             elif k == 'z':
                 col = lerp_c((40, 40, 60), c, a)
                 for (dx, dy) in ((0, 0), (1, 0), (2, 0), (1, 1), (0, 2), (1, 2), (2, 2)):

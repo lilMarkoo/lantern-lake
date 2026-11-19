@@ -114,7 +114,7 @@ DEFAULT_SETTINGS = dict(master=1.0, music=0.5, sfx=0.8, amb=0.8, assist=False, f
                         fps=60, show_fps=False, shake=1.0, zoom=True, hints=True, clock24=False, speed=1.0,
                         bg_pause=True, ui_scale=100, mp_name='', mp_addr='', slot=1, prompts='auto',
                         tutorial=True, binds={}, hud='calm', radio=None, rumble=True,
-                        radio_vol=0.5)
+                        radio_vol=0.5, fx='full')
 HUD_STYLES = ('full', 'calm', 'compact')
 PROMPTS = ['auto', 'keyboard', 'xbox', 'ps', 'switch']
 PROMPT_LABELS = ['Auto', 'Keyboard', 'Xbox', 'PS', 'Switch']
@@ -326,6 +326,7 @@ class Game:
         self.cam = [1.0, W / 2, H / 2]
         self.cam_look = 0.35         # where the resting view looks along the shore (0 the cabin .. 1 the far side)
         self.cam_rect = pygame.Rect(0, 0, W, H)
+        self.cam_f = (0.0, 0.0, float(W), float(H))
         self.shake_amt = 0.0
         self._jcache = {}
         self.save_t = 60
@@ -444,6 +445,8 @@ class Game:
             st['fps'] = 60
         if st['shake'] not in SHAKE_LEVELS:
             st['shake'] = 1.0
+        if st.get('fx') not in ('full', 'simple'):
+            st['fx'] = 'full'
         if st.get('radio') not in radiomod.BY_ID:
             st['radio'] = None
         if st['speed'] not in DAY_SPEEDS:
@@ -507,6 +510,36 @@ class Game:
             pygame.transform.scale(src, big.get_size(), big)
             pygame.transform.smoothscale(big, size, dst)
 
+    def _world_into(self, out):
+        """Scale what the camera sees onto the window. The camera's position and zoom aren't rounded to art
+        pixels, so a zoom or a pan moves smoothly instead of jumping a whole (big) pixel at a time."""
+        xf, yf, wf, hf = self.cam_f
+        ow, oh = out.get_size()
+        if wf >= W - 0.01 and hf >= H - 0.01:
+            self._scale_into(self.frame, out, 'w')
+            return
+        s = ow / wf                                    # window pixels per art pixel
+        x0, y0 = int(xf), int(yf)
+        x1, y1 = min(W, int(xf + wf) + 1), min(H, int(yf + hf) + 1)
+        src = self.frame.subsurface((x0, y0, x1 - x0, y1 - y0))
+        tw, th = int(round((x1 - x0) * s)), int(round((y1 - y0) * s))
+        big = self._buf('wz', (tw, th))
+        pygame.transform.scale(src, (tw, th), big)
+        out.blit(big, (-int(round((xf - x0) * s)), -int(round((yf - y0) * s))))
+
+    def _grid2_into(self, src, out, key):
+        """Put a picture drawn at twice the art's pixel size onto the window. A whole-number fit goes
+        straight there; otherwise it's halved to the art grid first (a camera sitting half a pixel over
+        shows as a soft blend, so moves stay smooth) and blown up from that, which is far cheaper."""
+        sw, sh = src.get_size()
+        ow, oh = out.get_size()
+        if ow % sw == 0 and oh % sh == 0:
+            pygame.transform.scale(src, (ow, oh), out)
+            return
+        small = self._small
+        pygame.transform.smoothscale(src, small.get_size(), small)
+        self._scale_into(small, out, key)
+
     def present(self):
         """Reduce the finished frame to its pixel grid, then blow it up to the window."""
         win, view, k = self.view_info
@@ -516,14 +549,21 @@ class Game:
         if view.size != win.get_size():
             win.fill(BAR_COLOR)
         out = win.subsurface(view)
-        small = self._small
         if not self.layered:
-            pygame.transform.smoothscale(self.canvas, (W, H), small)
-            self._scale_into(small, out, 'w')
+            # the canvas holds the art (and the interface) at exactly twice its pixel size, so it goes
+            # straight to the window: the world keeps the half-pixel camera moves it was drawn with
+            self._grid2_into(self.canvas, out, 'w')
             return
-        # world at its own 640x360 grid, then the interface on its own grid on top
-        small.blit(self._wsrc, (0, 0))
-        self._scale_into(small, out, 'w')
+        # the world at twice its own size (half-pixel camera), then the interface on its own grid on top
+        if view.w % W == 0 and view.h % H == 0:
+            self._world_into(out)                # a whole-number fit: straight onto the window
+        else:
+            # hard pixels at the next whole size up, then one smooth resize to fit (sharp bilinear), with the
+            # camera placed at that bigger size so it still glides
+            n = max(1, -(-view.w // W))
+            wb = self._buf('wn%d' % n, (W * n, H * n))
+            self._world_into(wb)
+            pygame.transform.smoothscale(wb, view.size, out)
         cv = self.canvas
         aw, ah = SW // 2, SH // 2
         if view.size == cv.get_size():
@@ -865,8 +905,8 @@ class Game:
         almanac.SW, almanac.SH = SW, SH
         U.LOGICAL = (SW, SH)
         minigame.CY = SH - 168                                # the reel ring sits in the bottom-left corner
-        # at 100% the world is drawn straight into the canvas (fastest); other sizes keep the world at its own
-        # pixel size and lay the interface over it as a separate see-through layer
+        # at 100% the world is drawn straight into the canvas (fastest); other sizes keep the world on its own
+        # and lay the interface over it as a separate see-through layer
         self.layered = (SW, SH) != (1280, 720)
         self.canvas = pygame.Surface((SW, SH), pygame.SRCALPHA if self.layered else 0, 32)
         self._fadebuf = pygame.Surface((SW, SH), pygame.SRCALPHA)
@@ -2908,7 +2948,7 @@ class Game:
         if 300 <= m < 450 or 1050 <= m < 1250:
             lift += 22
         elif m >= 1250 or m < 300:
-            lift += 12
+            lift += 26 if self.weather == 'clear' else 12      # a clear night: more of the stars
         return min(40, lift)
 
     def update_camera(self, dt):
@@ -2931,7 +2971,7 @@ class Game:
         st = f.state
         if (self.mode == 'play' and self.place != 'town' and not self.walk_scene()
                 and self.overlay in (None, 'catch') and st not in ('fight', 'landing')):
-            rate = 1.4
+            rate = 2.2
             if st == 'charging' or (st in ('casting', 'waiting', 'bite') and f.bob):
                 # a cast: frame you and where the line is going (or went)
                 if st == 'charging':
@@ -2944,7 +2984,7 @@ class Game:
                 fx = (lo + hi) / 2
                 fy = H - H / z / 2 - 18
                 if st in ('waiting', 'bite'):
-                    rate = 0.8
+                    rate = 1.3
             else:
                 # at rest: in close on you and the dock, and the view drifts toward wherever you point
                 z = self.HOME_Z
@@ -2987,11 +3027,14 @@ class Game:
         c[2] += (fy - c[2]) * k
         self.shake_amt = max(0.0, self.shake_amt - dt * 6)
 
-    def cam_view(self):
+    def cam_view_f(self):
+        """What the camera sees, in world pixels, not rounded: (x, y, w, h). Zooms and pans glide between
+        art pixels instead of stepping a whole pixel at a time."""
         z, fx, fy = self.cam
         if z < 1.002 and self.shake_amt <= 0.05:
-            return pygame.Rect(0, 0, W, H)
-        w, h = int(round(W / z)), int(round(H / z))
+            return (0.0, 0.0, float(W), float(H))
+        z = max(1.0, z)
+        w, h = W / z, H / z
         x = fx - w / 2 + random.uniform(-1, 1) * self.shake_amt
         y = fy - h / 2 + random.uniform(-1, 1) * self.shake_amt
         f = self.fishing
@@ -2999,15 +3042,20 @@ class Game:
             x = min(x, actors.CAT_X - 10 - 250 * w / SW)       # keep Biscuit and you clear of the reel ring
             if f.fish_pos:
                 x = max(x, f.fish_pos[0] + 24 - w)              # ...but never lose sight of the fish
-        return pygame.Rect(int(clamp(x, 0, W - w)), int(clamp(y, 0, H - h)), w, h)
+        return (clamp(x, 0.0, W - w), clamp(y, 0.0, H - h), w, h)
+
+    def cam_view(self):
+        x, y, w, h = self.cam_view_f()
+        w, h = int(round(w)), int(round(h))
+        return pygame.Rect(int(clamp(round(x), 0, W - w)), int(clamp(round(y), 0, H - h)), w, h)
 
     def w2s(self, x, y):
-        r = self.cam_rect
-        return (int((x - r.x) * SW / r.w), int((y - r.y) * SH / r.h))
+        rx, ry, rw, rh = self.cam_f
+        return (int((x - rx) * SW / rw), int((y - ry) * SH / rh))
 
     def s2w(self, px, py):
-        r = self.cam_rect
-        return (r.x + px * r.w / SW, r.y + py * r.h / SH)
+        rx, ry, rw, rh = self.cam_f
+        return (rx + px * rw / SW, ry + py * rh / SH)
 
     def reel_input(self):
         """(aim angle on the reel ring or None, steer -1/0/1) for the reeling minigame."""
@@ -3063,18 +3111,19 @@ class Game:
         scene = self.scene if self.overlay == 'scene' and self.mode == 'play' else None
         if scene:
             scene.draw_world(self.frame)
-        self.cam_rect = cooking.cam() if cooking else scene.cam(self.cam_view()) if scene else self.cam_view()
-        cv = self.canvas
-        if self.cam_rect.size == (W, H):
-            self._wsrc = self.frame
+        if cooking or scene:
+            self.cam_rect = cooking.cam() if cooking else scene.cam(self.cam_view())
+            r = self.cam_rect
+            self.cam_f = (float(r.x), float(r.y), float(r.w), float(r.h))
         else:
-            # zoom at the world's own pixel size so pixels stay square blocks
-            pygame.transform.scale(self.frame.subsurface(self.cam_rect), (W, H), self._wsmall)
-            self._wsrc = self._wsmall
+            self.cam_f = self.cam_view_f()
+            self.cam_rect = self.cam_view()
+        cv = self.canvas
+        self._wsrc = self.frame
         if self.layered:
             cv.fill((0, 0, 0, 0))
         else:
-            pygame.transform.scale(self._wsrc, (SW, SH), cv)
+            self._world_into(cv)                 # at twice the art's size: the camera moves in half-pixels
         ui.target = cv
         scr = cv
         if self.mode == 'title':
@@ -5641,8 +5690,9 @@ class Game:
                      lambda i: self.set_opt('shake', SHAKE_LEVELS[i]), True),
                     ('choice', 'Camera zoom while fishing', 'Leans in on the bobber and the fight', ['Off', 'On'],
                      int(bool(st['zoom'])), lambda i: self.set_opt('zoom', bool(i)), True),
-                    ('choice', 'Controller rumble', 'Feel the nibbles, the bite and the line', ['Off', 'On'],
-                     int(bool(st.get('rumble', True))), lambda i: self.set_opt('rumble', bool(i)), True)]
+                    ('choice', 'Light effects', 'Sunbeams, glow and mist. Simple runs lighter',
+                     ['Simple', 'Full'], int(st.get('fx', 'full') == 'full'),
+                     lambda i: self.set_opt('fx', ('simple', 'full')[i]), True)]
         if tab == 'game':
             return [('choice', 'Relaxed reeling', 'Wider arc, longer warnings, slower leaps', ['Off', 'On'],
                      int(self.assist()), lambda i: self.set_opt('assist', bool(i)), True),
@@ -5661,7 +5711,9 @@ class Game:
                      ['Off', 'On'], int(bool(st['bg_pause'])), lambda i: self.set_opt('bg_pause', bool(i)), True),
                     ('choice', 'First-day tips', 'A short walkthrough at the start of a new game',
                      ['Off', 'On'], int(bool(st.get('tutorial', True))),
-                     lambda i: self.set_opt('tutorial', bool(i)), True)]
+                     lambda i: self.set_opt('tutorial', bool(i)), True),
+                    ('choice', 'Controller rumble', 'Feel the nibbles, the bite and the line', ['Off', 'On'],
+                     int(bool(st.get('rumble', True))), lambda i: self.set_opt('rumble', bool(i)), True)]
         return []
 
     def draw_options(self, s):
@@ -5821,8 +5873,8 @@ class Game:
 
     def reset_tab(self):
         keys = {'audio': ('master', 'music', 'sfx', 'amb', 'radio_vol'),
-                'display': ('fps', 'show_fps', 'shake', 'zoom', 'ui_scale', 'rumble'),
-                'game': ('assist', 'speed', 'clock24', 'hud', 'hints', 'bg_pause', 'tutorial')}.get(self.opt_tab, ())
+                'display': ('fps', 'show_fps', 'shake', 'zoom', 'ui_scale', 'fx'),
+                'game': ('assist', 'speed', 'clock24', 'hud', 'hints', 'bg_pause', 'tutorial', 'rumble')}.get(self.opt_tab, ())
         for k in keys:
             self.settings[k] = DEFAULT_SETTINGS[k]
         if self.opt_tab == 'display' and self.fullscreen:

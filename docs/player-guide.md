@@ -84,11 +84,12 @@ your save, so they stay the same when you start a new game.
 - **Audio**: master, music, sound effects, ambience and radio volume sliders
 - **Display**: fullscreen, window size, interface size (50% to 110% for the HUD and menus), frame rate limit
   (30 / 60 / 120 / 144), a frame rate counter, screen shake (off / gentle / full), the camera zoom while fishing
-  and controller rumble.
+  and **Light effects**: Full gives sunbeams, the soft glow around lights, mist and cloud shadows; Simple leaves
+  them out for older or slower computers.
   The interface size row lists which sizes land on whole screen pixels for your window. Those are the sharpest
   and also the fastest to draw (on a 1080p screen: 67% and 100%)
 - **Gameplay**: relaxed reeling, day length (slow, normal or quick days), 12 or 24-hour clock, the HUD style
-  (see below), hints, pausing when you switch to another window, and the first-day tips (seven short tips at the top of the screen
+  (see below), hints, pausing when you switch to another window, controller rumble, and the first-day tips (seven short tips at the top of the screen
   in a new game, each gone once you've done it, with a Skip button). The key hints at the bottom of the screen
   and the tips show through your first day (and your first few fish). After that they tuck away: press **F1**
   or **?**, or click the small ? in the bottom-left corner, to bring them back
@@ -208,7 +209,7 @@ old record). Click or press Space to skip ahead.
 You can hear the line too: the reel ticks as it turns (faster when you hold), the drag sings when a fish runs
 or lunges, and a tight line starts to hum, higher and higher as the strain builds. With a controller, you
 feel it: a tick on a nibble, a thump on the bite, the weight of the fish growing with the strain, and a jolt
-when it lunges or splashes down (Options, Display, Controller rumble). The how-to lines under the ring show
+when it lunges or splashes down (Options, Gameplay, Controller rumble). The how-to lines under the ring show
 for your first ten catches.
 Small common fish come in quickly, so the long fights are saved for the good ones. The ring takes the fish's
 colours: lake blue for common fish, green for uncommon, deep blue for rare, violet for very rare and gold for a
@@ -237,6 +238,14 @@ stabs at a fish (it flies off when you hook one), a **canoe** paddles past with 
 a big fish **leaps** clear of the water two or three times, or a **breeze** sweeps across the whole lake,
 darkening the water and setting the reeds and willows swaying. In spring, blossom petals drift down and float.
 At dawn, dusk and under the stars the camera sits a little higher, so you see more of the sky.
+
+The light changes through the day. The sun comes up over the far shore on your left and goes down behind the
+trees on your right, and while it's low, beams of light slant across the water. They're at their best through
+a foggy morning. Mist lies on the lake at first light and a thinner haze comes back at dusk. On a clear day the
+sun's path on the water twinkles, cloud shadows slide across the lake and over the dock, and lanterns, windows
+and fireflies glow softly after dark. On a clear, moonless night the Milky Way arcs across the sky and shows in
+the still water. In the rain, sheets of it sweep past in the wind and every drop kicks up a tiny crown. When a
+fish breaks the surface, white water bursts up, the spray catches the light, and a ring of foam spreads out.
 
 **The evening rise**: at dusk on the lake (not in a storm, and not under ice), fish come up to feed. Fish jump
 and rise all over the water, bites come about a third quicker and the better fish are likelier.
