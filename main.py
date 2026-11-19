@@ -5100,7 +5100,7 @@ class Game:
     def on_online(self, st):
         n = self.net
         code = n.room_code()
-        why = n.opener.why if n.opener else ''
+        why = n.online_why()
         if code:
             copied = clip_put(code)
             self.add_chat('', 'Room code: %s   Friends paste it in Play together > Join.' % code, SYS_C)

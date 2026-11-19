@@ -661,8 +661,9 @@ After four seasons a new year begins, and Mayor Hazel writes with the news:
 
 Up to four people can fish the same lake. Choose **Play together** on the title screen.
 
-- **Host online**: the game asks your router to open its port and gives you a **room code** like
-  `7KQ2M-9X4TB-HC1PE-W3RA`. It is copied for you, shown in the chat, and kept in the pause menu
+- **Host online**: the game connects to the Lantern Lake online server (in Europe) and gives you a short
+  **room code** like `K7Q2-M9XT`. No router settings needed, and it works behind any home network. The code is
+  copied for you, shown in the chat, and kept in the pause menu
   (*Copy room code*). Send it to your friends. You can also open a game that is already running from the pause
   menu (*Open my lake to friends*)
 - **Join**: paste the room code (*Paste*, or Ctrl+V) and click *Join*. A typing mistake in a code is caught
@@ -672,9 +673,16 @@ Up to four people can fish the same lake. Choose **Play together** on the title 
 - The first time you host, Windows asks whether Lantern Lake may use the network. Allow it, or friends can't
   reach you
 
-The room code holds your address and a secret key that changes every time you host. Anyone joining from the
-internet needs the key. Someone who keeps guessing is shut out for ten minutes, and a connection that floods
-the lake with messages is dropped. Closing your lake (or the game) closes the port on the router again.
+**The online server.** It only passes your game's messages between you and your friends. It stores nothing, and
+it doesn't log addresses or room codes. Your own game still checks every newcomer. Someone who keeps guessing
+codes is shut out for a while, and a code stops working when you close your lake. If your connection to the
+server drops for a moment, your game reconnects with the same code.
+
+**Without the server.** If the online server can't be reached, the game falls back to asking your router to
+open its port, and gives you a longer room code like `7KQ2M-9X4TB-HC1PE-W3RA`. That code holds your address and a
+secret key that changes every time you host. Anyone joining from the internet needs the key, someone who keeps
+guessing is shut out for ten minutes, and a connection that floods the lake with messages is dropped. Closing
+your lake (or the game) closes the port on the router again.
 
 If going online doesn't work, the chat says why:
 
@@ -683,7 +691,7 @@ If going online doesn't work, the chat says why:
 - *Your internet provider shares one address between many homes*: friends can't reach your lake directly.
   Let a friend host, or both install a VPN app such as Tailscale and join with its address
 
-To learn your public address, the game asks the router and also sends one tiny request to a public STUN server
+When it uses the router, to learn your public address the game asks the router and also sends one tiny request to a public STUN server
 (Cloudflare's, or Google's as a backup), the same kind of service video calls use. Nothing about you is sent.
 
 How it works:

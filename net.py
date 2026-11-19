@@ -7,12 +7,18 @@ else, and owns the clock and the weather.
 
 On the local network the host also broadcasts a small UDP beacon so the join screen can list nearby lakes.
 
-Over the internet (portmap.py) the router opens the port and friends join with a room code that carries a random
-key. Anyone connecting from the internet must know that key; the host also caps connection attempts, bans
-addresses that keep guessing, and drops connections that flood it.
+Over the internet the lake goes through the online server (server/relay.py) when there is one: the host connects
+out to it and gets a short room code like K7Q2-M9XT, and friends who type it are passed through to the host. No
+router settings, and it works behind any network. The server only passes bytes along; the host still checks every
+newcomer exactly as it does a direct one.
+
+Without the server (or when it can't be reached) the router opens the port instead (portmap.py) and friends join
+with a longer room code that carries a random key. Anyone connecting from the internet must know that key; the
+host also caps connection attempts, bans addresses that keep guessing, and drops connections that flood it.
 """
 import hmac
 import json
+import os
 import queue
 import socket
 import threading
@@ -38,6 +44,178 @@ BAD_KEYS_BEFORE_BAN = 5
 BAN_SECONDS = 600
 MSG_BURST = 300          # messages a connection may send at once...
 MSG_RATE = 40.0          # ...and per second after that (the game sends about 10)
+# the online server (server/relay.py), in Europe. LANTERN_RELAY=host:port overrides it, '-' turns it off
+RELAY_ADDR = '92.5.166.93'
+RELAY_PORT = 24690
+RELAY_VERSION = 1
+RELAY_CODE_LEN = 8
+RELAY_PING = 20.0
+
+
+def relay_addr():
+    """(host, port) of the online server, or None when there isn't one."""
+    text = os.environ.get('LANTERN_RELAY', RELAY_ADDR).strip()
+    if not text or text == '-':
+        return None
+    host, port = text, RELAY_PORT
+    if text.count(':') == 1:
+        host, p = text.rsplit(':', 1)
+        try:
+            port = int(p)
+        except ValueError:
+            return None
+    return (host, port) if host and 0 < port < 65536 else None
+
+
+def parse_relay_code(text):
+    """'k7q2-m9xt' -> 'K7Q2M9XT', or None when it isn't one of the online server's codes."""
+    s = ''.join(ch for ch in str(text).upper() if ch not in ' -_')
+    s = ''.join(portmap.LOOKALIKE.get(ch, ch) for ch in s)
+    if len(s) != RELAY_CODE_LEN or any(ch not in portmap.ALPHABET for ch in s):
+        return None
+    if '.' in text or ':' in text:
+        return None
+    return s
+
+
+def show_relay_code(code):
+    return code[:4] + '-' + code[4:]
+
+
+class RelayHost:
+    """Host: keeps a room open on the online server, and opens a line through it for each friend who joins.
+    state: 'working' (connecting), 'open' (code is ready), 'failed' (couldn't reach the server; why says why)."""
+
+    def __init__(self, net, addr, stop, on_fail):
+        self.net = net
+        self.addr = addr
+        self.stop = stop
+        self.on_fail = on_fail
+        self.state = 'working'
+        self.code = None
+        self.tok = None
+        self.why = ''
+        self.sock = None
+
+    def start(self):
+        threading.Thread(target=self._run, daemon=True).start()
+        return self
+
+    def _run(self):
+        wait = 2.0
+        while not self.stop.is_set():
+            try:
+                sock = socket.create_connection(self.addr, timeout=6)
+            except OSError:
+                if self.code is None:
+                    self.why = "Couldn't reach the online server."
+                    self.on_fail()                     # the router gets a go first, so nothing reads 'failed'
+                    self.state = 'failed'
+                    return
+                self.state = 'working'                 # it was open: keep trying, the room is kept a while
+                if self.stop.wait(wait):
+                    return
+                wait = min(30.0, wait * 1.6)
+                continue
+            self.sock = sock
+            hello = {'t': 'r_host', 'v': RELAY_VERSION}
+            if self.code:
+                hello.update(code=self.code, tok=self.tok)
+            denied = self._session(sock, hello)
+            self.sock = None
+            try:
+                sock.close()
+            except OSError:
+                pass
+            if denied is not None:
+                self.why = denied
+                if self.code is None:
+                    self.on_fail()
+                self.state = 'failed'
+                return
+            if self.stop.is_set():
+                return
+            self.state = 'working'
+            wait = 2.0
+            if self.stop.wait(wait):
+                return
+
+    def _session(self, sock, hello):
+        """One connection to the server. Returns a refusal message, or None when the connection just ended."""
+        sock.settimeout(1.0)
+        try:
+            sock.sendall(_line(hello))
+        except OSError:
+            return None
+        buf = b''
+        last_ping = time.time()
+        heard = time.time()
+        while not self.stop.is_set():
+            if time.time() - last_ping > RELAY_PING:
+                last_ping = time.time()
+                try:
+                    sock.sendall(_line({'t': 'r_ping'}))
+                except OSError:
+                    return None
+            try:
+                data = sock.recv(4096)
+            except socket.timeout:
+                if time.time() - heard > RELAY_PING * 3.5:
+                    return None
+                continue
+            except OSError:
+                return None
+            if not data:
+                return None
+            heard = time.time()
+            buf += data
+            if len(buf) > MAX_LINE:
+                return None
+            while b'\n' in buf:
+                line, buf = buf.split(b'\n', 1)
+                try:
+                    m = json.loads(line.decode('utf-8'))
+                except Exception:
+                    continue
+                if not isinstance(m, dict):
+                    continue
+                t = m.get('t')
+                if t == 'r_room' and isinstance(m.get('code'), str) and isinstance(m.get('tok'), str):
+                    self.code, self.tok = m['code'], m['tok']
+                    self.state = 'open'
+                elif t == 'r_guest' and isinstance(m.get('sid'), int):
+                    threading.Thread(target=self._line_for, args=(m['sid'],), daemon=True).start()
+                elif t == 'deny':
+                    return str(m.get('why', 'The online server said no.'))[:120]
+        return None
+
+    def _line_for(self, sid):
+        """Open a line through the server for friend sid; from then on it's like they connected directly."""
+        try:
+            sock = socket.create_connection(self.addr, timeout=6)
+            sock.sendall(_line({'t': 'r_accept', 'sid': sid, 'tok': self.tok}))
+        except OSError:
+            return
+        if self.stop.is_set():
+            sock.close()
+            return
+        self.net._adopt(sock, 'relay', relayed=True)
+
+    def close(self):
+        s = self.sock
+        if s is not None:
+            try:
+                s.sendall(_line({'t': 'r_close'}))
+            except OSError:
+                pass
+            try:
+                s.close()
+            except OSError:
+                pass
+
+
+def _line(msg):
+    return (json.dumps(msg, separators=(',', ':')) + '\n').encode('utf-8')
 
 
 def needs_key(ip):
@@ -216,6 +394,7 @@ class Net:
         self.sent = self.received = 0
         self.key = b''           # host: the room key; guest: the key from the code they typed
         self.opener = None       # host: portmap.Opener while the lake is open to the internet
+        self.relay = None        # host: RelayHost while the lake is open through the online server
         self.bad = {}            # host: ip -> [wrong keys, first try time]
         self.banned = {}         # host: ip -> banned until
 
@@ -265,18 +444,48 @@ class Net:
 
     # ---------------------------------------------------------------- the internet
     def open_online(self, ssdp_target=portmap.SSDP, stun=portmap.stun_address):
-        """Host: ask the router to open the port and work out the room code (in the background)."""
+        """Host: get a room code, through the online server when there is one, otherwise by asking the router to
+        open the port (in the background either way). If the server can't be reached, the router is tried."""
         if self.role != 'host':
             return
+        if self.relay is not None:
+            self.relay.close()
+            self.relay = None
         if self.opener is not None:
             self.opener.close()
+            self.opener = None
+        addr = relay_addr()
+        if addr:
+            stop = self.stop
+            self.relay = RelayHost(self, addr, stop,
+                                   lambda: stop.is_set() or self._open_router(ssdp_target, stun)).start()
+        else:
+            self._open_router(ssdp_target, stun)
+
+    def _open_router(self, ssdp_target, stun):
         self.opener = portmap.Opener(self.port, ssdp_target, stun).start()
 
     def online_state(self):
-        """None (not trying), or the opener's state: working, open, manual, shared or failed."""
+        """None (not trying), or working, open, manual, shared or failed."""
+        r = self.relay
+        if r is not None and (r.state != 'failed' or self.opener is None):
+            return r.state
         return self.opener.state if self.opener is not None else None
 
+    def online_why(self):
+        r = self.relay
+        if self.opener is not None:
+            return self.opener.why
+        return r.why if r is not None else ''
+
+    def via_server(self):
+        """True while the room code is the online server's."""
+        return self.relay is not None and self.relay.state == 'open' and bool(self.relay.code)
+
     def room_code(self):
+        r = self.relay
+        if r is not None and r.code and r.state != 'failed':
+            return show_relay_code(r.code)
         return self.opener.code(self.key) if self.opener is not None else None
 
     def _accept(self, srv, stop, inbox):
@@ -287,30 +496,36 @@ class Net:
                 continue
             except OSError:
                 break
-            ip = addr[0]
-            now = time.time()
-            with self.lock:
-                if self.banned.get(ip, 0) > now:
-                    refuse = True
-                else:
-                    self.banned.pop(ip, None)
-                    pending = [c for c in self.conns.values() if c.alive and not c.hello]
-                    refuse = (len(self.conns) >= MAX_CONNS or len(pending) >= MAX_PENDING
-                              or sum(1 for c in pending if c.ip == ip) >= MAX_PENDING_PER_IP)
-                if refuse:
-                    try:
-                        sock.close()
-                    except OSError:
-                        pass
-                    continue
-                cid = self.next_id
-                self.next_id += 1
-                conn = Conn(sock, inbox, cid, ip)
-                conn.guard = True
-                conn.hello = False
-                conn.born = now
-                self.conns[cid] = conn
-            conn.start()
+            self._adopt(sock, addr[0], inbox=inbox)
+
+    def _adopt(self, sock, ip, relayed=False, inbox=None):
+        """Host: take on a new connection (straight in, or a line through the online server)."""
+        now = time.time()
+        with self.lock:
+            if self.role != 'host':
+                refuse = True
+            elif self.banned.get(ip, 0) > now:
+                refuse = True
+            else:
+                self.banned.pop(ip, None)
+                pending = [c for c in self.conns.values() if c.alive and not c.hello]
+                refuse = (len(self.conns) >= MAX_CONNS or len(pending) >= MAX_PENDING
+                          or sum(1 for c in pending if c.ip == ip) >= MAX_PENDING_PER_IP)
+            if refuse:
+                try:
+                    sock.close()
+                except OSError:
+                    pass
+                return
+            cid = self.next_id
+            self.next_id += 1
+            conn = Conn(sock, inbox or self.inbox, cid, ip)
+            conn.guard = True
+            conn.hello = False
+            conn.born = now
+            conn.relayed = relayed          # the server checked the room code; there's no key to ask for
+            self.conns[cid] = conn
+        conn.start()
 
     def _wrong_key(self, ip):
         now = time.time()
@@ -343,8 +558,11 @@ class Net:
     def join(self, addr, name):
         """Start connecting in the background, to a room code or an address. Returns an error message or None."""
         key = b''
-        code = portmap.parse_code(addr)
-        if code:
+        rcode = parse_relay_code(addr) if relay_addr() else None
+        code = None if rcode else portmap.parse_code(addr)
+        if rcode:
+            host, port = relay_addr()
+        elif code:
             host, port, key = code
         elif portmap.looks_like_code(addr):
             return "That room code doesn't look right. Check it letter by letter (or paste it with Ctrl+V)."
@@ -361,16 +579,18 @@ class Net:
         self.name = self.clean_name(name)
         self.join_t = time.time()
         self.peers = {}
-        threading.Thread(target=self._connect, args=(host, port, self.stop, self.inbox), daemon=True).start()
+        threading.Thread(target=self._connect, args=(host, port, self.stop, self.inbox, rcode), daemon=True).start()
         return None
 
-    def _connect(self, host, port, stop, inbox):
+    def _connect(self, host, port, stop, inbox, rcode=None):
         try:
             sock = socket.create_connection((host, port), timeout=6)
         except OSError as e:
             if not stop.is_set():
                 why = 'Nobody answered at that address.'
-                if isinstance(e, ConnectionRefusedError):
+                if rcode:
+                    why = "Couldn't reach the online server. Check your internet connection."
+                elif isinstance(e, ConnectionRefusedError):
                     why = 'That computer is not hosting a lake right now.'
                 elif isinstance(e, socket.gaierror):
                     why = 'Could not find that address.'
@@ -383,6 +603,8 @@ class Net:
         with self.lock:
             self.conns = {0: conn}
         conn.start()
+        if rcode:
+            conn.send({'t': 'r_join', 'code': rcode, 'v': RELAY_VERSION})     # the server passes us through
         conn.send({'t': 'hello', 'v': VERSION, 'name': self.name, 'key': self.key.hex()})
 
     # ---------------------------------------------------------------- LAN discovery (join screen)
@@ -496,7 +718,7 @@ class Net:
         if t == 'hello':
             if conn.hello:
                 return
-            if needs_key(conn.ip):
+            if not getattr(conn, 'relayed', False) and needs_key(conn.ip):
                 given = msg.get('key')
                 try:
                     given = bytes.fromhex(given) if isinstance(given, str) and len(given) <= 64 else b''
@@ -604,6 +826,9 @@ class Net:
     def close(self):
         """Leave or stop hosting. Safe to call at any time."""
         self.stop.set()
+        if self.relay is not None:
+            rl, self.relay = self.relay, None
+            threading.Thread(target=rl.close, daemon=True).start()
         if self.opener is not None:
             op, self.opener = self.opener, None
             # not a daemon thread: closing the port on the router still finishes if the game is quitting
