@@ -1857,6 +1857,11 @@ class World:
         if home:
             win = art.CABIN_WINDOW
             add_glow(frame, self.g_mid, win.center, nf * 0.8)
+            for i, (x, y) in enumerate(art.SLOPE_LAMPS):        # the little lamps on the slope
+                fl = 0.9 + 0.1 * math.sin(t * 9 + i * 2.1) * math.sin(t * 5.3 + i)
+                add_glow(frame, self.g_small, (x, y), nf * 0.85 * fl)
+                frame.fill((int(220 * nf), int(170 * nf), int(90 * nf)), (x - 1, y - 1, 3, 3),
+                           special_flags=pygame.BLEND_ADD)
         far = {'dock': 472, 'deep': 62}.get(self.spot)
         if self.spot in art.COAST_LAMP:
             self._sea_lights(frame, env, g)

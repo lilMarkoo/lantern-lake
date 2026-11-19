@@ -20,6 +20,13 @@ except ImportError:                       # an old pygame: the CPU path it is
     video = None
 
 BAR = (16, 14, 24, 255)
+HARD = 2.5          # from this many screen pixels per art pixel up, scale with hard pixels only: crisp at any
+                    # size (a pixel is n or n+1 wide, which can't be seen up here, while a smooth stretch blurs)
+
+
+def hard_ok(s):
+    """Draw at s screen pixels per art pixel with hard pixels alone?"""
+    return s >= HARD or abs(s - round(s)) < 0.01
 
 
 def _hint_scale(linear):
@@ -127,14 +134,17 @@ class Screen:
             ww, wh = world.get_size()
             src = self._tex('world', (ww, wh), streaming=True)
             src.update(world)
-            big, n = self._sharp('world', src, (ww, wh), vw / (cam[2] / ww) if cam else vw, False)
             xf, yf, wf, hf = cam if cam else (0.0, 0.0, float(ww), float(wh))
             s = vw / wf                                     # window pixels per art pixel
             x0, y0 = int(xf), int(yf)
             x1, y1 = min(ww, int(xf + wf) + 1), min(wh, int(yf + hf) + 1)
+            dst = pygame.FRect(-(xf - x0) * s, -(yf - y0) * s, (x1 - x0) * s, (y1 - y0) * s)
             r.set_viewport(pygame.Rect(view))
-            big.draw(srcrect=pygame.Rect(x0 * n, y0 * n, (x1 - x0) * n, (y1 - y0) * n),
-                     dstrect=pygame.FRect(-(xf - x0) * s, -(yf - y0) * s, (x1 - x0) * s, (y1 - y0) * s))
+            if hard_ok(s):
+                src.draw(srcrect=pygame.Rect(x0, y0, x1 - x0, y1 - y0), dstrect=dst)
+            else:
+                big, n = self._sharp('world', src, (ww, wh), s * ww, False)
+                big.draw(srcrect=pygame.Rect(x0 * n, y0 * n, (x1 - x0) * n, (y1 - y0) * n), dstrect=dst)
             r.set_viewport(None)
         if ui is not None:
             cw, ch = ui.get_size()
@@ -152,9 +162,13 @@ class Screen:
                 src.draw(dstrect=(0, 0, aw, ah))
                 r.target = None
                 src = art
-            big, n = self._sharp('ui', src, (aw, ah), vw, alpha)
-            big.blend_mode = 1 if alpha else 0
-            big.draw(dstrect=pygame.Rect(view))
+            if hard_ok(vw / aw):
+                src.blend_mode = 1 if alpha else 0
+                src.draw(dstrect=pygame.Rect(view))
+            else:
+                big, n = self._sharp('ui', src, (aw, ah), vw, alpha)
+                big.blend_mode = 1 if alpha else 0
+                big.draw(dstrect=pygame.Rect(view))
         r.present()
 
     def show_surface(self, surf):

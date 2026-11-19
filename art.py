@@ -274,6 +274,226 @@ def bank_top(x):
     return 360
 
 
+# ---------------------------------------------------------------- the home slope: terraces under the cabin
+SLOPE_LAMPS = ((5, 268), (93, 271), (27, 215))     # (x, y) of each little lamp's glass: path, steps, porch
+WALL_Y = 282                                       # top of the stone wall under the garden terrace
+FACE_X = 84                                        # right of this (below the wall) is the stone face with the arch
+
+
+def _lawn_px(season, rng, x, y, base, dark, light):
+    """One pixel of lawn: soft noise with little dark blades and lighter tips."""
+    r = rng.random() * (2.5 if season == 3 else 1.0)       # snow lies smoother than grass grows
+    if r < 0.10:
+        return dark
+    if r < 0.17:
+        return light
+    if (x * 7 + y * 3) % 11 == 0:
+        return lerp_c(base, dark, 0.5)
+    return base
+
+
+def _stone(s, x, y, w, h, col, season, moss=None):
+    """One fieldstone: a rounded block with a lit top edge and a dark seam under it."""
+    pygame.draw.rect(s, darken(col, 0.35), (x, y, w, h), border_radius=1)
+    pygame.draw.rect(s, col, (x, y, w - 1, h - 1), border_radius=1)
+    pygame.draw.line(s, lighten(col, 0.22), (x + 1, y), (x + w - 3, y))
+    if season == 3:
+        pygame.draw.line(s, (240, 244, 250), (x + 1, y), (x + w - 3, y))
+    elif moss and (x * 13 + y) % 5 == 0:
+        s.set_at((x + 1, y + h - 2), moss)
+        s.set_at((x + 2, y + h - 2), moss)
+
+
+def _lamp(s, x, y, post=12):
+    """A little lamp on a post: (x, y) is the glass."""
+    s.fill((70, 60, 54), (x, y + 2, 1, post))
+    s.fill((60, 52, 48), (x - 1, y - 2, 3, 1))
+    s.fill((60, 52, 48), (x - 1, y + 2, 3, 1))
+    s.fill((236, 210, 150), (x - 1, y - 1, 3, 3))
+    s.set_at((x, y), (255, 240, 200))
+
+
+def _dock_slope(s, season, rng):
+    """Turns the bare bank under the cabin into a lawn on two terraces: the garden up top, a stone wall, the pond
+    terrace below it, and a mossy stone face around the old arch. Everything that's clicked keeps its place."""
+    grass = GRASS[season]
+    g_dark, g_light = darken(grass, 0.14), lighten(grass, 0.1)
+    if season == 3:
+        g_dark, g_light = (214, 222, 234), (250, 252, 255)
+    stone = ((150, 144, 132), (146, 140, 128), (152, 140, 122), (160, 162, 170))[season]
+    moss = ((96, 140, 70), (84, 128, 62), (130, 120, 60), None)[season]
+    flowers = {0: [(250, 236, 120), (250, 186, 210), (255, 255, 255), (186, 170, 250)],
+               1: [(250, 140, 90), (250, 220, 90), (230, 110, 150), (255, 255, 255)],
+               2: [(220, 120, 50), (200, 70, 50), (240, 190, 80)], 3: []}[season]
+    # ---- the lawns: the garden terrace (to the wall) and the pond terrace (to the stone face)
+    for x in range(0, 136):
+        top = int(bank_top(x)) + 5
+        bottom = 318 if x < FACE_X else WALL_Y
+        for y in range(top, bottom):
+            if not s.get_at((x, y))[3]:
+                continue
+            k = 0.0 if y < WALL_Y else 0.06                       # the lower lawn sits a touch in shadow
+            base = darken(grass, k)
+            s.set_at((x, y), _lawn_px(season, rng, x, y, base, darken(g_dark, k), g_light))
+    # ---- below the lawns: a cool earth bank with boulders, roots and a grassy lip, and stones ringing the arch
+    rx = random.Random(17)
+    earth_hi, earth_lo = (104, 80, 60), (58, 46, 42)
+    if season == 3:
+        earth_hi, earth_lo = (112, 98, 92), (64, 58, 60)
+    for x in range(0, 140):
+        top = max(int(bank_top(x)) + 5, 318 if x < FACE_X else WALL_Y + 1)
+        for y in range(top, 360):
+            if not s.get_at((x, y))[3]:
+                continue
+            k = min(1.0, (y - 300) / 60)
+            c = lerp_c(earth_hi, earth_lo, k)
+            if rx.random() < 0.08:
+                c = darken(c, 0.15)
+            s.set_at((x, y), c)
+    for _ in range(22):                                       # boulders, half sunk in the bank
+        x, y = rx.randint(0, 132), rx.randint(320, 352)
+        if FACE_X - 2 < x < FACE_X + 28 and y < 324:
+            continue
+        if not s.get_at((x, y))[3] or bank_top(x + 8) > y:
+            continue
+        w, h = rx.randint(5, 10), rx.randint(3, 6)
+        c = lerp_c(stone, darken(stone, 0.4), rx.random() * 0.6 + (y - 320) / 80)
+        pygame.draw.ellipse(s, darken(c, 0.35), (x, y + 1, w, h))
+        pygame.draw.ellipse(s, c, (x, y, w - 1, h - 1))
+        s.fill(lighten(c, 0.2), (x + 2, y, max(1, w - 5), 1))
+        if moss and rx.random() < 0.5:
+            s.fill(moss, (x + 1, y, 2, 1))
+    for _ in range(9):                                        # roots hanging out of the bank
+        x = rx.randint(4, 80)
+        y = 319
+        pts = [(x, y)]
+        for _ in range(rx.randint(3, 6)):
+            x += rx.randint(-1, 1)
+            y += rx.randint(2, 3)
+            pts.append((x, y))
+        pygame.draw.lines(s, (88, 66, 50), False, pts)
+    # the lawn's lip: tufts hanging over the edge
+    for x in range(0, FACE_X):
+        if s.get_at((x, 318))[3]:
+            s.set_at((x, 318), darken(grass, 0.3))
+            if rx.random() < 0.4:
+                s.set_at((x, 319), darken(grass, 0.15) if season != 3 else (236, 240, 248))
+                if rx.random() < 0.4:
+                    s.set_at((x, 320), darken(grass, 0.3) if season != 3 else (220, 226, 236))
+    # the bank under the garden terrace, right of the wall, where the arch is cut in
+    ax, ay = 99, 308
+    for k in range(26):
+        a = math.pi * (0.95 + k / 25 * 1.1)                  # a ring of stones over the top half of the arch
+        rr = 14 + (k % 2)
+        x, y = ax + math.cos(a) * rr, ay + math.sin(a) * rr * 0.9
+        if y > 322:
+            continue
+        c = lerp_c(stone, darken(stone, 0.25), rx.random())
+        _stone(s, int(x) - 2, int(y) - 2, 5, 4, c, season, moss)
+    for x in range(FACE_X - 2, FACE_X + 30, 6):              # a stone sill along the foot of the arch
+        if s.get_at((min(W - 1, x + 2), 321))[3] and bank_top(x + 6) < 318:
+            _stone(s, x, 321, 6, 3, lerp_c(stone, darken(stone, 0.2), rx.random()), season)
+    # ---- the retaining wall under the garden: two courses of fieldstone, moss and a flower border on top
+    x = 0
+    while x < FACE_X - 2:
+        w = rng.randint(7, 11)
+        w = min(w, FACE_X - 2 - x)
+        if w >= 3:
+            c = lerp_c(stone, darken(stone, 0.2), rng.random() * 0.8)
+            _stone(s, x, WALL_Y, w, 4, c, season, moss)
+        x += w
+    x = -4
+    while x < FACE_X - 2:
+        w = rng.randint(8, 12)
+        w = min(w, FACE_X - 2 - x)
+        if w >= 3:
+            c = lerp_c(stone, darken(stone, 0.28), rng.random() * 0.8)
+            _stone(s, max(0, x), WALL_Y + 4, w if x >= 0 else w + x, 4, c, season, moss)
+        x += w
+    pygame.draw.line(s, darken(grass, 0.35), (0, WALL_Y + 8), (FACE_X - 3, WALL_Y + 8))      # its shadow
+    for x in range(0, FACE_X - 2):
+        if moss and rng.random() < 0.18:                                                  # ivy over the top
+            for k in range(rng.randint(1, 4)):
+                s.set_at((x, WALL_Y + k), moss if k % 2 == 0 else darken(moss, 0.2))
+        if flowers and rng.random() < 0.3:
+            s.set_at((x, WALL_Y - 2), rng.choice(flowers))
+            s.set_at((x, WALL_Y - 1), darken(grass, 0.2))
+        elif season == 3 and rng.random() < 0.6:
+            s.set_at((x, WALL_Y - 1), (250, 252, 255))
+    # ---- steps from the garden down to the arch, at the right end of the wall
+    for k in range(4):
+        sx, sy = FACE_X - 6 + k * 2, WALL_Y - 2 + k * 3
+        c = lighten(stone, 0.05 - k * 0.04)
+        s.fill(darken(c, 0.35), (sx, sy + 2, 9, 2))
+        s.fill(c, (sx, sy, 9, 2))
+        if season == 3:
+            s.fill((244, 246, 252), (sx, sy, 9, 1))
+    # a gravel apron in front of the arch
+    for _ in range(40):
+        gx, gy = rng.randint(FACE_X + 2, FACE_X + 26), rng.randint(318, 323)
+        if s.get_at((gx, gy))[3]:
+            s.set_at((gx, gy), rng.choice([(150, 140, 126), (128, 120, 110), (170, 160, 146)]))
+    # ---- stepping stones from the cabin door, a porch slab, and a few around the pond terrace
+    for sx, sy, w in ((10, 233, 15), (30, 236, 6), (42, 238, 5), (54, 237, 6), (66, 239, 5)):
+        c = lighten(stone, 0.08)
+        pygame.draw.ellipse(s, darken(c, 0.3), (sx, sy, w, 3))
+        pygame.draw.ellipse(s, c, (sx, sy - 1, w, 3))
+    for sx, sy in ((6, 313), (66, 314), (78, 316)):
+        pygame.draw.ellipse(s, darken(stone, 0.3), (sx, sy, 7, 3))
+        pygame.draw.ellipse(s, lighten(stone, 0.06), (sx, sy - 1, 7, 3))
+    # ---- shrubs and flower clumps on the lower lawn
+    bush = {0: (82, 140, 72), 1: (64, 126, 58), 2: (190, 106, 52), 3: (210, 220, 232)}[season]
+    for bx, by, r in ((84, 296, 4), (10, 318, 4)):
+        pygame.draw.circle(s, darken(bush, 0.25), (bx, by + 1), r)
+        pygame.draw.circle(s, bush, (bx, by), r - 1)
+        s.set_at((bx - 1, by - r + 2), lighten(bush, 0.2))
+        if flowers:
+            for _ in range(3):
+                s.set_at((bx + rng.randint(-2, 2), by + rng.randint(-2, 1)), rng.choice(flowers))
+    for cx, cy in ((14, 289), (62, 289), (40, 314)):
+        for _ in range(6):
+            fx, fy = cx + rng.randint(-3, 3), cy + rng.randint(-1, 1)
+            s.set_at((fx, fy), darken(grass, 0.25))
+            if flowers:
+                s.set_at((fx, fy - 1), rng.choice(flowers))
+    # ---- the lamps (glass glows at night: world._lights)
+    _lamp(s, *SLOPE_LAMPS[0], post=12)
+    _lamp(s, *SLOPE_LAMPS[1], post=10)
+
+
+def _cabin_extras(s, season, rng):
+    """A stone footing, a lamp by the door, a woodpile under the eave and shingles that catch the light."""
+    stone = ((150, 144, 132), (146, 140, 128), (152, 140, 122), (160, 162, 170))[season]
+    x = 6
+    while x < 64:
+        w = rng.randint(4, 7)
+        w = min(w, 64 - x)
+        if not (CABIN_DOOR.x - 1 <= x + w // 2 <= CABIN_DOOR.right):
+            c = lerp_c(stone, darken(stone, 0.25), rng.random())
+            s.fill(darken(c, 0.3), (x, 229, w, 3))
+            s.fill(c, (x, 229, w - 1, 2))
+        x += w
+    # the porch lamp, right of the door
+    lx, ly = SLOPE_LAMPS[2]
+    s.fill((70, 60, 54), (lx - 2, ly + 1, 2, 1))
+    s.fill((60, 52, 48), (lx - 1, ly - 3, 3, 1))
+    s.fill((236, 210, 150), (lx - 1, ly - 2, 3, 3))
+    s.set_at((lx, ly - 1), (255, 240, 200))
+    s.fill((60, 52, 48), (lx - 1, ly + 1, 3, 1))
+    # a woodpile under the left eave
+    for row, (y, n) in enumerate(((229, 3), (226, 2), (223, 1))):
+        for k in range(n):
+            cx = 1 + k * 2 + row
+            pygame.draw.circle(s, (120, 84, 56), (cx + 1, y + 1), 1)
+            s.set_at((cx + 1, y + 1), (196, 160, 110))
+    # shingles: a light lip on every other course
+    for i in range(1, 6, 2):
+        y = 178 + i * 4 + 1
+        half = 35 * (i * 4 + 1) / 23
+        for xx in range(int(35 - half) + 1, int(35 + half) - 1, 3):
+            s.set_at((xx, y), (156, 84, 68) if season != 3 else (250, 252, 255))
+
+
 def make_foreground(season, spot='dock'):
     if spot == 'pier':
         return _pier_fg(season)
@@ -377,6 +597,7 @@ def make_foreground(season, spot='dock'):
         _right_bank(s, season, rng)
         return s
 
+    _dock_slope(s, season, rng)
     # ---- cabin
     log, log_d = (156, 104, 68), (122, 80, 52)
     pygame.draw.rect(s, log, (6, 198, 58, 34))
@@ -413,6 +634,7 @@ def make_foreground(season, spot='dock'):
     if season != 3:
         for i in range(0, CABIN_WINDOW.w + 2, 2):
             s.set_at((CABIN_WINDOW.x + i, CABIN_WINDOW.bottom), (240, 120, 120) if i % 4 else (250, 220, 110))
+    _cabin_extras(s, season, rng)
 
     # ---- dock
     wood, wood_d, wood_dd = (164, 118, 78), (134, 94, 62), (100, 70, 48)

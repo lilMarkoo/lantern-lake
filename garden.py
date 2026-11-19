@@ -4,6 +4,9 @@ Plant seeds, water the beds once a day (rain and snow do it for you) and pick wh
 serving to a matching dish in the kitchen, turn into crab-pot bait (sweetcorn) or make Biscuit very happy (catnip).
 Junk fished out of the lake goes on the compost heap and comes back as plant food. Nothing ever dies: a bed that
 wasn't watered simply waits a day.
+
+A sunflower in bloom brings bees: the beds beside it (and the one across the path) give one more crop. A rain barrel
+catches the rain and waters dry beds by itself on the next mornings without any.
 """
 import math
 import random
@@ -54,6 +57,8 @@ GARNISH = {'fritters': ('dill',), 'chowder': ('corn', 'peas'), 'grilled': ('garl
            'fishpie': ('peas', 'carrot'), 'clam': ('tomato',), 'stew': ('kale', 'carrot', 'pumpkin'),
            'tart': ('strawberry',), 'feast': ('pumpkin', 'beet', 'radish')}
 CORN_BAIT = 5                          # one cob makes this much Sweet Corn bait
+BARREL_PRICE = 250
+BARREL_HOLDS = 3                       # dry mornings a full barrel can water
 
 # the beds on the slope under the cabin, in world pixels: (x, soil y, width)
 BED_SPOTS = [(6, 252, 22), (32, 252, 22), (58, 252, 20), (10, 274, 22), (36, 274, 22), (62, 274, 22)]
@@ -63,7 +68,7 @@ VIEW = pygame.Rect(0, 230, 100, 54)    # what the Garden tab shows, scaled up
 
 def new():
     return {'beds': [None] * BEDS, 'open': START_OPEN, 'produce': {}, 'heap': 0, 'food': 0, 'grew': 0,
-            'rain': 0}
+            'rain': 0, 'barrel': False, 'water': 0, 'poured': 0}
 
 
 def clean(gd):
@@ -76,6 +81,9 @@ def clean(gd):
         out['food'] = max(0, int(gd.get('food', 0)))
         out['grew'] = int(gd.get('grew', 0))
         out['rain'] = int(gd.get('rain', 0))
+        out['barrel'] = bool(gd.get('barrel', False))
+        out['water'] = max(0, min(BARREL_HOLDS, int(gd.get('water', 0))))
+        out['poured'] = int(gd.get('poured', 0))
     except (TypeError, ValueError):
         pass
     pr = gd.get('produce')
@@ -127,6 +135,22 @@ def ready_beds(g):
     return [i for i, b in enumerate(gd['beds'][:gd['open']]) if ready(b)]
 
 
+def neighbours(i):
+    """The beds beside bed i in its row, and the one across the path."""
+    row, col = divmod(i, 3)
+    return [row * 3 + c for c in (col - 1, col + 1) if 0 <= c < 3] + [(1 - row) * 3 + col]
+
+
+def bees(g, i):
+    """True when a sunflower in bloom next to bed i brings it bees."""
+    gd = g.garden
+    for j in neighbours(i):
+        b = gd['beds'][j] if j < gd['open'] else None
+        if b and b['crop'] == 'sunflower' and stage(b) >= 3:
+            return True
+    return False
+
+
 def seeds_now(g):
     sea = g.season_of(g.day)
     return [c for c in CROPS if c['season'] is None or c['season'] == sea]
@@ -156,12 +180,26 @@ def morning(g):
 
 
 def update(g, dt):
-    """Rain and snow water the beds for you."""
+    """Rain and snow water the beds for you (and fill the barrel); the barrel waters them on dry mornings."""
     if g.garden_fx > 0:
         g.garden_fx = max(0.0, g.garden_fx - dt)
     gd = g.garden
-    if not raining(g) or g.mode != 'play':
+    if g.mode != 'play':
         return
+    if not raining(g):
+        if gd['barrel'] and gd['water'] > 0 and gd['poured'] != g.day and g.minute >= 360:
+            gd['poured'] = g.day
+            beds = thirsty(g)
+            if beds:
+                for i in beds:
+                    gd['beds'][i]['wet'] = g.day
+                gd['water'] -= 1
+                g.garden_fx = 1.0
+                if g.place == 'lake':
+                    g.toast('The rain barrel watered the garden.', (100, 130, 170))
+        return
+    if gd['barrel'] and gd['water'] < BARREL_HOLDS:
+        gd['water'] = BARREL_HOLDS
     dry = [b for b in gd['beds'][:gd['open']] if b and not ready(b) and b['wet'] != g.day]
     for b in dry:
         b['wet'] = g.day
@@ -205,7 +243,7 @@ def harvest(g, i, quiet=False):
     if not ready(b):
         return 0
     c = crop(b)
-    n = c['n'] + (1 if b['fed'] else 0)
+    n = c['n'] + (1 if b['fed'] else 0) + (1 if c['id'] != 'sunflower' and bees(g, i) else 0)
     gd['produce'][c['id']] = gd['produce'].get(c['id'], 0) + n
     g.stats['harvested'] = g.stats.get('harvested', 0) + n
     if c['regrow']:
@@ -289,6 +327,48 @@ def open_bed(g):
     g.toast('A new garden bed, dug and edged.', (110, 150, 80))
     g.save()
     return True
+
+
+def buy_barrel(g):
+    gd = g.garden
+    if gd['barrel'] or g.coins < BARREL_PRICE:
+        return False
+    g.coins -= BARREL_PRICE
+    gd['barrel'] = True
+    gd['water'] = BARREL_HOLDS
+    g.audio.play('coin', 0.6)
+    g.toast('A rain barrel by the beds, full to the brim.', (100, 130, 170))
+    g.save()
+    return True
+
+
+def plant_all(g, cid):
+    """The same seed in every empty bed you can pay for. How many were planted."""
+    gd = g.garden
+    n = 0
+    for i in range(gd['open']):
+        if gd['beds'][i] is None and plant(g, i, cid):
+            n += 1
+    return n
+
+
+def produce_value(g):
+    return sum(n * CROP_BY_ID[cid]['sell'] for cid, n in g.garden['produce'].items())
+
+
+def sell_all(g):
+    gd = g.garden
+    total = produce_value(g)
+    if not total:
+        return 0
+    n = sum(gd['produce'].values())
+    gd['produce'] = {}
+    g.coins += total
+    g.stats['sold'] = g.stats.get('sold', 0) + n
+    g.audio.play('coin', 0.7)
+    g.toast('Sold %d things from the garden for %d coins.' % (n, total), (200, 160, 70))
+    g.save()
+    return total
 
 
 def sell(g, cid):
@@ -547,11 +627,27 @@ def draw_beds(s, g, t, ox=0, oy=0, sel=None):
     s.fill(lighten(can, 0.25), (cx, cy - 4, 5, 1))
     pygame.draw.line(s, can, (cx + 5, cy - 3), (cx + 8, cy - 6))
     pygame.draw.line(s, darken(can, 0.3), (cx + 1, cy - 6), (cx + 3, cy - 6))
-    hx, hy = 2 + ox, 292 + oy
-    pygame.draw.ellipse(s, (88, 66, 46), (hx, hy - 4, 12, 6))
-    for k, col in enumerate(((120, 100, 60), (96, 120, 70), (140, 110, 70))):
-        s.set_at((hx + 3 + k * 3, hy - 4 + k % 2), col)
-    s.fill((150, 112, 74), (hx - 1, hy - 1, 14, 2))
+    if gd['barrel']:
+        bx, by = 90 + ox, 258 + oy
+        oak = (128, 88, 58)
+        s.fill(darken(oak, 0.2), (bx, by, 7, 9))
+        s.fill(oak, (bx + 1, by, 5, 9))
+        s.fill((96, 100, 108), (bx, by + 2, 7, 1))
+        s.fill((96, 100, 108), (bx, by + 6, 7, 1))
+        s.fill((80, 110, 140) if gd['water'] else (70, 52, 40), (bx + 1, by, 5, 1))
+    # the compost bin: a slatted box on the lower lawn, with the heap showing over the top
+    hx, hy = 2 + ox, 306 + oy
+    slat, slat_d = (150, 108, 70), (104, 74, 50)
+    heap = gd['heap'] + min(3, gd['food'])
+    if heap:
+        pygame.draw.ellipse(s, (96, 72, 50), (hx + 1, hy - 10 - min(3, heap), 9, 5 + min(3, heap)))
+        for k, col in enumerate(((120, 100, 60), (96, 128, 70), (150, 116, 70))):
+            s.set_at((hx + 3 + k * 2, hy - 9 - min(3, heap) + k % 2), col)
+    s.fill(slat_d, (hx, hy - 8, 11, 8))
+    for k in range(3):
+        s.fill(slat, (hx, hy - 8 + k * 3, 11, 2))
+    s.fill(slat_d, (hx, hy - 9, 1, 9))
+    s.fill(slat_d, (hx + 10, hy - 9, 1, 9))
     fx = getattr(g, 'garden_fx', 0)
     if fx > 0:
         rng = random.Random(int(t * 20))
@@ -640,148 +736,409 @@ def crop_icon(cid, scale=3):
 
 
 # ---------------------------------------------------------------- the Garden tab in the cabin
+CARD = (47, 39)          # one bed's picture, in art pixels
+CARD_K = 4               # drawn at this zoom
+_CARD_BG = {}
+
+
+def _card_bg(season, night):
+    """Grass behind a bed: cached per season and light."""
+    key = (season, night)
+    if key not in _CARD_BG:
+        w, h = CARD
+        nf = night / 10
+        s = pygame.Surface((w, h))
+        top = lerp_c(((206, 226, 178), (200, 222, 160), (226, 210, 160), (226, 232, 240))[season], (70, 80, 100), nf * 0.6)
+        bot = lerp_c(((128, 168, 92), (118, 160, 82), (164, 146, 84), (210, 218, 228))[season], (50, 60, 70), nf * 0.6)
+        for y in range(h):
+            s.fill(lerp_c(top, bot, y / (h - 1)), (0, y, w, 1))
+        rng = random.Random(season)
+        for _ in range(60):
+            x, y = rng.randrange(w), rng.randrange(h // 3, h)
+            c = s.get_at((x, y))
+            s.set_at((x, y), darken(c, 0.1) if rng.random() < 0.6 else lighten(c, 0.08))
+        _CARD_BG[key] = s
+    return _CARD_BG[key]
+
+
+def _bee(s, x, y, t):
+    x, y = int(x), int(y)
+    s.set_at((x, y), (250, 210, 70))
+    s.set_at((x + 1, y), (40, 34, 30))
+    s.set_at((x + 2, y), (250, 210, 70))
+    if int(t * 16) % 2:
+        s.set_at((x + 1, y - 1), (240, 248, 255))
+
+
+def _bed_card(g, i, t):
+    """Bed i as a little picture: the raised bed, its plants, the soil wet or dry."""
+    gd = g.garden
+    w, h = CARD
+    s = _card_bg(g.env.season, int(round(g.env.nf * 10))).copy()
+    sea = g.env.season
+    soil_y = 29
+    x0, x1 = 4, w - 4
+    if i >= gd['open']:
+        # an unused patch: rough ground, two stakes and a string
+        s.fill((112, 86, 62), (x0, soil_y - 1, x1 - x0, 6))
+        for k in range(x0 + 2, x1 - 2, 4):
+            s.set_at((k, soil_y - 2), (90, 130, 70) if sea != 3 else (220, 228, 236))
+            s.set_at((k + 1, soil_y - 3), (110, 150, 80) if sea != 3 else (236, 240, 246))
+        for sx in (x0 + 1, x1 - 2):
+            s.fill((150, 112, 74), (sx, soil_y - 10, 2, 11))
+        pygame.draw.line(s, (236, 226, 200), (x0 + 2, soil_y - 8), (x1 - 2, soil_y - 8))
+        return s
+    b = gd['beds'][i]
+    is_wet = wet(g, b)
+    soil = (76, 56, 44) if is_wet else (128, 96, 68)
+    wood, wood_d = (164, 114, 72), (116, 78, 50)
+    s.fill(darken(soil, 0.15), (x0, soil_y - 3, x1 - x0, 9))
+    s.fill(soil, (x0, soil_y - 3, x1 - x0, 6))
+    for k in range(x0 + 1, x1 - 1, 3):
+        s.set_at((k, soil_y), darken(soil, 0.2))
+        s.set_at((k + 1, soil_y + 2), darken(soil, 0.12))
+    if is_wet:
+        for k in range(x0 + 3, x1 - 3, 7):
+            s.set_at((k, soil_y - 2), (120, 140, 160))
+    elif b and not ready(b):
+        for k in range(x0 + 6, x1 - 6, 13):                # little cracks in dry soil
+            s.set_at((k, soil_y - 1), darken(soil, 0.35))
+            s.set_at((k + 1, soil_y), darken(soil, 0.35))
+    # the boards: front, ends
+    s.fill(wood, (x0 - 2, soil_y + 3, x1 - x0 + 4, 5))
+    s.fill(lighten(wood, 0.2), (x0 - 2, soil_y + 3, x1 - x0 + 4, 1))
+    s.fill(wood_d, (x0 - 2, soil_y + 8, x1 - x0 + 4, 1))
+    for k in range(x0 + 10, x1, 14):
+        s.fill(wood_d, (k, soil_y + 4, 1, 4))
+    s.fill(wood_d, (x0 - 2, soil_y - 4, 2, 12))
+    s.fill(wood_d, (x1, soil_y - 4, 2, 12))
+    if sea == 3:
+        s.fill((240, 244, 250), (x0 - 2, soil_y + 2, x1 - x0 + 4, 1))
+    if b:
+        c = crop(b)
+        st = stage(b)
+        for k in range(3):
+            px = x0 + int((x1 - x0) * (k + 0.5) / 3)
+            _plant(s, c, st, px, soil_y - 2, t + k * 0.7)
+        if st == 4:
+            for k in range(3):                                # it twinkles when it's ready
+                ph = (t * 1.3 + k * 0.37 + i * 0.21) % 1
+                if ph < 0.25:
+                    sx = x0 + 5 + (k * 13 + i * 7) % (x1 - x0 - 10)
+                    sy = soil_y - 10 - (k * 5) % 7
+                    s.set_at((sx, sy), (255, 250, 210))
+                    if ph < 0.12:
+                        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                            s.set_at((sx + dx, sy + dy), (250, 230, 150))
+    if bees(g, i) or (b and b['crop'] == 'sunflower' and stage(b) >= 3):
+        for k in range(2):
+            a = t * (1.6 + k * 0.4) + i + k * 2
+            _bee(s, w / 2 + math.cos(a) * (10 + k * 5), 13 + math.sin(a * 2) * 4, t + k)
+    if getattr(g, 'garden_fx', 0) > 0:                         # drops from the watering can
+        rng = random.Random(int(t * 20) + i)
+        for _ in range(8):
+            s.set_at((rng.randrange(x0, x1), rng.randrange(6, soil_y)), (170, 210, 240))
+    return s
+
+
+def _drop(s, c, r, col=(96, 150, 210)):
+    x, y = c
+    pygame.draw.circle(s, col, (x, y + r // 3), r)
+    pygame.draw.polygon(s, col, [(x - r + 1, y + r // 3 - 1), (x + r - 1, y + r // 3 - 1), (x, y - r - 2)])
+    pygame.draw.circle(s, lighten(col, 0.5), (x - r // 3, y), max(1, r // 4))
+
+
+def _sel_key(g):
+    sel = g.garden_sel
+    if isinstance(sel, int) and not 0 <= sel < BEDS:
+        return None
+    if isinstance(sel, str) and sel.startswith('p:') and g.garden['produce'].get(sel[2:], 0) <= 0:
+        return None
+    return sel
+
+
 def draw_tab(g, s, rect):
     ui = g.ui
     gd = g.garden
     t = g.t
-    # a close-up of the real beds
-    view = pygame.Rect(rect.x + 30, rect.y + 90, VIEW.w * 6, VIEW.h * 6)
-    small = pygame.Surface(VIEW.size)
-    sky = lerp_c((150, 190, 214), (60, 70, 100), g.env.nf * 0.7)
-    small.fill(sky)
-    small.blit(_dock_ground(g.env.season), (0, 0), VIEW)
-    sel = g.garden_sel
-    draw_beds(small, g, t, 0, -VIEW.y, None)
-    pygame.draw.rect(s, (120, 80, 54), view.inflate(16, 16), border_radius=12)
-    s.blit(pygame.transform.scale(small, view.size), view)
-    pygame.draw.rect(s, (150, 104, 70), view.inflate(8, 8), 3, border_radius=10)
-    for i, (x, y, w) in enumerate(BED_SPOTS):
-        r = pygame.Rect(view.x + (x - 3) * 6, view.y + (y - 19 - VIEW.y) * 6, (w + 6) * 6, 27 * 6)
-        if i == sel:
-            pygame.draw.rect(s, (255, 230, 140), r, 3, border_radius=8)
-        elif r.collidepoint(ui.mouse):
-            pygame.draw.rect(s, (255, 250, 230), r, 2, border_radius=8)
+    sel = g.garden_sel = _sel_key(g)
+    # ---- the six beds, as cards
+    cw, ch = CARD[0] * CARD_K, CARD[1] * CARD_K
+    gx, gy = rect.x + 30, rect.y + 92
+    for i in range(BEDS):
+        r = pygame.Rect(gx + (i % 3) * (cw + 14), gy + (i // 3) * (ch + 14), cw, ch)
+        pic = pygame.transform.scale(_bed_card(g, i, t), r.size)
+        on = sel == i
+        hov = r.collidepoint(ui.mouse)
+        s.blit(ui._frame(r.w + 8, r.h + 8, (120, 86, 60), (230, 180, 70) if on else (84, 58, 42), 2),
+               r.inflate(8, 8))
+        s.blit(pic, r)
+        if hov and not on:
+            pygame.draw.rect(s, (255, 250, 230), r, 2)
         ui.hotspot(r, lambda i=i: _select(g, i))
-    # buttons under the view
-    by = view.bottom + 18
-    nd = len(thirsty(g))
-    ui.button(s, (view.x, by, 190, 44), 'Water the beds', lambda: water_all(g), 'primary', enabled=nd > 0)
-    nr = len(ready_beds(g))
-    ui.button(s, (view.x + 202, by, 170, 44), 'Pick all', lambda: harvest_all(g), 'gold', enabled=nr > 0)
+        if i >= gd['open']:
+            label = 'Dig a new bed' if i == gd['open'] else 'Unused patch'
+            ui.blit_text(s, label, (r.x + 10, r.y + 8), 'smallb', U.INK, outline=(250, 244, 228))
+            if i == gd['open']:
+                price = BED_PRICES[gd['open'] - START_OPEN]
+                U.coin(s, (r.x + 18, r.y + 46), 8)
+                ui.blit_text(s, str(price), (r.x + 30, r.y + 46), 'smallb', U.INK, 'midleft', outline=(250, 244, 228))
+            continue
+        b = gd['beds'][i]
+        if b is None:
+            ui.blit_text(s, 'Empty', (r.x + 10, r.y + 8), 'smallb', U.INK, outline=(250, 244, 228))
+            ui.blit_text(s, '+ plant', (r.centerx, r.y + 64), 'smallb', (90, 120, 70), 'center',
+                         outline=(250, 244, 228))
+            continue
+        c = crop(b)
+        st = stage(b)
+        ui.blit_text(s, c['name'], (r.x + 10, r.y + 8), 'smallb', U.INK, outline=(250, 244, 228), maxw=r.w - 50)
+        if st == 4:
+            chip = pygame.Rect(r.right - 62, r.y + 8, 54, 26)
+            pygame.draw.rect(s, (246, 210, 110), chip, border_radius=12)
+            pygame.draw.rect(s, (170, 120, 50), chip, 2, border_radius=12)
+            ui.blit_text(s, 'Pick', chip.center, 'smallb', U.INK, 'center')
+        elif not wet(g, b):
+            k = 9 + int(math.sin(t * 4 + i) * 1.5)
+            _drop(s, (r.right - 22, r.y + 22), k)
+        # days grown, as pips along the bottom board
+        n = c['days']
+        for k in range(n):
+            px = r.centerx - (n - 1) * 8 + k * 16
+            done = k < b['age']
+            pygame.draw.circle(s, (126, 186, 100) if done else (90, 64, 44), (px, r.bottom - 10), 5)
+            pygame.draw.circle(s, (60, 44, 32), (px, r.bottom - 10), 5, 1)
+        if b['fed']:
+            ui.blit_text(s, 'fed', (r.x + 10, r.bottom - 10), 'tiny', (250, 244, 228), 'midleft',
+                         outline=(70, 50, 36))
+    # ---- the basket of things picked
+    py = gy + 2 * ch + 14 + 26
+    ui.blit_text(s, 'Picked', (gx, py), 'h3', U.INK)
+    items = sorted(gd['produce'].items(), key=lambda kv: list(CROP_BY_ID).index(kv[0]))
+    if not items:
+        ui.blit_text(s, 'Nothing picked yet. Ready beds twinkle.', (gx + 110, py + 6), 'small', U.SOFT)
+    full_w = 3 * cw + 28
+    tw = 64
+    for k, (cid, n) in enumerate(items[:7]):
+        tr = pygame.Rect(gx + k * (tw + 8), py + 34, tw, 60)
+        on = sel == 'p:' + cid
+        ui.tile(s, tr, (255, 246, 214) if on else (250, 244, 228), (230, 180, 70) if on else (160, 190, 120))
+        ic = crop_icon(cid, 2)
+        s.blit(ic, ic.get_rect(center=(tr.centerx, tr.y + 24)))
+        ui.blit_text(s, str(n), (tr.right - 6, tr.bottom - 4), 'smallb', U.INK, 'bottomright', outline=(250, 244, 228))
+        ui.hotspot(tr, lambda cid=cid: _select(g, 'p:' + cid))
+    if items:
+        v = produce_value(g)
+        ui.button(s, (gx + full_w - 168, py + 40, 168, 48), 'Sell all  %d' % v, lambda: sell_all(g), 'gold',
+                  font='smallb')
+    # ---- the right-hand column
+    x0 = gx + full_w + 30
+    pw = rect.right - 30 - x0
+    pane = pygame.Rect(x0, gy - 4, pw, rect.bottom - 20 - (gy - 4))
+    ui.tile(s, pane, (252, 247, 234), (196, 172, 140))
+    x, y, w = pane.x + 18, pane.y + 16, pane.w - 36
+    if isinstance(sel, int) and sel >= gd['open']:
+        _pane_patch(g, s, x, y, w, pane, sel)
+    elif isinstance(sel, int) and gd['beds'][sel] is None:
+        _pane_seeds(g, s, x, y, w, pane, sel)
+    elif isinstance(sel, int):
+        _pane_bed(g, s, x, y, w, pane, sel)
+    elif isinstance(sel, str):
+        _pane_produce(g, s, x, y, w, pane, sel[2:])
+    else:
+        _pane_today(g, s, x, y, w, pane)
+
+
+def _back(g, s, pane):
+    g.ui.button(s, (pane.right - 92, pane.y + 12, 78, 32), 'Back', lambda: setattr(g, 'garden_sel', None), 'normal',
+                font='tiny')
+
+
+def _pane_today(g, s, x, y, w, pane):
+    ui = g.ui
+    gd = g.garden
+    ui.blit_text(s, 'Today', (x, y), 'h3', U.INK)
+    nd, nr = len(thirsty(g)), len(ready_beds(g))
     if raining(g):
-        note = 'The weather is watering the beds today.'
+        note = 'The weather is watering the beds.'
     elif nd:
-        note = '%d bed%s need%s water.' % (nd, '' if nd == 1 else 's', 's' if nd == 1 else '')
+        note = '%d bed%s could use water.' % (nd, '' if nd == 1 else 's')
     elif any(gd['beds'][:gd['open']]):
         note = 'All watered for today.'
     else:
-        note = 'Click a bed to plant seeds.'
-    ui.blit_text(s, note, (view.x + 386, by + 22), 'small', U.SOFT, 'midleft', maxw=view.right - view.x - 386)
-    # the produce shelf
-    py = by + 62
-    ui.blit_text(s, 'From the garden', (view.x, py), 'h3', U.INK)
-    items = [(cid, n) for cid, n in sorted(gd['produce'].items(), key=lambda kv: list(CROP_BY_ID).index(kv[0]))]
-    if not items:
-        ui.blit_text(s, 'Nothing picked yet.', (view.x + 200, py + 6), 'small', U.SOFT)
-    tw = 148
-    for k, (cid, n) in enumerate(items[:8]):
-        c = CROP_BY_ID[cid]
-        tr = pygame.Rect(view.x + (k % 4) * (tw + 4), py + 32 + (k // 4) * 54, tw, 50)
-        ui.tile(s, tr, (250, 244, 228), (160, 190, 120))
-        ic = crop_icon(cid, 2)
-        s.blit(ic, ic.get_rect(center=(tr.x + 22, tr.centery)))
-        ui.blit_text(s, c['name'], (tr.x + 42, tr.y + 5), 'tiny', U.INK, maxw=tw - 48)
-        ui.blit_text(s, str(n), (tr.x + 34, tr.bottom - 6), 'smallb', U.INK, 'bottomright', outline=(250, 244, 228))
-        if cid == 'corn':
-            ui.button(s, (tr.x + 42, tr.y + 24, 48, 22), 'Bait', lambda: corn_to_bait(g), 'normal', font='tiny')
-            ui.button(s, (tr.x + 94, tr.y + 24, 48, 22), 'Sell', lambda cid=cid: sell(g, cid), 'normal', font='tiny')
-        elif cid == 'catnip':
-            ui.button(s, (tr.x + 42, tr.y + 24, 48, 22), 'Cat', lambda: give_catnip(g), 'rose', font='tiny',
-                      enabled=not catnip_today(g))
-            ui.button(s, (tr.x + 94, tr.y + 24, 48, 22), 'Sell', lambda cid=cid: sell(g, cid), 'normal', font='tiny')
-        else:
-            ui.button(s, (tr.x + 42, tr.y + 24, 100, 22), 'Sell  %d' % (n * c['sell']), lambda cid=cid: sell(g, cid),
-                      'normal', font='tiny')
-    if len(items) > 8:
-        ui.blit_text(s, '+%d more' % (len(items) - 8), (view.right, py + 6), 'small', U.SOFT, 'topright')
-    # the right column: the chosen bed
-    x0 = view.right + 34
-    cw = rect.right - 30 - x0
-    y = rect.y + 92
-    if sel is None or sel >= BEDS:
-        ui.blit_text(s, 'Your garden', (x0, y), 'h3', U.INK)
-        lines = ['Click a bed in the picture to plant,', 'feed or pick it.', '',
-                 'Water once a day and every bed', 'grows a little overnight. Rain', 'and snow water them for you.', '',
-                 'Fresh crops add a serving to the', 'dish they go with in the kitchen.']
-        for k, ln in enumerate(lines):
-            ui.blit_text(s, ln, (x0, y + 40 + k * 24), 'small', U.SOFT)
-    elif sel >= gd['open']:
-        price = BED_PRICES[gd['open'] - START_OPEN]
-        ui.blit_text(s, 'An empty patch', (x0, y), 'h3', U.INK)
-        ui.blit_text(s, 'Dig it over and edge it with boards', (x0, y + 40), 'small', U.SOFT, maxw=cw)
-        ui.blit_text(s, 'to make another bed.', (x0, y + 62), 'small', U.SOFT, maxw=cw)
-        if sel == gd['open']:
-            ui.button(s, (x0, y + 100, 240, 46), 'Dig it: %d coins' % price, lambda: open_bed(g), 'primary',
-                      enabled=g.coins >= price)
-        else:
-            ui.blit_text(s, 'Dig the beds in order.', (x0, y + 110), 'smallb', U.SOFT)
+        note = 'Click an empty bed to plant.'
+    ui.blit_text(s, note, (x, y + 34), 'small', U.SOFT, maxw=w)
+    ui.button(s, (x, y + 66, w, 46), 'Water the beds' + ('  (%d)' % nd if nd else ''), lambda: water_all(g), 'primary',
+              enabled=nd > 0)
+    ui.button(s, (x, y + 120, w, 46), 'Pick everything' + ('  (%d)' % nr if nr else ''), lambda: harvest_all(g),
+              'gold', enabled=nr > 0)
+    # the rain barrel
+    y += 186
+    pygame.draw.line(s, (226, 212, 186), (x, y - 8), (x + w, y - 8), 2)
+    bic = pygame.Surface((10, 12), pygame.SRCALPHA)
+    oak = (128, 88, 58)
+    bic.fill(darken(oak, 0.2), (1, 1, 8, 11))
+    bic.fill(oak, (2, 1, 6, 11))
+    bic.fill((96, 100, 108), (1, 3, 8, 1))
+    bic.fill((96, 100, 108), (1, 8, 8, 1))
+    bic.fill((80, 120, 160) if gd['water'] else (70, 52, 40), (2, 1, 6, 1))
+    s.blit(pygame.transform.scale(bic, (30, 36)), (x, y))
+    ui.blit_text(s, 'Rain barrel', (x + 42, y), 'smallb', U.INK)
+    if gd['barrel']:
+        for k in range(BARREL_HOLDS):
+            _drop(s, (x + 52 + k * 22, y + 30), 6, (96, 150, 210) if k < gd['water'] else (214, 204, 188))
+        ui.blit_text(s, 'Waters dry beds on its own,', (x + 42, y + 46), 'tiny', U.SOFT, maxw=w - 42)
+        ui.blit_text(s, 'and the rain fills it again.', (x + 42, y + 64), 'tiny', U.SOFT, maxw=w - 42)
     else:
-        b = gd['beds'][sel]
-        if b is None:
-            sea = g.season_of(g.day)
-            ui.blit_text(s, 'Plant something', (x0, y), 'h3', U.INK)
-            ui.blit_text(s, '%s seeds and herbs' % SEASON_NAMES[sea], (x0, y + 32), 'small', U.SOFT)
-            for k, c in enumerate(seeds_now(g)):
-                r = pygame.Rect(x0, y + 60 + k * 62, cw, 56)
-                ui.tile(s, r, (250, 244, 228), (196, 170, 140))
-                ic = crop_icon(c['id'], 2)
-                s.blit(ic, ic.get_rect(center=(r.x + 26, r.centery)))
-                ui.blit_text(s, c['name'], (r.x + 52, r.y + 6), 'smallb', U.INK, maxw=cw - 150)
-                rg = ', again every %d' % c['regrow'] if c['regrow'] else ''
-                ui.blit_text(s, '%d days%s' % (c['days'], rg), (r.x + 52, r.y + 30), 'tiny', U.SOFT,
-                             maxw=cw - 150)
-                ui.button(s, (r.right - 92, r.y + 10, 82, 36), '%d' % c['seed'], lambda c=c: plant(g, sel, c['id']),
-                          'primary', enabled=g.coins >= c['seed'], font='smallb')
-        else:
-            c = crop(b)
-            st = stage(b)
-            ic = crop_icon(c['id'], 4)
-            s.blit(ic, (x0, y))
-            ui.blit_text(s, c['name'], (x0 + 76, y + 4), 'h3', U.INK, maxw=cw - 76)
-            words = ('Just planted', 'Sprouting', 'Growing', 'Nearly there', 'Ready to pick!')[st]
-            ui.blit_text(s, words, (x0 + 76, y + 36), 'smallb', (90, 140, 70) if st == 4 else U.SOFT)
-            # growth bar
-            bar = pygame.Rect(x0, y + 82, cw, 14)
-            pygame.draw.rect(s, (226, 214, 196), bar, border_radius=7)
-            pygame.draw.rect(s, (140, 190, 100), (bar.x, bar.y, int(bar.w * min(1, b['age'] / c['days'])), bar.h),
-                             border_radius=7)
-            ui.blit_text(s, 'Day %d of %d' % (min(b['age'], c['days']), c['days']), (x0, y + 104), 'small', U.SOFT)
-            if st < 4:
-                ui.blit_text(s, 'Watered today' if wet(g, b) else 'Needs water today',
-                             (x0 + cw, y + 104), 'small', (90, 130, 170) if wet(g, b) else (190, 120, 90), 'topright')
-            u = uses(c['id'])
-            if u:
-                ui.blit_text(s, u, (x0, y + 134), 'small', (90, 130, 80), maxw=cw)
-            yb = y + 172
-            if st == 4:
-                ui.button(s, (x0, yb, 200, 46), 'Pick', lambda: harvest(g, sel), 'gold')
-            else:
-                ui.button(s, (x0, yb, 200, 46), 'Plant food (%d)' % gd['food'], lambda: feed(g, sel), 'normal',
-                          enabled=gd['food'] > 0 and not b['fed'])
-                if b['fed']:
-                    ui.blit_text(s, 'Fed: one extra crop', (x0, yb + 52), 'tiny', (90, 130, 80))
-            ui.button(s, (x0 + 212, yb, cw - 212, 46), 'Pull up', lambda: pull_up(g, sel), 'rose', font='smallb')
-    # compost, bottom right
-    cy = rect.bottom - 132
-    ui.blit_text(s, 'Compost heap', (x0, cy), 'h3', U.INK)
-    ui.blit_text(s, 'Junk from the lake: %d of %d for one plant food' % (gd['heap'], JUNK_PER_FOOD), (x0, cy + 32),
-                 'tiny', U.SOFT, maxw=cw)
-    ui.blit_text(s, 'Plant food: %d' % gd['food'], (x0, cy + 54), 'smallb', U.INK)
+        ui.blit_text(s, 'Catches the rain, then waters', (x + 42, y + 24), 'tiny', U.SOFT, maxw=w - 42)
+        ui.blit_text(s, 'dry beds for you, %d mornings a fill.' % BARREL_HOLDS, (x + 42, y + 42), 'tiny', U.SOFT,
+                     maxw=w - 42)
+        g.price_button(s, (x + 42, y + 64, 140, 38), BARREL_PRICE, lambda: buy_barrel(g))
+    # the compost heap
+    y += 120
+    pygame.draw.line(s, (226, 212, 186), (x, y - 8), (x + w, y - 8), 2)
+    ui.blit_text(s, 'Compost heap', (x, y), 'smallb', U.INK)
+    ui.blit_text(s, 'Plant food: %d' % gd['food'], (x + w, y), 'smallb', (96, 140, 80), 'topright')
+    for k in range(JUNK_PER_FOOD):
+        r = pygame.Rect(x + k * 26, y + 30, 20, 14)
+        pygame.draw.rect(s, (150, 118, 80) if k < gd['heap'] else (226, 214, 196), r, border_radius=5)
+    ui.blit_text(s, 'junk from the lake makes food', (x + JUNK_PER_FOOD * 26 + 6, y + 37), 'tiny', U.SOFT, 'midleft',
+                 maxw=w - JUNK_PER_FOOD * 26 - 6)
     nj = len(junk_in_basket(g))
-    ui.button(s, (x0, cy + 80, cw, 40), 'Add junk from the basket (%d)' % nj, lambda: compost(g), 'normal',
-              enabled=nj > 0, font='smallb')
-    if gd['open'] < BEDS and sel is None:
-        ui.blit_text(s, 'More beds: click a staked patch', (x0, cy - 34), 'tiny', U.SOFT, maxw=cw)
+    ui.button(s, (x, y + 56, w, 38), 'Add junk from the basket' + ('  (%d)' % nj if nj else ''), lambda: compost(g),
+              'normal', enabled=nj > 0, font='smallb')
+    for k, line in enumerate(ui.wrap('Tip: a sunflower in bloom brings bees, and the beds beside it give one '
+                                     'more crop.', 'tiny', w)[:3]):
+        ui.blit_text(s, line, (x, pane.bottom - 70 + k * 20), 'tiny', (110, 140, 80))
+
+
+def _pane_patch(g, s, x, y, w, pane, sel):
+    ui = g.ui
+    gd = g.garden
+    _back(g, s, pane)
+    ui.blit_text(s, 'An unused patch', (x, y), 'h3', U.INK, maxw=w - 90)
+    for k, line in enumerate(ui.wrap('Dig it over and edge it with boards to make another raised bed.', 'small', w)):
+        ui.blit_text(s, line, (x, y + 40 + k * 24), 'small', U.SOFT)
+    if sel == gd['open']:
+        price = BED_PRICES[gd['open'] - START_OPEN]
+        ui.blit_text(s, 'Dig it for:', (x, y + 92), 'smallb', U.INK)
+        g.price_button(s, (x, y + 110, w, 48), price, lambda: open_bed(g))
+    else:
+        ui.blit_text(s, 'Dig the beds in order.', (x, y + 116), 'smallb', U.SOFT)
+
+
+def _pane_seeds(g, s, x, y, w, pane, sel):
+    ui = g.ui
+    gd = g.garden
+    _back(g, s, pane)
+    sea = g.season_of(g.day)
+    ui.blit_text(s, 'Plant something', (x, y), 'h3', U.INK, maxw=w - 90)
+    ui.blit_text(s, '%s seeds and herbs' % SEASON_NAMES[sea], (x, y + 32), 'small', U.SOFT)
+    empty = [i for i in range(gd['open']) if gd['beds'][i] is None]
+    fill = getattr(g, 'garden_fill', False) and len(empty) > 1
+    seeds = seeds_now(g)
+    rh = min(58, (pane.bottom - 70 - (y + 62)) // max(1, len(seeds)))
+    for k, c in enumerate(seeds):
+        r = pygame.Rect(x, y + 62 + k * rh, w, rh - 6)
+        cost = c['seed'] * (len(empty) if fill else 1)
+        ok = g.coins >= c['seed']
+        hov = ok and r.collidepoint(ui.mouse)
+        ui.tile(s, r, (255, 250, 236) if hov else (246, 238, 220), (196, 170, 140))
+        ic = crop_icon(c['id'], 2)
+        s.blit(ic, ic.get_rect(center=(r.x + 24, r.centery)))
+        ui.blit_text(s, c['name'], (r.x + 48, r.y + 4), 'smallb', U.INK, maxw=w - 140)
+        rg = ', again every %d' % c['regrow'] if c['regrow'] else ''
+        ui.blit_text(s, '%d days%s' % (c['days'], rg), (r.x + 48, r.y + 26), 'tiny', U.SOFT, maxw=w - 140)
+        U.coin(s, (r.right - 64, r.centery), 8)
+        ui.blit_text(s, '%d' % cost, (r.right - 52, r.centery), 'smallb', U.INK if g.coins >= cost else (190, 120, 100),
+                     'midleft')
+        if ok:
+            act = (lambda c=c: plant_all(g, c['id'])) if fill else (lambda c=c: plant(g, sel, c['id']))
+            ui.hotspot(r, act)
+    if len(empty) > 1:
+        ui.button(s, (x, pane.bottom - 58, w, 40),
+                  ('Plant in: all %d empty beds' % len(empty)) if fill else 'Plant in: just this bed',
+                  lambda: setattr(g, 'garden_fill', not getattr(g, 'garden_fill', False)),
+                  'tab_on' if fill else 'normal', font='smallb')
+
+
+def _pane_bed(g, s, x, y, w, pane, sel):
+    ui = g.ui
+    gd = g.garden
+    b = gd['beds'][sel]
+    c = crop(b)
+    st = stage(b)
+    _back(g, s, pane)
+    ic = crop_icon(c['id'], 4)
+    s.blit(ic, (x, y))
+    ui.blit_text(s, c['name'], (x + 76, y + 4), 'h3', U.INK, maxw=w - 76 - 90)
+    words = ('Just planted', 'Sprouting', 'Growing', 'Nearly there', 'Ready to pick!')[st]
+    ui.blit_text(s, words, (x + 76, y + 36), 'smallb', (90, 140, 70) if st == 4 else U.SOFT)
+    y += 84
+    bar = pygame.Rect(x, y, w, 14)
+    pygame.draw.rect(s, (226, 214, 196), bar, border_radius=7)
+    pygame.draw.rect(s, (140, 190, 100), (bar.x, bar.y, max(14, int(bar.w * min(1, b['age'] / c['days']))), bar.h),
+                     border_radius=7)
+    ui.blit_text(s, 'Day %d of %d' % (min(b['age'], c['days']), c['days']), (x, y + 22), 'small', U.SOFT)
+    if st < 4:
+        ui.blit_text(s, 'Watered today' if wet(g, b) else 'Needs water today', (x + w, y + 22), 'small',
+                     (90, 130, 170) if wet(g, b) else (190, 120, 90), 'topright')
+    y += 56
+    extra = []
+    n = c['n'] + (1 if b['fed'] else 0) + (1 if c['id'] != 'sunflower' and bees(g, sel) else 0)
+    extra.append('Each picking gives %d.' % n)
+    if b['fed']:
+        extra.append('Fed with plant food: one extra.')
+    if c['id'] != 'sunflower' and bees(g, sel):
+        extra.append('Bees from the sunflower: one extra.')
+    if c['id'] == 'sunflower':
+        extra.append('In bloom it brings bees to the beds beside it.')
+    if c['regrow']:
+        extra.append('Grows back %d days after picking.' % c['regrow'])
+    u = uses(c['id'])
+    if u:
+        extra.append(u)
+    for line in extra[:5]:
+        ui.blit_text(s, line, (x, y), 'small', (90, 120, 80) if 'extra' in line or 'bees' in line else U.SOFT, maxw=w)
+        y += 24
+    by = pane.bottom - 70
+    if st == 4:
+        ui.button(s, (x, by, w - 120, 48), 'Pick', lambda: harvest(g, sel), 'gold')
+    else:
+        ui.button(s, (x, by, w - 120, 48), 'Plant food (%d)' % gd['food'], lambda: feed(g, sel), 'normal',
+                  enabled=gd['food'] > 0 and not b['fed'], font='smallb')
+    ui.button(s, (x + w - 110, by, 110, 48), 'Pull up', lambda: pull_up(g, sel), 'rose', font='smallb')
+
+
+def _pane_produce(g, s, x, y, w, pane, cid):
+    ui = g.ui
+    gd = g.garden
+    c = CROP_BY_ID[cid]
+    n = gd['produce'].get(cid, 0)
+    _back(g, s, pane)
+    ic = crop_icon(cid, 4)
+    s.blit(ic, (x, y))
+    ui.blit_text(s, c['name'], (x + 76, y + 4), 'h3', U.INK, maxw=w - 76 - 90)
+    ui.blit_text(s, '%d in the basket' % n, (x + 76, y + 36), 'smallb', U.SOFT)
+    y += 92
+    u = uses(cid)
+    lines = ['Each one sells for %d.' % c['sell']]
+    if u:
+        lines.append(u)
+    lines.append('Fresh crops add a serving to the dish they go with when you cook.')
+    for line in lines:
+        for ln in ui.wrap(line, 'small', w):
+            ui.blit_text(s, ln, (x, y), 'small', U.SOFT)
+            y += 24
+        y += 4
+    by = pane.bottom - 70
+    ui.button(s, (x, by, w, 48), 'Sell %d  for %d' % (n, n * c['sell']), lambda: sell(g, cid), 'gold', font='smallb')
+    if cid == 'corn':
+        ui.button(s, (x, by - 56, w, 46), 'Make %d Sweet Corn bait' % CORN_BAIT, lambda: corn_to_bait(g), 'normal',
+                  font='smallb')
+    elif cid == 'catnip':
+        ui.button(s, (x, by - 56, w, 46), 'Give some to Biscuit' if not catnip_today(g) else 'Biscuit had some today',
+                  lambda: give_catnip(g), 'rose', enabled=not catnip_today(g), font='smallb')
 
 
 _GROUND = {}

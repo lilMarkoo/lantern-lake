@@ -88,8 +88,10 @@ your save, so they stay the same when you start a new game.
     - Sharp always uses a whole-number zoom, so every art pixel is the same size. That can leave a border.
     - Fill stretches the picture to fill the window, with a sharp-then-smooth filter.
     - Auto (the default) picks Sharp whenever that fills nearly all of the window.
-  - **Interface size**: 50% to 110%, for the HUD and menus. The row lists which sizes land on whole screen
-    pixels for your window. Those are the sharpest and also the fastest to draw (on a 1080p screen: 67% and 100%).
+  - **Interface size**: 50% to 110%, for the HUD and menus. Whenever each interface pixel comes out at least
+    two and a half screen pixels wide (on a 1080p screen: 85% and up), it's drawn with hard pixels only, so text
+    stays crisp at every size. Smaller sizes on small windows use the sharp-then-smooth filter; the row lists which
+    sizes land exactly on whole screen pixels for your window, the sharpest of those.
   - **Frame rate**: 30, 60, 120, 144 or Screen. Screen, the default, matches your monitor's refresh rate and
     uses vsync, so motion is smooth and doesn't tear.
   - A frame rate counter.
@@ -102,7 +104,9 @@ your save, so they stay the same when you start a new game.
       Simple, and turns them back on once there's room again.
 
   The game draws through your graphics card (Direct3D 11 on Windows). It stays sharp when you change the window
-  size, go fullscreen, or move the window to a screen with a different Windows scale setting. A computer that
+  size, go fullscreen, or move the window to a screen with a different Windows scale setting. The fishing camera
+  zoom is drawn with hard pixels too, and settles on its exact zoom once it stops moving, so the lake doesn't
+  look soft when you're zoomed in. A computer that
   can't do that falls back to drawing on the CPU, which looks the same but runs slower.
 - **Gameplay**: relaxed reeling, day length (slow, normal or quick days), 12 or 24-hour clock, the HUD style
   (see below), hints, pausing when you switch to another window, controller rumble, and the first-day tips (seven short tips at the top of the screen
@@ -113,11 +117,13 @@ your save, so they stay the same when you start a new game.
 
 ### The HUD
 
-The top left shows one card with the clock, the day and your coins, and under it **one tracked goal**: what to do next, where to go, and when (for a fish: the
+The top left shows one slim bar with the clock, the day and your coins (point at it for the date), and under it
+**one tracked goal**: what to do next, where to go, and when (for a fish: the
 spots it swims at, and the hours, seasons, weather and tide it wants). When there's more than one, a small arrow
 on the card switches between them (dots show which one you're on). A live festival comes first, then the
 request. At the sea, the harbour's jobs (the lighthouse, Morwen's orders, Kit's shells) come before a letter
-asking for a lake fish. Under it are the day's notes: snacks, visitors, fish runs, the sky. Away at the sea,
+asking for a lake fish. Under it are the day's notes as a row of small icons: snacks, visitors, fish runs, the
+sky. Point at an icon to read it; click it to go there (the lanterns, the garden, the shore, the mailbox). Away at the sea,
 the lake's chores (the garden, the wagon, the crab pot) stay at home.
 
 When a fish you have never caught could bite **right now** (because it's dusk, or raining, or you're at the one
@@ -131,10 +137,17 @@ bottom corner, so you can cast again. New fish, records and anything rare still 
 tips show only when they make sense (no "sell your catch" with an empty basket, no "rest" at noon) and move on
 by themselves.
 
-With the Calm or Compact HUD, the cards fade nearly away once your bobber has settled and all through the
-fight, so it's just you and the water. With the Calm HUD they also fade when nothing has changed for a few
-seconds. Point at them, or earn some coins, and they come back. While a cast is out the goal card shrinks to a
+With the Clean, Calm or Compact HUD, the cards fade nearly away once your bobber has settled and all through
+the fight, so it's just you and the water. With the Clean and Calm HUDs they also fade when nothing has changed
+for a few seconds. When a window is open (the shop, the journal, the cabin...) the HUD steps away entirely, so
+the window stands on its own. Point at them, or earn some coins, and they come back. While a cast is out the goal card shrinks to a
 single line.
+
+### The Trading Post (S)
+
+The shop sets its things out as cards on a shelf: a picture, the name and the price (greyed when you can't afford
+it yet). Point at a card to read about it in the panel on the right, with what a rod's range and arc are, and how
+many of a bait you have. Click a card to keep it there, and buy it with the big button at the bottom.
 
 ### Goals (Q)
 
@@ -159,9 +172,12 @@ and what the host is saying; click it to open the set.
 The radio has its own volume slider in Options, Audio, so you can turn the usual music off and still have
 the radio, or the other way round. The game remembers your station.
 
-The **HUD** setting (Options > Gameplay) has three styles:
+The **HUD** setting (Options > Gameplay) has four styles:
 
-- **Calm** (the default): the menu toolbar is folded into one **Menu** button in the bottom-right corner.
+- **Clean** (the default): the tidiest. One slim bar for the time, day and coins, one slim goal line, the day's
+  notes as icons, and your bait as a small count (its name, and Tab to switch, when you point at it). The menu
+  is the same folded **Menu** button as Calm
+- **Calm**: the menu toolbar is folded into one **Menu** button in the bottom-right corner.
   Point at it (or click it) and it opens into the Journal, Shop, Cabin, Calendar, Town and Rest buttons. While
   a cast is out it slides away and the day's notes step aside, so it's just you and the water. The keys (J, S,
   C, K...) still work. Your bait sits in a small label at the top right
@@ -661,8 +677,16 @@ your dock.
 
 ## The garden
 
+The slope under the cabin is laid out in two lawns. The garden terrace sits up top, edged by a fieldstone wall
+with flowers along it, and stepping stones lead from the cabin door. The lower lawn holds the hatchery pond and
+the compost bin, and steps at the end of the wall lead down to the old stone arch. Little lamps by the path and
+the porch light up after dark.
+
 Six raised beds sit on the slope under the cabin (three to start; dig the others for 150, 300 and 500 coins).
-Click them on the lake, or open the cabin's **Garden** tab. Pick a bed, then plant seeds for the season: radishes,
+Click them on the lake, or open the cabin's **Garden** tab. The tab shows each bed as its own little picture: a
+blue drop means it wants water, *Pick* means it's ready (it twinkles), and the dots along the board count the days
+it has grown. The panel on the right shows today's jobs, or whatever bed or crop you've picked. Click an empty bed,
+then a seed, to plant: radishes,
 snap peas and strawberries in spring; sweetcorn, tomatoes and sunflowers in summer; pumpkins, carrots and beetroot
 in autumn; winter kale and garlic in winter; dill and catnip all year round.
 
@@ -675,6 +699,13 @@ in autumn; winter kale and garlic in winter; dill and catnip all year round.
 - Sell what you pick, turn sweetcorn into crab-pot bait (5 per cob), or give Biscuit some catnip once a day
 - Old boots, tin cans and driftwood from the lake go on the **compost heap**. Every three make one plant food, which
   puts a bed a day ahead and adds one more crop to its harvest
+- **Bees**: a sunflower in bloom brings bees, and the beds beside it in its row (and the one across the path) give
+  one more crop at each picking
+- A **rain barrel** (250 coins) stands by the beds. On the first dry morning after the beds need water, it waters
+  them for you. It holds three mornings' worth, and any rain or snow fills it again
+- Seeds can go in **every empty bed at once**: switch *Plant in* to *all empty beds* under the seed list
+- *Sell all* under the picked crops sells the whole basket of produce in one go; click a crop for its own
+  choices (sell it, turn corn into bait, give Biscuit catnip)
 
 ## Colour morphs and the hatchery
 
@@ -699,7 +730,9 @@ pond is full, or it's a sea fish, the button reads *Sell* and a collector pays t
 it to the tank, or release it.
 
 **The hatchery pond** is the stone-ringed pool on the slope under the garden. Click it on the lake, or open the
-cabin's **Hatchery** tab.
+cabin's **Hatchery** tab. The tab opens with the whole pond across the top: the fish wander about, rest, nose the
+surface and keep out of each other's way, the fry dart about in the reeds, and fireflies come out after dark.
+Click a fish in the water (or its card) to pick it.
 
 - It holds 6 fish. Colour morphs come here from the catch card. To bring ordinary fish, click their kind under
   *Add from the basket* (the biggest one goes in). Only freshwater fish live here.
@@ -714,7 +747,7 @@ cabin's **Hatchery** tab.
 - **Releasing a morph stocks the lake.** For a week, that kind of fish bites in that colour far more often. This
   works whether you release it from the pond, the tank or a catch card. Breed a pair of golden perch, let one go,
   and golden perch start turning up on your line.
-- *Colours found* along the bottom of the tab tracks every kind you've seen in each morph. Hover over one to see
+- *Colours found* in the corner of the tab tracks every kind you've seen in each morph. Hover over one to see
   its description, or a hint about when it bites if you haven't found it yet.
 - Badges: **Fish Nursery** for raising your first clutch, and **Every Colour** for finding all six morphs.
 
@@ -880,7 +913,7 @@ The calendar (K) shows a three-day weather forecast, the moon phase and every ev
 - A cabin garden with 13 crops, and 19 animals to photograph for the Nature page and frame on your wall
 - Three shoreline restoration projects that change the lake and bring new animals
 - Biscuit's discoveries in Fernwick: Grandma Rosie's diary, her old lures, and a secret
-- A calm HUD that steps aside while you fish, with one tracked objective
+- A clean, slim HUD that steps aside while you fish, with one tracked objective
 - Four legend hunts, one a season, with tales, clues, crafted lures and three-stage fights
 - Co-op for up to four players: over the internet with a room code, or on your home Wi-Fi, with gifts, races
   and shared expeditions

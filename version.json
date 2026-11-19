@@ -1,11 +1,11 @@
 {
-  "version": "0.3.8",
+  "version": "0.3.9",
   "notes": [
-    "The Drowned Stair: a new fishing dungeon under the hill by your dock. Go down with nothing, catch fish in each flooded cave to open the stair, and find better gear the deeper you go. A boss fish guards every fifth floor. Climb out at the camp with your haul, or lose every heart and lose it all.",
-    "A bag for the dungeon: twelve slots, five gear slots (rod, reel, line, lure, charm) in five tiers, and things to use like Kelp Wraps and Homeward Shells.",
-    "Colour morphs: any lake fish can now bite in a rare colour (golden, ghost, shadow, koi, starry or prism), and they sell for much more.",
-    "The hatchery: a pond under the garden where pairs of fish lay eggs, and the young can take after their parents' colours. Release a morph to make that colour bite more often for a week.",
-    "The cabin has its own roomier window, with the tabs down the side and a view of the lake.",
-    "Four new badges: Fish Nursery, Every Colour, Into the Deep and The Bottom Step."
+    "A cleaner HUD (the new default): one slim bar for the time, day and coins, one slim goal line, the day's notes as a row of icons you can point at or click, and your bait as a small count. Windows like the shop now stand alone with no HUD behind them.",
+    "Sharper picture: interface sizes from about 85% up on a 1080p screen, and the fishing camera's zoom, now draw with crisp hard pixels instead of a soft stretch.",
+    "The Trading Post is laid out as a shelf of cards, with the one you point at told in full on the right (a rod's range and arc, how much bait you have) and one big button to buy it.",
+    "The hatchery pond is alive: the fish wander, rest, keep out of each other's way and flick their tails, fry dart in the reeds, rings spread where a fish touches the surface, and fireflies come out after dark.",
+    "The garden tab shows each bed as its own little picture, with drops for thirsty beds and twinkles for ready ones. New: sunflowers in bloom bring bees (an extra crop for the beds beside them), a rain barrel that waters dry beds for you, planting every empty bed at once, and Sell all for your produce.",
+    "The slope under the cabin is now two terraced lawns: the garden behind a fieldstone wall with flowers, stepping stones from the door, the pond and a compost bin on the lower lawn, steps down to the stone arch, and little lamps that glow at night."
   ]
 }

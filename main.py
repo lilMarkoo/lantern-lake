@@ -129,9 +129,9 @@ UI_SCALES = [50, 60, 67, 75, 85, 100, 110]      # interface size, percent (100 =
 DEFAULT_SETTINGS = dict(master=1.0, music=0.5, sfx=0.8, amb=0.8, assist=False, fullscreen=False, window=None,
                         fps=0, show_fps=False, scaling='auto', shake=1.0, zoom=True, hints=True, clock24=False, speed=1.0,
                         bg_pause=True, ui_scale=100, mp_name='', mp_addr='', slot=1, prompts='auto',
-                        tutorial=True, binds={}, hud='calm', radio=None, rumble=True,
+                        tutorial=True, binds={}, hud='clean', radio=None, rumble=True,
                         radio_vol=0.5, fx='auto')
-HUD_STYLES = ('full', 'calm', 'compact')
+HUD_STYLES = ('full', 'calm', 'compact', 'clean')
 PROMPTS = ['auto', 'keyboard', 'xbox', 'ps', 'switch']
 PROMPT_LABELS = ['Auto', 'Keyboard', 'Xbox', 'PS', 'Switch']
 SLOTS = (1, 2, 3)
@@ -505,6 +505,10 @@ class Game:
             st['speed'] = 1.0
         if st['ui_scale'] not in UI_SCALES:
             st['ui_scale'] = 100
+        if st.get('hud_v', 1) < 2:
+            if st.get('hud', 'calm') == 'calm':
+                st['hud'] = 'clean'          # 0.3.9: the old default becomes the new, tidier one
+            st['hud_v'] = 2
         if st.get('slot') not in SLOTS:
             st['slot'] = 1
         if st.get('prompts') not in PROMPTS:
@@ -566,8 +570,8 @@ class Game:
         """Blow a pixel-grid picture up onto dst with square pixels."""
         sw, sh = src.get_size()
         size = dst.get_size()
-        if size[0] % sw == 0 and size[1] % sh == 0:
-            pygame.transform.scale(src, size, dst)                 # whole-number zoom: perfectly square pixels
+        if (size[0] % sw == 0 and size[1] % sh == 0) or screenmod.hard_ok(size[0] / sw):
+            pygame.transform.scale(src, size, dst)                 # whole-number or big zoom: hard, crisp pixels
         elif size[0] < sw:
             pygame.transform.smoothscale(src, size, dst)
         else:
@@ -632,8 +636,8 @@ class Game:
             self._grid2_into(self.canvas, out, 'w')
             return
         # the world at twice its own size (half-pixel camera), then the interface on its own grid on top
-        if view.w % W == 0 and view.h % H == 0:
-            self._world_into(out)                # a whole-number fit: straight onto the window
+        if (view.w % W == 0 and view.h % H == 0) or screenmod.hard_ok(view.w / W):
+            self._world_into(out)                # a whole-number fit, or big: straight on with hard pixels
         else:
             # hard pixels at the next whole size up, then one smooth resize to fit (sharp bilinear), with the
             # camera placed at that bigger size so it still glides
@@ -648,14 +652,14 @@ class Game:
             return
         layer = self._buf('uview', view.size, True)
         whole = view.w % aw == 0 and view.h % ah == 0
-        if not whole and view.w < aw * 3:
+        if not whole and view.w < aw * 3 and not screenmod.hard_ok(view.w / aw):
             # the canvas is the art grid blown up 2x with hard pixels, so it is already the sharp-bilinear
             # prescale: one smooth resize to the window finishes the job
             pygame.transform.smoothscale(cv, view.size, layer)
         else:
             art = self._buf('uart', (aw, ah), True)
             pygame.transform.smoothscale(cv, (aw, ah), art)
-            if whole:
+            if whole or screenmod.hard_ok(view.w / aw):
                 pygame.transform.scale(art, view.size, layer)
             else:
                 # sharp bilinear: whole-number zoom with hard pixels, then a small smooth stretch up to fit
@@ -3231,6 +3235,8 @@ class Game:
         k = min(1.0, dt * rate)
         c = self.cam
         c[0] += (z - c[0]) * k
+        if abs(z - c[0]) < 0.001:
+            c[0] = z                     # settle exactly: a zoom of 1.9999 can't sit on whole pixels
         c[1] += (fx - c[1]) * k
         c[2] += (fy - c[2]) * k
         self.shake_amt = max(0.0, self.shake_amt - dt * 6)
@@ -3351,9 +3357,9 @@ class Game:
         elif scene:
             scene.draw_ui(scr)
         elif not self.hide_ui and self.rest_phase != 'row_cross':
-            if self.overlay != 'catch':
+            if self.overlay is None:
                 self.draw_world_marks(scr)
-                self.draw_hud(scr)
+                self.draw_hud(scr)            # a window that's open stands alone: no HUD peeking out behind it
             tutorial.draw(self, scr)
             ov = self.overlay
             showoff = ov == 'catch' and self.card and self.card['t'] < 0
@@ -3446,7 +3452,7 @@ class Game:
         d = getattr(self, '_dim', None)
         if d is None:
             d = self._dim = pygame.Surface((SW, SH), pygame.SRCALPHA)
-            d.fill((20, 14, 30, 120))
+            d.fill((20, 14, 30, 150))
         s.blit(d, (0, 0))
 
     def panel_header(self, s, rect, title):
@@ -3609,8 +3615,8 @@ class Game:
                    (120, 140, 170))
 
     def hud_style(self):
-        v = self.settings.get('hud', 'calm')
-        return v if v in HUD_STYLES else 'calm'
+        v = self.settings.get('hud', 'clean')
+        return v if v in HUD_STYLES else 'clean'
 
     def hud_quiet(self):
         """Once the bobber has settled (and all through the fight), the HUD cards fade nearly away.
@@ -3625,7 +3631,7 @@ class Game:
         st = f.state
         if st in ('fight', 'landing'):
             return True
-        idle = (st == 'idle' and self.hud_style() == 'calm' and self.total >= 3 and not self.help_on()
+        idle = (st == 'idle' and self.hud_style() in ('calm', 'clean') and self.total >= 3 and not self.help_on()
                 and self.t - self._hud_wake > 5.0)
         if not idle and (st not in ('waiting', 'bite') or (st == 'waiting' and f.t < 1.6)):
             return False
@@ -3816,6 +3822,28 @@ class Game:
         ui.blit_text(s, title, (r.x + 58, r.y + 10), 'smallb', U.INK, maxw=CW - 70 - extra)
         ui.blit_text(s, line, (r.x + 58, r.y + 34), 'small', U.SOFT, maxw=CW - 70 - extra)
 
+    def _note_act(self, kind, text):
+        """What clicking a day note does (or None)."""
+        if kind == 'lantern':
+            return self.open_lanterns
+        if kind == 'garden':
+            return lambda: self.open_cabin_tab('garden')
+        if kind == 'reeds':
+            return lambda: shoremod.open_panel(self)
+        if kind == 'mail' and self.place == 'lake' and self.spot == 'dock':
+            return self.open_mailbox
+        if kind == 'festival' and text.startswith('Legend'):
+            return lambda: (self.set_lan_tab('legends'), self.open_lanterns())
+        return None
+
+    def _tipbox(self, s, text, pos):
+        """A small label hanging under something you point at."""
+        ui = self.ui
+        w = ui.fonts['small'].size(text)[0] + 28
+        x = int(clamp(pos[0] - w // 2, 8, SW - 8 - w))
+        r = ui.panel(s, (x, pos[1], w, 36), fill=(255, 250, 238), radius=14, shadow=False, width=2)
+        ui.blit_text(s, text, (r.centerx, r.centery), 'small', U.INK, 'center')
+
     def day_lines(self):
         """The day's notes under the objective: where you are, snacks, visitors, sky events..."""
         lines = []
@@ -3915,8 +3943,10 @@ class Game:
         if sig != self._wake_sig:
             self._wake_sig = sig
             self._hud_wake = now
-        self._goal_slim = style != 'full' and self.hud_tuck > 0.5
-        calm_card = style == 'calm'
+        clean = style == 'clean'
+        self._goal_slim = style != 'full' and (self.hud_tuck > 0.5 or clean)
+        calm_card = style in ('calm', 'clean')
+        tip = None                 # (text, (x, y)): a little label under whatever the mouse is on
         want = 1.0 if self.hud_quiet() else 0.0
         self.hud_calm += (want - self.hud_calm) * min(1.0, dt * (1.3 if want > self.hud_calm else 7))
         if abs(want - self.hud_calm) < 0.01:
@@ -3930,7 +3960,7 @@ class Game:
                 lay = self._hud_layer = pygame.Surface(s.get_size(), pygame.SRCALPHA)
             lay.fill((0, 0, 0, 0))
             s = lay
-        CW = 372                   # width of the left-hand cards
+        CW = 320 if clean else 372    # width of the left-hand cards
         tw = CW - 70               # room for text beside the card icons
         # clock
         if compact:
@@ -3940,6 +3970,25 @@ class Game:
             ui.blit_text(s, almanac.weekday(self.day), (r.right - 16, r.centery), 'small', U.SOFT, 'midright',
                          maxw=100)
             y = 70
+        elif clean:
+            # one slim line: the time, the day, your purse (the date comes up when you point at it)
+            r = ui.panel(s, (16, 14, 320, 52), radius=24)
+            self._dial(s, (r.x + 28, r.centery), 18)
+            clk = fmt_clock(self.minute)
+            ui.blit_text(s, clk, (r.x + 56, r.centery), 'bodyb', U.INK, 'midleft')
+            cs = '{:,}'.format(self.coins)
+            cw_ = ui.fonts['bodyb'].size(cs)[0]
+            ui.blit_text(s, cs, (r.right - 18, r.centery), 'bodyb', U.INK, 'midright')
+            U.coin(s, (r.right - 32 - cw_, r.centery), 10)
+            dx = r.x + 66 + ui.fonts['bodyb'].size(clk)[0]
+            ui.blit_text(s, almanac.weekday(self.day), (dx, r.centery), 'small', U.SOFT, 'midleft',
+                         maxw=max(10, r.right - 50 - cw_ - dx))
+            if env.full_moon and env.nf > 0.4:
+                U.moon_phase(s, (r.x + 28, r.bottom + 2), 0, 6)
+            if r.collidepoint(ui.mouse):
+                tip = ('%s, %s %d   (K: calendar)' % (almanac.weekday(self.day), SEASONS[env.season],
+                                                       almanac.dow(self.day)), (r.centerx, r.bottom + 6))
+            y = 74
         elif calm_card:
             # one card for the time, the day and your purse
             r = ui.panel(s, (16, 14, CW, 72), radius=20)
@@ -3980,7 +4029,23 @@ class Game:
             y += self.goal_h() + 8
         # today's other notes: they step aside while a cast is out (and always while reeling)
         quiet = (self.hud_tuck > 0.5) if style != 'full' else self.fishing.state in ('fight', 'landing')
-        if not quiet:
+        if not quiet and clean:
+            # the day's notes as a row of icons: point at one to read it, click to go there
+            lines = [ln for ln in self.day_lines() if ln[0] != 'town'][:9]
+            if lines:
+                r7 = ui.panel(s, (16, y, 18 + 38 * len(lines), 46), radius=22)
+                for i, (kind, text) in enumerate(lines):
+                    c = (r7.x + 28 + i * 38, r7.centery)
+                    almanac.event_icon(s, kind, c, 0.8)
+                    hit = pygame.Rect(c[0] - 19, r7.y, 38, r7.h)
+                    act = self._note_act(kind, text)
+                    if act:
+                        ui.hotspot(hit, act)
+                    if hit.collidepoint(ui.mouse):
+                        tip = (text, (hit.centerx, r7.bottom + 6))
+                        pygame.draw.line(s, U.BROWN, (hit.x + 8, r7.bottom - 7), (hit.right - 8, r7.bottom - 7), 2)
+                y = r7.bottom + 8
+        elif not quiet:
             lines = self.day_lines()
             if lines:
                 r7 = ui.panel(s, (16, y, CW, 20 + 30 * len(lines)), radius=16)
@@ -4005,7 +4070,20 @@ class Game:
         # coins, bait and luck down the right-hand side
         b = BAIT_BY_ID[self.bait]
         label = '%s x%d' % (b['name'], self.worms() if self.bait == 'worm' else self.baits.get(self.bait, 0))
-        if calm_card:
+        if clean:
+            # just the bait and how much is left (its name when you point at it), and any luck
+            cnt = 'x%d' % (self.worms() if self.bait == 'worm' else self.baits.get(self.bait, 0))
+            nl = min(3, int(math.ceil(self.luck))) if self.luck > 0.05 else 0
+            bw = ui.fonts['bodyb'].size(cnt)[0] + 70 + nl * 20
+            r4 = ui.panel(s, (SW - 16 - bw, 14, bw, 52), radius=24)
+            s.blit(art.item_icon(self.bait, 2), (r4.x + 12, r4.centery - 16))
+            ui.blit_text(s, cnt, (r4.x + 52, r4.centery), 'bodyb', U.INK, 'midleft')
+            for i in range(nl):
+                U.clover(s, (r4.right - 22 - i * 20, r4.centery - 2), 7)
+            if r4.collidepoint(ui.mouse):
+                tip = ('%s%s   (Tab: switch bait)' % (label, ', and luck' if nl else ''), (r4.centerx, r4.bottom + 6))
+            ry = 74
+        elif calm_card:
             bw = min(300, ui.fonts['small'].size(label)[0] + 64)
             r4 = ui.panel(s, (SW - 16 - bw, 14, bw, 44), radius=21)
             s.blit(art.item_icon(self.bait, 2), (r4.x + 8, r4.centery - 16))
@@ -4031,7 +4109,7 @@ class Game:
             ui.keycap(s, 'Tab', (r4.right - 12, r4.centery), 'midright')
             ry = 134
         ui.hotspot(r4, self.cycle_bait)
-        if self.luck > 0.05:
+        if self.luck > 0.05 and not clean:
             r5 = ui.panel(s, (SW - 16 - 150, ry, 150, 40), radius=19)
             n = min(3, int(math.ceil(self.luck)))
             for i in range(n):
@@ -4042,6 +4120,8 @@ class Game:
             s.set_alpha(int(255 * (1 - 0.8 * self.hud_calm)))
             real.blit(s, (0, 0))
             s = real
+        if tip:
+            self._tipbox(s, *tip)
         # toolbar of menu buttons, bottom right: item-slot style tiles
         if self.place == 'town':
             slots = [('Journal', 'J', lambda: self.toggle('journal')),
@@ -5034,11 +5114,12 @@ class Game:
         s.blit(icon, icon.get_rect(center=ib.center))
         ui.blit_text(s, name, (ib.right + 14, r.y + 12), 'h3', U.INK, maxw=r.right - ib.right - 180)
         width = r.right - ib.right - 14 - (reserve or 160)
+        fit = max(2, (r.h - 50) // 21)              # a taller row reads its whole description
         lines = ui.wrap(desc, 'small', width)
-        tight = len(lines) > 2
+        tight = len(lines) > fit
         if tight:
             lines = ui.wrap(desc, 'small', width, narrow=True)
-        for i, line in enumerate(lines[:2]):
+        for i, line in enumerate(lines[:fit]):
             ui.blit_text(s, line, (ib.right + 14, r.y + 42 + i * 21), 'small', U.SOFT, narrow=tight)
         right(pygame.Rect(r.right - 150, r.centery - 22, 136, 44))
 
@@ -5052,70 +5133,174 @@ class Game:
             U.coin(self._ci, (11, 11), 9)
         return self._ci
 
-    def shop_tackle(self, s, body):
+    # The shop's shelves: a grid of cards on the left, the one you point at (or picked) told in full on the right.
+    # entries: dicts with id, name, desc, icon (a function of scale), and any of
+    #   price + buy      for sale
+    #   status           'Owned', 'Equipped'... (shown in place of a price)
+    #   acts             [(label, action, style, enabled)] extra buttons in the detail pane
+    #   note             one more line in the detail pane ('In your box: 4')
+    #   stats            [(label, 0..1)] little bars in the detail pane
+    #   tint             the card's rim colour
+    def shop_catalog(self, s, body, entries, cols=4):
         ui = self.ui
-        items = [('rod', r) for r in RODS[1:]] + [('gear', g) for g in GEAR]
-        items.insert(0, ('rod', RODS[0]))
-        for i, (kind, it) in enumerate(items):
-            col, row = i % 2, i // 2
-            r = pygame.Rect(body.x + col * 498, body.y + row * 104, 484, 94)
-            if kind == 'rod':
-                desc = it['desc'] + '  Range %d%%, arc %d.' % (int(it['range'] * 100), it['arc'])
-
-                def right(br, it=it):
-                    if it['id'] in self.rods:
-                        if self.rod == it['id']:
-                            ui.button(s, br, 'Equipped', None, enabled=False)
-                        else:
-                            ui.button(s, br, 'Equip', lambda: (setattr(self, 'rod', it['id']), self.audio.play('ui')),
-                                      'primary')
-                    else:
-                        self.price_button(s, br, it['price'], lambda: self.buy('rod', it))
-                self.item_row(s, r, art.item_icon(it['id'], 3, it['color']), it['name'], desc, right)
+        if not entries:
+            return
+        grid_w = 620
+        pane = pygame.Rect(body.x + grid_w + 22, body.y, body.w - grid_w - 22, body.h)
+        rows = (len(entries) + cols - 1) // cols
+        gap = 12
+        cw = (grid_w - (cols - 1) * gap) // cols
+        ch = max(120, min(168, (body.h - (rows - 1) * gap) // rows))
+        picks = self.__dict__.setdefault('shop_pick', {})
+        ids = [e['id'] for e in entries]
+        if picks.get(self.shop_tab) not in ids:
+            picks[self.shop_tab] = ids[0]
+        show = picks[self.shop_tab]
+        for i, e in enumerate(entries):
+            r = pygame.Rect(body.x + (i % cols) * (cw + gap), body.y + (i // cols) * (ch + gap), cw, ch)
+            on = e['id'] == picks[self.shop_tab]
+            hov = r.collidepoint(ui.mouse)
+            if hov:
+                show = e['id']
+            owned = 'price' not in e
+            fill = (255, 250, 236) if on or hov else (244, 234, 214)
+            ui.tile(s, r, fill, (214, 170, 92) if on else e.get('tint', (196, 172, 140)))
+            if on:
+                pygame.draw.rect(s, (232, 182, 72), r.inflate(-6, -6), 2, border_radius=6)
+            lines = ui.wrap(e['name'], 'smallb', r.w - 14)[:2]
+            plate = (r.centerx, r.y + ch // 2 - (24 if len(lines) > 1 else 16))
+            pygame.draw.circle(s, (232, 220, 196) if not owned else (222, 232, 206), plate, min(36, ch // 3))
+            ic = e['icon'](3)
+            s.blit(ic, ic.get_rect(center=plate))
+            for k, line in enumerate(lines):
+                ui.blit_text(s, line, (r.centerx, r.bottom - 50 - (len(lines) - 1 - k) * 22), 'smallb', U.INK,
+                             'center', maxw=r.w - 10)
+            if owned:
+                st = e.get('status', 'Owned')
+                ui.blit_text(s, st, (r.centerx, r.bottom - 22), 'small', e.get('status_col', (96, 140, 80)), 'center',
+                             maxw=r.w - 14)
             else:
-                def right(br, it=it):
-                    if self.has(it['id']):
-                        ui.button(s, br, 'Owned', None, enabled=False)
+                ok = self.coins >= e['price']
+                txt = '{:,}'.format(e['price'])
+                tw = ui.fonts['smallb'].size(txt)[0]
+                U.coin(s, (r.centerx - tw // 2 - 6, r.bottom - 22), 8)
+                ui.blit_text(s, txt, (r.centerx - tw // 2 + 6, r.bottom - 22), 'smallb',
+                             U.INK if ok else (178, 150, 130), 'midleft')
+            ui.hotspot(r, lambda k=e['id']: (picks.__setitem__(self.shop_tab, k), self.audio.play('ui', 0.4)))
+        self._shop_pane(s, pane, next(e for e in entries if e['id'] == show),
+                        show == picks[self.shop_tab])
+
+    def _shop_pane(self, s, r, e, picked):
+        """The detail card on the right of the shop."""
+        ui = self.ui
+        ui.tile(s, r, (252, 247, 234), (196, 172, 140))
+        x0, cw = r.x + 22, r.w - 44
+        plate = (r.centerx, r.y + 78)
+        pygame.draw.circle(s, (236, 224, 200), plate, 58)
+        pygame.draw.circle(s, (224, 208, 180), plate, 58, 3)
+        ic = e['icon'](5)
+        s.blit(ic, ic.get_rect(center=plate))
+        y = r.y + 150
+        ui.blit_text(s, e['name'], (r.centerx, y), 'h3', U.INK, 'midtop', maxw=cw)
+        y += 38
+        for line in ui.wrap(e['desc'], 'small', cw)[:5]:
+            ui.blit_text(s, line, (x0, y), 'small', U.SOFT)
+            y += 23
+        if e.get('note'):
+            y += 6
+            for line in ui.wrap(e['note'], 'smallb', cw)[:2]:
+                ui.blit_text(s, line, (x0, y), 'smallb', (96, 120, 140))
+                y += 24
+        for label, k, val in e.get('stats', ()):
+            y += 6
+            ui.blit_text(s, label, (x0, y), 'small', U.INK)
+            ui.blit_text(s, val, (x0 + 88, y), 'small', U.SOFT, 'topright')
+            bar = pygame.Rect(x0 + 100, y + 6, cw - 100, 12)
+            pygame.draw.rect(s, (230, 218, 196), bar, border_radius=6)
+            pygame.draw.rect(s, (126, 176, 112), (bar.x, bar.y, max(12, int(bar.w * min(1, k))), bar.h),
+                             border_radius=6)
+            y += 24
+        # the buttons sit at the bottom of the card
+        acts = list(e.get('acts', ()))
+        by = r.bottom - 22 - 50
+        if 'price' in e:
+            self.price_button(s, (x0, by, cw, 50), e['price'], e['buy'])
+            if self.coins < e['price']:
+                ui.blit_text(s, '%s more coins' % '{:,}'.format(e['price'] - self.coins), (r.centerx, by - 14),
+                             'small', (190, 120, 100), 'center')
+            by -= 58 if not self.coins < e['price'] else 72
+        elif not acts:
+            ui.button(s, (x0, by, cw, 50), e.get('status', 'Owned'), None, enabled=False)
+            by -= 58
+        for label, act, style, en in reversed(acts):
+            ui.button(s, (x0, by, cw, 46), label, act, style, enabled=en, font='bodyb')
+            by -= 54
+
+    def shop_tackle(self, s, body):
+        items = [('rod', r) for r in RODS] + [('gear', g) for g in GEAR]
+        top = max(r['range'] for r in RODS), max(r['arc'] for r in RODS)
+        out = []
+        for kind, it in items:
+            e = dict(id=it['id'], name=it['name'], desc=it['desc'])
+            if kind == 'rod':
+                e['icon'] = lambda k, it=it: art.item_icon(it['id'], k, it['color'])
+                e['stats'] = [('Range', it['range'] / top[0], '%d%%' % round(it['range'] * 100)),
+                              ('Arc', it['arc'] / top[1], '%d' % it['arc'])]
+                if it['id'] in self.rods:
+                    if self.rod == it['id']:
+                        e['status'] = 'Equipped'
                     else:
-                        self.price_button(s, br, it['price'], lambda: self.buy('gear', it))
-                self.item_row(s, r, art.item_icon(it['id'], 3), it['name'], it['desc'], right)
+                        e['status'] = 'In your shed'
+                        e['acts'] = [('Equip', lambda it=it: (setattr(self, 'rod', it['id']), self.audio.play('ui')),
+                                      'primary', True)]
+                else:
+                    e['price'], e['buy'] = it['price'], (lambda it=it: self.buy('rod', it))
+            else:
+                e['icon'] = lambda k, it=it: art.item_icon(it['id'], k)
+                if self.has(it['id']):
+                    e['status'] = 'Owned'
+                else:
+                    e['price'], e['buy'] = it['price'], (lambda it=it: self.buy('gear', it))
+            out.append(e)
+        self.shop_catalog(s, body, out)
 
     def shop_bait(self, s, body):
-        ui = self.ui
-        for i, b in enumerate([b for b in BAITS if not b.get('merchant')]):
-            r = pygame.Rect(body.x, body.y + i * 104, body.w, 94)
-            owned = ('In the tin:  %d  (it fills to %d each morning)' % (self.worms(), self.WORM_TIN)
-                     if b['id'] == 'worm' else 'In your box:  %d' % self.baits.get(b['id'], 0))
-
-            def right(br, b=b):
-                if self.bait == b['id']:
-                    ui.button(s, br, 'Using', None, enabled=False)
-                elif b['id'] == 'worm' or self.baits.get(b['id'], 0) > 0:
-                    ui.button(s, br, 'Use', lambda: (setattr(self, 'bait', b['id']), self.audio.play('ui')), 'primary')
-                if b['pack']:
-                    bb = br.move(-180, 0)
-                    bb.w = 170
-                    ui.button(s, bb, '+%d  for %d' % (b['pack'], b['price']), lambda: self.buy('bait', b), 'gold',
-                              enabled=self.coins >= b['price'])
-                elif b['id'] == 'worm':
-                    bb = br.move(-180, 0)
-                    bb.w = 170
-                    ui.button(s, bb, '+%d  for %d' % (self.WORM_PACK, self.WORM_PRICE), self.buy_worms, 'gold',
-                              enabled=self.coins >= self.WORM_PRICE)
-            self.item_row(s, r, art.item_icon(b['id'], 3), b['name'], b['desc'] + '      ' + owned, right, 350)
+        out = []
+        for b in [b for b in BAITS if not b.get('merchant')]:
+            have = self.worms() if b['id'] == 'worm' else self.baits.get(b['id'], 0)
+            e = dict(id=b['id'], name=b['name'], desc=b['desc'], icon=lambda k, b=b: art.item_icon(b['id'], k),
+                     tint=(150, 186, 200) if self.bait == b['id'] else (196, 172, 140))
+            e['note'] = ('In the tin: %d  (it fills to %d each morning)' % (have, self.WORM_TIN)
+                         if b['id'] == 'worm' else 'In your box: %d' % have)
+            acts = []
+            if b['pack']:
+                acts.append(('Buy %d  for %d' % (b['pack'], b['price']), lambda b=b: self.buy('bait', b), 'gold',
+                             self.coins >= b['price']))
+            elif b['id'] == 'worm':
+                acts.append(('Dig %d more  for %d' % (self.WORM_PACK, self.WORM_PRICE), self.buy_worms, 'gold',
+                             self.coins >= self.WORM_PRICE))
+            if self.bait == b['id']:
+                e['status'] = 'On your hook'
+            elif have > 0:
+                acts.append(('Use it', lambda b=b: (setattr(self, 'bait', b['id']), self.audio.play('ui')),
+                             'primary', True))
+                e['status'], e['status_col'] = 'x%d in your box' % have, U.INK
+            else:
+                e['status'], e['status_col'] = 'None left', U.SOFT
+            e['acts'] = acts
+            out.append(e)
+        self.shop_catalog(s, body, out)
 
     def shop_decor(self, s, body):
-        ui = self.ui
-        for i, d in enumerate(DECOR):
-            col, row = i % 2, i // 2
-            r = pygame.Rect(body.x + col * 498, body.y + row * 100, 484, 92)
-
-            def right(br, d=d):
-                if self.has(d['id']):
-                    ui.button(s, br, 'On the dock', None, enabled=False, font='smallb')
-                else:
-                    self.price_button(s, br, d['price'], lambda: self.buy('decor', d))
-            self.item_row(s, r, art.item_icon(d['id'], 3), d['name'], d['desc'], right)
+        out = []
+        for d in DECOR:
+            e = dict(id=d['id'], name=d['name'], desc=d['desc'], icon=lambda k, d=d: art.item_icon(d['id'], k))
+            if self.has(d['id']):
+                e['status'] = 'On the dock'
+            else:
+                e['price'], e['buy'] = d['price'], (lambda d=d: self.buy('decor', d))
+            out.append(e)
+        self.shop_catalog(s, body, out)
 
     def wagon_stock(self):
         """Four things for sale, picked once per wagon visit."""
@@ -5150,44 +5335,42 @@ class Game:
         stock = list(self.wagon_stock())
         if not self.owns_boat():
             stock = [('boat', 'boat')] + stock[:3]
-        for i, (kind, iid) in enumerate(stock):
-            r = pygame.Rect(body.x, body.y + 80 + i * 100, body.w, 92)
+        out = []
+        for kind, iid in stock:
             if kind == 'boat':
                 it = BOAT
-                icon = pygame.Surface((54, 54), pygame.SRCALPHA)
-                U.rowboat(icon, (27, 30), 1.4)
-                desc = it['desc']
 
-                def right(br, it=it):
-                    self.price_button(s, br, it['price'], lambda: self.buy('boat', it))
+                def icon(k):
+                    ic = pygame.Surface((16 * k, 16 * k), pygame.SRCALPHA)
+                    U.rowboat(ic, (8 * k, 9 * k), 0.45 * k)
+                    return ic
+                e = dict(id='boat', name=it['name'], desc=it['desc'], icon=icon, price=it['price'],
+                         buy=lambda it=it: self.buy('boat', it))
             elif kind == 'bait':
                 it = BAIT_BY_ID[iid]
-                icon = art.item_icon(iid, 3)
-                desc = '%s  Pack of %d.      In your box:  %d' % (it['desc'], it['pack'], self.baits.get(iid, 0))
-
-                def right(br, it=it):
-                    self.price_button(s, br, it['price'], lambda: self.buy('bait', it))
+                e = dict(id=iid, name=it['name'], desc='%s  A pack of %d.' % (it['desc'], it['pack']),
+                         icon=lambda k, iid=iid: art.item_icon(iid, k), price=it['price'],
+                         buy=lambda it=it: self.buy('bait', it), note='In your box: %d' % self.baits.get(iid, 0))
             elif kind == 'hat':
                 it = HAT_BY_ID[iid]
-                icon = art.item_icon('hat_' + iid, 3)
-                desc = 'A hat for you. Change outfits any time in the cabin wardrobe.'
-
-                def right(br, it=it):
-                    if it['id'] in self.hats:
-                        ui.button(s, br, 'Owned', None, enabled=False)
-                    else:
-                        self.price_button(s, br, it['price'], lambda: self.buy('hat', it))
+                e = dict(id='hat_' + iid, name=it['name'],
+                         desc='A hat for you. Change outfits any time in the cabin wardrobe.',
+                         icon=lambda k, iid=iid: art.item_icon('hat_' + iid, k))
+                if it['id'] in self.hats:
+                    e['status'] = 'Owned'
+                else:
+                    e['price'], e['buy'] = it['price'], (lambda it=it: self.buy('hat', it))
             else:
                 it = CAT_BY_ID[iid]
-                icon = art.item_icon('cat_' + iid, 3)
-                desc = 'Something for Biscuit to wear. She pretends not to care.'
-
-                def right(br, it=it):
-                    if it['id'] in self.cat_items:
-                        ui.button(s, br, 'Owned', None, enabled=False)
-                    else:
-                        self.price_button(s, br, it['price'], lambda: self.buy('cat', it))
-            self.item_row(s, r, icon, it['name'], desc, right)
+                e = dict(id='cat_' + iid, name=it['name'],
+                         desc='Something for Biscuit to wear. She pretends not to care.',
+                         icon=lambda k, iid=iid: art.item_icon('cat_' + iid, k))
+                if it['id'] in self.cat_items:
+                    e['status'] = 'Owned'
+                else:
+                    e['price'], e['buy'] = it['price'], (lambda it=it: self.buy('cat', it))
+            out.append(e)
+        self.shop_catalog(s, pygame.Rect(body.x, body.y + 80, body.w, body.h - 80), out, cols=2)
 
     # ---------------- pause
     def draw_pause(self, s):
@@ -5949,7 +6132,8 @@ class Game:
                      lambda i: self.set_opt('speed', DAY_SPEEDS[i]), True),
                     ('choice', 'Clock', 'How times are shown', ['12-hour', '24-hour'], int(bool(st['clock24'])),
                      lambda i: self.set_opt('clock24', bool(i)), True),
-                    ('choice', 'HUD', 'Calm hides the toolbar while you fish', ['Full', 'Calm', 'Compact'],
+                    ('choice', 'HUD', 'Clean: one slim line each, icons for the day', ['Full', 'Calm', 'Compact',
+                                                                                    'Clean'],
                      HUD_STYLES.index(self.hud_style()),
                      lambda i: self.set_opt('hud', HUD_STYLES[i]), True),
                     ('choice', 'Hints', 'Tips along the bottom of the screen', ['Off', 'On'],
@@ -7091,6 +7275,8 @@ def run_bot(seconds):
                 did('dig_bed')
             if gardenmod.give_catnip(g):
                 did('catnip')
+            if not g.garden['barrel'] and g.coins > gardenmod.BARREL_PRICE + 1000 and gardenmod.buy_barrel(g):
+                did('barrel')
             while g.garden['produce'].get('corn', 0) > 1:
                 gardenmod.corn_to_bait(g)
             for cid, n in list(g.garden['produce'].items()):
