@@ -1,0 +1,4 @@
+# the server scripts run on Linux: they must keep Unix line endings
+server/*.sh text eol=lf
+server/*.service text eol=lf
+server/*.py text eol=lf

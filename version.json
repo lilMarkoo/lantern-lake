@@ -1,11 +1,8 @@
 {
-  "version": "0.3.5",
+  "version": "0.3.6",
   "notes": [
-    "The light moves through the day: low sun throws beams across the water (best on a foggy morning), and the sun now rises over the far shore and sets behind the trees, both in view.",
-    "Mist lies on the lake at first light and a haze comes back at dusk. On clear days the sun's path twinkles on the water and cloud shadows slide over the lake and the dock.",
-    "Lanterns, windows and fireflies glow softly after dark, and on clear, moonless nights the Milky Way arcs over the lake and shows in the still water.",
-    "Rain sweeps past in sheets and each drop kicks up a tiny crown. When a fish breaks the surface, white water bursts up, the spray catches the light and a ring of foam spreads out.",
-    "Camera zooms and pans glide smoothly instead of stepping.",
-    "New Options > Display > Light effects: Full, or Simple for slower computers. Controller rumble has moved to the Gameplay tab."
+    "Play together over the internet is easier: open your lake online and get a short room code like K7Q2-M9XT. Friends type it to join. No router settings, and it works behind any home network.",
+    "It runs through the new Lantern Lake online server in Europe, which only passes messages between you and your friends and keeps nothing. If it can't be reached, the game falls back to the old router method.",
+    "If your connection to the online server drops for a moment, your lake reconnects with the same code and your friends stay in."
   ]
 }
