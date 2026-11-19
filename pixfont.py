@@ -161,7 +161,13 @@ class PixelFont:
     def grid_width(self, text):
         if not text:
             return 0
-        return sum(self._advance(c) for c in text) - self.spacing
+        cache = self.__dict__.setdefault('_widths', {})    # the HUD measures the same few strings every frame
+        w = cache.get(text)
+        if w is None:
+            if len(cache) > 4000:
+                cache.clear()
+            w = cache[text] = sum(self._advance(c) for c in text) - self.spacing
+        return w
 
     def size(self, text):
         return (max(1, self.grid_width(text)) * self.px, LINE * self.px)

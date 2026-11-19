@@ -15,6 +15,7 @@ import pygame
 
 import actors
 import art
+import look as looks
 import coast
 import town as T
 import ui as U
@@ -828,7 +829,7 @@ class HarbourScene:
         # you
         x = int(self.x - sc)
         T.ground_shadow(s, x, FLOOR, 13, 60)
-        T.walker(s, x, FLOOR, self.face, self.step, actors.SHIRT[season], (112, 72, 52), g.hat, season)
+        T.walker(s, x, FLOOR, self.face, self.step, *looks.player_colors(g, season), g.hat, season, look=looks.of(g))
         for p in self.fx:
             s.fill(p[5], (int(p[0] - sc), int(p[1]), 2, 2))
         # smoke

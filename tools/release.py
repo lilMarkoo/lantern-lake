@@ -42,7 +42,8 @@ base64 select selectors uuid pickle typing dataclasses enum statistics fractions
 tempfile shutil traceback platform locale unicodedata operator contextlib weakref gzip csv http.client
 urllib.request urllib.parse winreg runpy webbrowser secrets hmac binascii codecs difflib pprint abc numbers
 signal errno stat atexit warnings inspect types'''.split()
-EXTRA = ['numpy', 'pygame', 'pygame._sdl2', 'pygame._sdl2.controller', 'pygame._sdl2.audio', 'pygame.sndarray',
+EXTRA = ['numpy', 'pygame', 'pygame._sdl2', 'pygame._sdl2.controller', 'pygame._sdl2.audio', 'pygame._sdl2.video',
+         'pygame.sndarray',
          'pygame.surfarray', 'pygame.mixer', 'pygame.font', 'pygame.sysfont']
 
 

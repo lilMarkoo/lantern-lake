@@ -346,7 +346,8 @@ class Atmos:
     # ------------------------------------------------------------------ glow and sunbeams
     def full(self, g):
         try:
-            return g.settings.get('fx', 'full') != 'simple'
+            fx = g.settings.get('fx', 'full')
+            return fx == 'full' or (fx == 'auto' and not getattr(g, 'fx_low', False))
         except AttributeError:
             return True
 

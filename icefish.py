@@ -13,6 +13,7 @@ import random
 import pygame
 
 import actors
+import look as looks
 import art
 import ui as U
 from art import lerp_c, darken
@@ -415,9 +416,10 @@ class IceScene:
                     pygame.draw.circle(frame, (230, 240, 250), (int(lx), int(ly) + 2), int(6 + (0.35 - self.jig_t) * 30), 1)
         # you, kneeling by the hole, with Biscuit
         season = 3
-        shirt = actors.SHIRT[season]
-        actors.draw_person(frame, HOLE_X - 22, ICE_TOP - 2, shirt, (112, 72, 52), getattr(g, 'hat', 'straw'), season,
-                           1 if math.sin(t * 1.6) > 0.6 else 0)
+        lk = looks.of(g)
+        shirt = looks.shirt(lk, season)
+        actors.draw_person(frame, HOLE_X - 22, ICE_TOP - 2, shirt, looks.hair(lk), getattr(g, 'hat', 'straw'), season,
+                           1 if math.sin(t * 1.6) > 0.6 else 0, look=lk)
         pull = self.state == 'reel' and self.reel['phase'] == 'pull'
         tip = (HOLE_X + 2, ICE_TOP - 20 + (4 if pull else 0))
         pygame.draw.line(frame, (110, 80, 60), (HOLE_X - 18, ICE_TOP - 14), tip, 2)
@@ -429,7 +431,7 @@ class IceScene:
             pygame.draw.line(frame, (150, 150, 160), (ax, ICE_TOP - 22), (ax, ICE_TOP + int(self.drill * 20)), 2)
             frame.fill((210, 210, 220), (ax - 2 + spin, ICE_TOP - 6, 2, 2))
         cx = HOLE_X - 50
-        o, wht = (232, 150, 78), (250, 240, 228)
+        o, wht = looks.cat_colors(g)[:2]
         pygame.draw.ellipse(frame, o, (cx - 6, ICE_TOP - 11, 11, 9))
         pygame.draw.circle(frame, o, (cx + 4, ICE_TOP - 13), 4)
         pygame.draw.polygon(frame, o, [(cx + 1, ICE_TOP - 15), (cx + 2, ICE_TOP - 19), (cx + 4, ICE_TOP - 16)])

@@ -82,12 +82,28 @@ Open Options from the title screen or the pause menu (Esc). Settings are kept in
 your save, so they stay the same when you start a new game.
 
 - **Audio**: master, music, sound effects, ambience and radio volume sliders
-- **Display**: fullscreen, window size, interface size (50% to 110% for the HUD and menus), frame rate limit
-  (30 / 60 / 120 / 144), a frame rate counter, screen shake (off / gentle / full), the camera zoom while fishing
-  and **Light effects**: Full gives sunbeams, the soft glow around lights, mist and cloud shadows; Simple leaves
-  them out for older or slower computers.
-  The interface size row lists which sizes land on whole screen pixels for your window. Those are the sharpest
-  and also the fastest to draw (on a 1080p screen: 67% and 100%)
+- **Display**:
+  - **Window**: three window sizes that fit your screen, or Full for fullscreen.
+  - **Pixel scaling**:
+    - Sharp always uses a whole-number zoom, so every art pixel is the same size. That can leave a border.
+    - Fill stretches the picture to fill the window, with a sharp-then-smooth filter.
+    - Auto (the default) picks Sharp whenever that fills nearly all of the window.
+  - **Interface size**: 50% to 110%, for the HUD and menus. The row lists which sizes land on whole screen
+    pixels for your window. Those are the sharpest and also the fastest to draw (on a 1080p screen: 67% and 100%).
+  - **Frame rate**: 30, 60, 120, 144 or Screen. Screen, the default, matches your monitor's refresh rate and
+    uses vsync, so motion is smooth and doesn't tear.
+  - A frame rate counter.
+  - **Screen shake**: off, gentle or full.
+  - The camera zoom while fishing.
+  - **Light effects**:
+    - Full gives sunbeams, the soft glow around lights, mist and cloud shadows.
+    - Simple leaves them out, for older or slower computers.
+    - Auto (the default) keeps them on, but if your computer falls behind for a few seconds it switches to
+      Simple, and turns them back on once there's room again.
+
+  The game draws through your graphics card (Direct3D 11 on Windows). It stays sharp when you change the window
+  size, go fullscreen, or move the window to a screen with a different Windows scale setting. A computer that
+  can't do that falls back to drawing on the CPU, which looks the same but runs slower.
 - **Gameplay**: relaxed reeling, day length (slow, normal or quick days), 12 or 24-hour clock, the HUD style
   (see below), hints, pausing when you switch to another window, controller rumble, and the first-day tips (seven short tips at the top of the screen
   in a new game, each gone once you've done it, with a Skip button). The key hints at the bottom of the screen
@@ -154,8 +170,35 @@ The **HUD** setting (Options > Gameplay) has three styles:
 
 The whole screen, menus and text included, is pixel art on the lake's 640x360 grid. Panels have wooden frames,
 and the text uses a bitmap font drawn in code (`pixfont.py`). Fullscreen uses your monitor's own resolution, and
-whole-number sizes (1280x720, 1920x1080, 2560x1440) give perfectly square pixels. Other window sizes are scaled
-with a sharp-then-smooth filter so the pixels stay even.
+whole-number sizes (1280x720, 1920x1080, 2560x1440) give perfectly square pixels. At other window sizes, Pixel
+scaling decides: Sharp keeps whole-number pixels with a thin border, and Fill uses a sharp-then-smooth filter so
+the pixels stay even.
+
+## Making your angler
+
+A new game opens the **character creator** first. On the left is a little living diorama of your dock: you,
+Biscuit, the lantern post and the water, which reflects everything. Every change shows there straight away.
+Switch it between **dawn, noon, dusk and night**, and click one of the four **season** figures underneath to see
+that season's colours (and your winter scarf). *Hat: on/off* takes your hat off so you can see your hair.
+
+- **Face**: eight skin tones, five eyes (bright, smiley, sleepy, glasses or shades), a beard, stubble or
+  moustache, and freckles or rosy cheeks
+- **Hair**: ten colours, from brown and silver to lake teal, rose and lavender, and eight styles: side part,
+  short, long, ponytail, bun, curls, buzz and braids
+- **Clothes**: overalls, a striped tee, a knit sweater, a raincoat or an angler vest. **Colours** gives your top
+  one shade for each season, from eight palettes. Then trousers, and boots or wellies
+- **Keepsake**: a charm tied to your rod. It sways while you wait and shivers when a fish nibbles. The bell
+  shivers, the ribbon flutters, and the tin star and tiny lantern glow after dark. And **While you wait**: how
+  you pass the time until a bite. Hummers hum little notes, stargazers look up and spot stars at night, fidgety
+  anglers tap a foot, dozy ones yawn and nod off after dark, and chatty ones have plenty to tell Biscuit
+- **Biscuit**: her coat. Ginger tabby, tuxedo, grey, calico, cream, siamese or midnight black. She wears it
+  everywhere: on the dock, in the cabin, in the kitchen and around the village
+
+Your name is typed at the top (it's the name friends see when you play together). **Surprise me** rolls the dice
+through a flicker of looks and settles on one. **Reset** goes back to the classic look. Then **Start fishing**.
+
+You can change any of it later: Cabin, **Wardrobe** tab, **Change your look**. Older saves keep the classic look
+until you do. When you play together, friends see the look you made, keepsake and all.
 
 ## Your first day
 
@@ -742,6 +785,8 @@ The calendar (K) shows a three-day weather forecast, the moon phase and every ev
 - Saltmarsh, a second region down the river: a harbour village with five new neighbours, tides that change what
   bites, daily orders, beachcombing, a boatyard and a lighthouse to light again
 - Aim your casts. Bubbling hotspots on the water give quicker bites and rarer fish
+- A character creator with a living diorama: skin, hair colour and style, eyes, beards, five tops in eight
+  seasonal palettes, trousers and boots, a rod keepsake, a way of waiting for bites, and Biscuit's coat
 - Cabin fish tank (8 fish) and a wardrobe with 7 hats and 5 outfits for Biscuit
 - 29 badges with coin rewards (Journal, Badges tab)
 - A walkable aquarium with twelve themed exhibits, benches and visitors

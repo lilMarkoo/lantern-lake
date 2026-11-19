@@ -14,6 +14,7 @@ import pygame
 
 import actors
 import art
+import look as looks
 import dialogue
 import kitchen
 import pixfont
@@ -180,24 +181,28 @@ def sign_text(s, text, center, color):
     s.blit(img, img.get_rect(center=center))
 
 
-def walker(s, x, fy, face, step, shirt, hair, hat, season, kid=False, glasses=False, umbrella=None):
-    """A person walking (step is a running phase, 0 when standing). face is 1 for right, -1 for left."""
+def walker(s, x, fy, face, step, shirt, hair, hat, season, kid=False, glasses=False, umbrella=None, look=None):
+    """A person walking (step is a running phase, 0 when standing). face is 1 for right, -1 for left.
+    look is a look.py dict for you or a friend; the village folk go without."""
     tmp = pygame.Surface((26, 40), pygame.SRCALPHA)
     cx, base = 13, 38
     bob = 1 if step and math.sin(step * 2) > 0 else 0
-    actors.draw_person(tmp, cx, base, shirt, hair, hat, season, bob)
+    actors.draw_person(tmp, cx, base, shirt, hair, hat, season, bob, look=look)
     if glasses:
         tmp.fill((60, 50, 50), (cx + 1, base - 20 - bob, 3, 1))
         tmp.set_at((cx + 2, base - 19 - bob), (60, 50, 50))
     if step:
-        pants, boot = (72, 92, 140), (84, 58, 42)
-        tmp.fill((0, 0, 0, 0), (cx - 6, base - 6, 12, 6))
+        lk = look or looks.DEFAULT
+        pants, boot = looks.pants(lk), looks.boots(lk)
+        tall = 4 if lk['boots'] in ('yellow', 'red', 'green') else 2
+        clear = 6 if lk['top'] != 'raincoat' else 4
+        tmp.fill((0, 0, 0, 0), (cx - 6, base - clear, 12, clear))
         a = math.sin(step)
         o = int(round(a * 2))
-        tmp.fill(pants, (cx - 3 + o, base - 6, 2, 5))
-        tmp.fill(boot, (cx - 4 + o, base - 2, 3, 2))
-        tmp.fill(darken(pants, 0.2), (cx + 1 - o, base - 6, 2, 5))
-        tmp.fill(boot, (cx + 1 - o, base - 2, 3, 2))
+        tmp.fill(pants, (cx - 3 + o, base - clear, 2, clear - 1))
+        tmp.fill(boot, (cx - 4 + o, base - tall, 3, tall))
+        tmp.fill(darken(pants, 0.2), (cx + 1 - o, base - clear, 2, clear - 1))
+        tmp.fill(darken(boot, 0.1) if tall > 2 else boot, (cx + 1 - o, base - tall, 3, tall))
     if face < 0:
         tmp = pygame.transform.flip(tmp, True, False)
     if kid:
@@ -214,23 +219,55 @@ def walker(s, x, fy, face, step, shirt, hair, hat, season, kid=False, glasses=Fa
         pygame.draw.line(s, darken(umbrella, 0.3), (x - 9 + 2 * face, top - 7), (x + 9 + 2 * face, top - 7))
 
 
-def sitter(s, x, seat, shirt, hair, hat, season, breathe=0):
+def sitter(s, x, seat, shirt, hair, hat, season, breathe=0, look=None):
     """You on the lookout bench, seen from behind: looking out over the lake."""
-    pants = (72, 92, 140)
+    lk = look or looks.DEFAULT
+    pants, skin = looks.pants(lk), looks.skin(lk)
     by = seat + 3 - breathe
     s.fill(pants, (x - 4, seat - 3, 8, 3))                         # sitting on the plank
     s.fill(shirt, (x - 4, by - 15, 8, 10))                          # your back
     s.fill(darken(shirt, 0.18), (x - 4, by - 15, 1, 10))
-    s.fill(darken(pants, 0.15), (x - 3, by - 15, 1, 7))            # braces
-    s.fill(darken(pants, 0.15), (x + 2, by - 15, 1, 7))
+    if lk['top'] == 'overalls':
+        s.fill(darken(pants, 0.15), (x - 3, by - 15, 1, 7))        # braces
+        s.fill(darken(pants, 0.15), (x + 2, by - 15, 1, 7))
+    elif lk['top'] == 'vest':
+        s.fill((134, 128, 90), (x - 4, by - 15, 8, 8))
+    elif lk['top'] == 'tee':
+        s.fill(looks.accent(lk), (x - 4, by - 13, 8, 1))
+        s.fill(looks.accent(lk), (x - 4, by - 10, 8, 1))
+    elif lk['top'] == 'raincoat':
+        s.fill(darken(shirt, 0.18), (x - 3, by - 17, 7, 3))        # the hood, down
     if season == 3:
-        s.fill((200, 70, 70), (x - 4, by - 16, 9, 2))
-    s.fill((240, 202, 172), (x - 4, by - 19, 1, 2))                # ears
-    s.fill((240, 202, 172), (x + 3, by - 19, 1, 2))
-    s.fill(hair, (x - 3, by - 21, 7, 6))                            # the back of your head
-    s.fill(darken(hair, 0.15), (x - 3, by - 16, 7, 1))
-    actors.draw_hat(s, hat, x, by, season, hair)
-    s.fill((236, 186, 156), (x + 4, by - 9, 3, 2))                  # a hand resting by Biscuit
+        s.fill(looks.scarf(lk), (x - 4, by - 16, 9, 2))
+    s.fill(skin, (x - 4, by - 19, 1, 2))                            # ears
+    s.fill(skin, (x + 3, by - 19, 1, 2))
+    hs = lk['hstyle']
+    if hs == 'buzz':
+        s.fill(darken(skin, 0.06), (x - 3, by - 21, 7, 6))
+        for i in range(-3, 4, 2):
+            s.set_at((x + i, by - 20), darken(hair, 0.2))
+            s.set_at((x + i + 1, by - 18), darken(hair, 0.2))
+    else:
+        s.fill(hair, (x - 3, by - 21, 7, 6))                        # the back of your head
+        s.fill(darken(hair, 0.15), (x - 3, by - 16, 7, 1))
+    if hs == 'long':
+        s.fill(hair, (x - 3, by - 16, 7, 5))
+        s.fill(darken(hair, 0.15), (x - 3, by - 12, 7, 1))
+    elif hs == 'ponytail':
+        s.fill(hair, (x, by - 16, 2, 5))
+        s.set_at((x, by - 17), (230, 110, 120))
+    elif hs == 'bun':
+        s.fill(hair, (x - 1, by - 24, 4, 3))
+    elif hs == 'braids':
+        for bx in (x - 3, x + 3):
+            for i in range(5):
+                s.set_at((bx, by - 16 + i), hair if i % 2 == 0 else darken(hair, 0.2))
+    elif hs == 'curly':
+        s.fill(hair, (x - 4, by - 22, 9, 7))
+        for i in range(-4, 5, 2):
+            s.set_at((x + i, by - 20 + (i % 4 == 0)), darken(hair, 0.2))
+    actors.draw_hat(s, hat, x, by, season, hair, 'side' if hs in ('buzz', 'curly') else hs)
+    s.fill(darken(skin, 0.03), (x + 4, by - 9, 3, 2))               # a hand resting by Biscuit
 
 
 def draw_front(s, sc, season, t):
@@ -2021,8 +2058,9 @@ class Town:
             x = int(v['tx'] - sc)
             if -30 < x < W + 30:
                 ground_shadow(s, x, GROUND, 13)
-                walker(s, x, GROUND, v['face'], self.t * 9 + pid if v['walk'] else 0, actors.PEER_COLORS[pid % 4],
-                       actors.PEER_HAIR[pid % 4], v['hat'], season, umbrella=(110, 140, 190) if rain else None)
+                pshirt, phair, _, plk = actors.peer_colors(pid, v, season)
+                walker(s, x, GROUND, v['face'], self.t * 9 + pid if v['walk'] else 0, pshirt,
+                       phair, v['hat'], season, umbrella=(110, 140, 190) if rain else None, look=plk)
                 if v['em']:
                     actors.draw_bubble(s, x + 1, GROUND - 32, v['em'], t + pid)
         # the lake below the lookout glitters
@@ -2053,14 +2091,14 @@ class Town:
         x = int(self.x - sc)
         if st is not None:
             breathe = 1 if math.sin(st['t'] * 1.6) > 0.6 else 0
-            sitter(s, x, BENCH_SEAT, actors.SHIRT[season], (112, 72, 52), g.hat, season, breathe)
+            sitter(s, x, BENCH_SEAT, *looks.player_colors(g, season), g.hat, season, breathe, look=looks.of(g))
             # the bench's back rail is between us and you now
             s.fill((150, 100, 66), (BENCH_X - 14 - sc, GROUND - 17, 28, 2))
             s.fill((120, 80, 56), (BENCH_X - 14 - sc, GROUND - 15, 28, 1))
         else:
             ground_shadow(s, x, GROUND, 13)
-            walker(s, x, GROUND, self.face, self.step, actors.SHIRT[season], (112, 72, 52), g.hat, season,
-                   umbrella=(90, 130, 110) if rain else None)
+            walker(s, x, GROUND, self.face, self.step, *looks.player_colors(g, season), g.hat, season,
+                   umbrella=(90, 130, 110) if rain else None, look=looks.of(g))
         if g.emote:
             actors.draw_bubble(s, x + 1, GROUND - 32, g.emote[0], t)
         draw_front(s, sc, season, t)

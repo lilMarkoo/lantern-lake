@@ -10,6 +10,9 @@ from art import W, H, HORIZON, DECK_Y, lerp_c, mul_c, darken, lighten, add_glow
 from data import phase_of
 from fishing import cast_point
 
+# the lake mirror: for each water row, which sky row it reflects and how far its ripple swings
+_REFL_ROWS = [(dy, 0.3 + dy * 0.03, (0, min(HORIZON - 1, int(dy * 0.95)), W, 1)) for dy in range(H - HORIZON)]
+
 WAGON_RECT = pygame.Rect(524, 200, 50, 34)     # Wren's houseboat, clickable on wagon days
 # weeping willow leaves by season (winter: bare grey-brown withies)
 WILLOW = {0: (150, 194, 98), 1: (96, 146, 64), 2: (214, 168, 70), 3: (120, 106, 92)}
@@ -741,17 +744,35 @@ class World:
             frame.fill((v, v, v + 10), special_flags=pygame.BLEND_ADD)
         frame.blit(self.vig, (0, 0))
 
+    _sky_key = None
+
+    def _cloud_tinted(self, i, col):
+        """Cloud sprite i in colour col, made once per colour (the colour drifts slowly with the hour)."""
+        cache = self.__dict__.setdefault('_cloud_cache', {})
+        if cache.get('col') != col:
+            cache.clear()
+            cache['col'] = col
+        spr = cache.get(i)
+        if spr is None:
+            spr = cache[i] = self.cloud_sprites[i].copy()
+            spr.fill((*col, 255), special_flags=pygame.BLEND_RGBA_MULT)
+        return spr
+
     def _sky(self, frame, env):
         top, mid, bot = env.sky
-        strip = self.sky_strip
-        for y in range(HORIZON):
-            k = y / (HORIZON - 1)
-            if k < 0.55:
-                c = lerp_c(top, mid, k / 0.55)
-            else:
-                c = lerp_c(mid, bot, (k - 0.55) / 0.45)
-            strip.set_at((0, y), c)
-        pygame.transform.scale(strip, (W, HORIZON), frame.subsurface((0, 0, W, HORIZON)))
+        key = (tuple(top), tuple(mid), tuple(bot))
+        if self._sky_key != key:                          # the gradient only moves every few frames: keep it
+            strip = self.sky_strip
+            for y in range(HORIZON):
+                k = y / (HORIZON - 1)
+                if k < 0.55:
+                    c = lerp_c(top, mid, k / 0.55)
+                else:
+                    c = lerp_c(mid, bot, (k - 0.55) / 0.45)
+                strip.set_at((0, y), c)
+            self._sky_img = pygame.transform.scale(strip, (W, HORIZON))
+            self._sky_key = key
+        frame.blit(self._sky_img, (0, 0))
         t = self.t
         nf = env.nf
         vis = nf * (1 - env.over) * (1 - env.fog * 0.8)
@@ -818,8 +839,7 @@ class World:
             a = max(0.0, min(1.0, (cover - c['th']) * 3 + 0.3)) if cover > c['th'] - 0.1 else 0
             if a <= 0.02:
                 continue
-            spr = self.cloud_sprites[c['spr']].copy()
-            spr.fill((*cloud_col, 255), special_flags=pygame.BLEND_RGBA_MULT)
+            spr = self._cloud_tinted(c['spr'], cloud_col)
             spr.set_alpha(int(225 * a))
             frame.blit(spr, (int(c['x']), int(c['y'])))
         # bird flock
@@ -1198,18 +1218,19 @@ class World:
                                                                (end, ly + 10 * abs(sweep))])
                 frame.blit(beam, (0, 0))
 
+    _tint_key = None
+
     def _water(self, frame, env, plain=False):
         t = self.t
         deep = self.spot == 'deep' and not plain
-        top_region = frame.subsurface((0, 0, W, HORIZON)).copy()
-        refl = pygame.transform.flip(top_region, False, True)
+        refl = pygame.transform.flip(frame.subsurface((0, 0, W, HORIZON)), False, True)
         frame.fill(env.sky[2], (0, HORIZON, W, H - HORIZON))
         amp_k = 1 + env.wind * 0.8 + env.rain * 1.2
-        for dy in range(H - HORIZON):
-            sy = min(HORIZON - 1, int(dy * 0.95))
-            amp = (0.3 + dy * 0.03) * amp_k
-            off = int(math.sin(dy * 0.42 - t * 2.1 + math.sin(dy * 0.07 + t * 0.4) * 2) * amp)
-            frame.blit(refl, (off, HORIZON + dy), (0, sy, W, 1))
+        sin = math.sin
+        a, b = t * 2.1, t * 0.4
+        # every row of the mirrored sky, shifted by its own ripple: one batched blit call
+        frame.blits([(refl, (int(sin(dy * 0.42 - a + sin(dy * 0.07 + b) * 2) * (amp * amp_k)), HORIZON + dy), area)
+                     for dy, amp, area in _REFL_ROWS], False)
         # depth tint
         wc = mul_c((40, 98, 112), lerp_c(env.amb, (255, 255, 255), 0.15))
         if env.season == 3:
@@ -1219,12 +1240,16 @@ class World:
             wc = lerp_c(wc, env.fog_color, env.fog * 0.4)
         if deep:
             wc = darken(lerp_c(wc, (30, 60, 96), 0.35), 0.22)      # deep water: darker and bluer
-        strip = self.water_strip
-        n = H - HORIZON
-        for y in range(n):
-            k = y / (n - 1)
-            strip.set_at((0, y), (*wc, int(96 + 140 * k ** 0.7) if deep else int(60 + 150 * k ** 0.8)))
-        frame.blit(pygame.transform.scale(strip, (W, n)), (0, HORIZON))
+        key = (tuple(wc), deep)
+        if self._tint_key != key:                         # the colour only moves every few frames: keep it
+            strip = self.water_strip
+            n = H - HORIZON
+            for y in range(n):
+                k = y / (n - 1)
+                strip.set_at((0, y), (*wc, int(96 + 140 * k ** 0.7) if deep else int(60 + 150 * k ** 0.8)))
+            self._tint = pygame.transform.scale(strip, (W, n))
+            self._tint_key = key
+        frame.blit(self._tint, (0, HORIZON))
         # shore line glint
         pygame.draw.line(frame, lerp_c(env.sky[2], (255, 255, 255), 0.25), (0, HORIZON), (W, HORIZON))
         # shimmer dashes
@@ -1243,22 +1268,29 @@ class World:
         glint = lerp_c(wc, hl, 0.6)
         for gu in self.gusts:
             gx, gy, gw, gh = gu['x'], gu['y'], gu['w'], gu['h']
-            p = 0.5 + (gy - HORIZON) / 170
-            sd = gu['seed']
-            for i in range(int(gw * gh / 9)):
-                u = (math.sin(i * 12.9898 + sd) * 43758.5453) % 1.0
-                v = (math.sin(i * 78.233 + sd * 1.7) * 12543.17) % 1.0
-                dx, dy = u * 2 - 1, v * 2 - 1
-                if dx * dx + dy * dy > 1:
+            pts = gu.get('pts')
+            if pts is None:                               # the patch's little waves never change shape
+                p = 0.5 + (gy - HORIZON) / 170
+                sd = gu['seed']
+                pts = gu['pts'] = []
+                for i in range(int(gw * gh / 9)):
+                    u = (math.sin(i * 12.9898 + sd) * 43758.5453) % 1.0
+                    v = (math.sin(i * 78.233 + sd * 1.7) * 12543.17) % 1.0
+                    dx, dy = u * 2 - 1, v * 2 - 1
+                    if dx * dx + dy * dy > 1:
+                        continue
+                    y = int(gy + dy * gh / 2)
+                    if y <= HORIZON + 1:
+                        continue
+                    pts.append((i, dx * gw / 2, y, 1 + int(2.5 * p * (1 - abs(dx))), i % 7 == 0))
+            t5, t2 = t * 5, t * 2
+            for i, ox, y, ln, gl in pts:
+                if math.sin(t5 + i * 1.3) < -0.4:
                     continue
-                if math.sin(t * 5 + i * 1.3) < -0.4:
+                x = gx + ox + math.sin(t2 + i) * 1.5
+                if x < 0 or x >= W:
                     continue
-                x = gx + dx * gw / 2 + math.sin(t * 2 + i) * 1.5
-                y = int(gy + dy * gh / 2)
-                if y <= HORIZON + 1 or x < 0 or x >= W:
-                    continue
-                ln = 1 + int(2.5 * p * (1 - abs(dx)))
-                pygame.draw.line(frame, glint if i % 7 == 0 else ruff, (x, y), (x + ln, y))
+                pygame.draw.line(frame, glint if gl else ruff, (x, y), (x + ln, y))
         # sun / moon glitter path
         rng = self.rng
         if env.sun_vis and env.over < 0.85:

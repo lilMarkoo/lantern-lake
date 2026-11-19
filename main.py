@@ -21,13 +21,19 @@ if '--size' in sys.argv:
     _w, _h = sys.argv[sys.argv.index('--size') + 1].lower().split('x')
     SHOT_SIZE = (int(_w), int(_h))
 if not HEADLESS and sys.platform == 'win32':
-    # draw at the real pixel size on scaled Windows displays instead of being stretched (blurry) by Windows
+    # draw at the real pixel size on scaled Windows displays instead of being stretched (blurry) by Windows. Per
+    # monitor, so it stays sharp when the window moves to another screen or the Windows scale changes mid-game
+    os.environ.setdefault('SDL_WINDOWS_DPI_AWARENESS', 'permonitorv2')
     try:
         import ctypes
         try:
-            ctypes.windll.shcore.SetProcessDpiAwareness(1)
+            if not ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+                ctypes.windll.shcore.SetProcessDpiAwareness(2)
         except Exception:
-            ctypes.windll.user32.SetProcessDPIAware()
+            try:
+                ctypes.windll.shcore.SetProcessDpiAwareness(2)
+            except Exception:
+                ctypes.windll.user32.SetProcessDPIAware()
     except Exception:
         pass
 
@@ -58,6 +64,9 @@ import yeartwo
 import binds as bindsmod
 import tutorial
 import coop
+import screen as screenmod
+import creator
+import look as looks
 import garden as gardenmod
 import wildlife
 import shore as shoremod
@@ -106,15 +115,18 @@ def _game_version():
 
 GAME_VERSION = _game_version()
 WINDOW_SIZES = [(1280, 720), (1600, 900), (1920, 1080), (2560, 1440)]
-FPS_CHOICES = [30, 60, 120, 144]
+FPS_CHOICES = [30, 60, 120, 144, 0]       # 0: match the screen (vsync)
+FPS_LABELS = ['30', '60', '120', '144', 'Screen']
+SCALINGS = ('auto', 'sharp', 'fill')
+FX_LEVELS = ('simple', 'auto', 'full')
 SHAKE_LEVELS = [0.0, 0.5, 1.0]
 DAY_SPEEDS = [0.7, 1.0, 1.5]
 UI_SCALES = [50, 60, 67, 75, 85, 100, 110]      # interface size, percent (100 = the 1280x720 layout)
 DEFAULT_SETTINGS = dict(master=1.0, music=0.5, sfx=0.8, amb=0.8, assist=False, fullscreen=False, window=None,
-                        fps=60, show_fps=False, shake=1.0, zoom=True, hints=True, clock24=False, speed=1.0,
+                        fps=0, show_fps=False, scaling='auto', shake=1.0, zoom=True, hints=True, clock24=False, speed=1.0,
                         bg_pause=True, ui_scale=100, mp_name='', mp_addr='', slot=1, prompts='auto',
                         tutorial=True, binds={}, hud='calm', radio=None, rumble=True,
-                        radio_vol=0.5, fx='full')
+                        radio_vol=0.5, fx='auto')
 HUD_STYLES = ('full', 'calm', 'compact')
 PROMPTS = ['auto', 'keyboard', 'xbox', 'ps', 'switch']
 PROMPT_LABELS = ['Auto', 'Keyboard', 'Xbox', 'PS', 'Switch']
@@ -238,6 +250,9 @@ class Game:
         self._ui_pct = None
         self._small = pygame.Surface((W, H), 0, 32)
         self._wsmall = pygame.Surface((W, H), 0, 32)
+        self.gpu = None              # screen.Screen when the graphics card draws the frames
+        self.fx_low = False          # Light effects on Auto: eased off because frames were running slow
+        self._perf = [0.0, 0.0, 0.0]  # average frame work (s), seconds over budget, seconds well under
         self.apply_ui_scale()
         try:
             dw, dh = pygame.display.get_desktop_sizes()[0]
@@ -247,10 +262,13 @@ class Game:
         self.win_sizes = [s for s in WINDOW_SIZES if s[0] <= dw and s[1] <= dh - 60] or [WINDOW_SIZES[0]]
         self.open_window()
         self.screen = self.window
-        pygame.display.set_caption('Lantern Lake')
+        if self.gpu is None:
+            pygame.display.set_caption('Lantern Lake')
         self._icon()
         self.frame = pygame.Surface((W, H))
         self.ui = U.UI()
+        self._ui_pct = None
+        self.apply_ui_scale()                  # the GPU path keeps the interface on its own layer
         self._loading()
         self.audio = Audio()
         self.radio = radiomod.Radio(self)
@@ -353,15 +371,21 @@ class Game:
         pygame.draw.rect(s, (90, 70, 60), (11, 7, 10, 2))
         pygame.draw.rect(s, (90, 70, 60), (11, 20, 10, 2))
         pygame.draw.line(s, (90, 70, 60), (16, 4), (16, 7), 2)
-        pygame.display.set_icon(s)
+        if self.gpu:
+            self.gpu.set_icon(s)
+        else:
+            pygame.display.set_icon(s)
 
     def _loading(self):
-        win = pygame.display.get_surface()
+        win = pygame.Surface(self.gpu.size) if self.gpu else pygame.display.get_surface()
         win.fill((26, 24, 40))
         cx, cy = win.get_width() // 2, win.get_height() // 2
         self.ui.blit_text(win, 'Lantern Lake', (cx, cy - 20), 'title', (248, 230, 200), 'center')
         self.ui.blit_text(win, 'tuning the crickets...', (cx, cy + 70), 'body', (200, 190, 200), 'center')
-        pygame.display.flip()
+        if self.gpu:
+            self.gpu.show_surface(win)
+        else:
+            pygame.display.flip()
 
     # ------------------------------------------------------------ window, fullscreen and settings
     def default_window(self):
@@ -377,13 +401,32 @@ class Game:
             self.window = pygame.display.set_mode(SHOT_SIZE)
             return
         size = tuple(self.settings.get('window') or self.default_window())
-        self.window = pygame.display.set_mode(size, pygame.RESIZABLE)
+        self.gpu = None
+        if os.environ.get('LANTERN_CPU') != '1':
+            try:
+                self.gpu = screenmod.Screen('Lantern Lake', size, vsync=self.settings.get('fps') == 0)
+            except Exception as e:                       # no usable graphics card: draw on the CPU instead
+                print('drawing on the CPU:', e)
+                self.gpu = None
+        if self.gpu:
+            # a tiny hidden window only so pictures can be convert()ed to the screen's format
+            pygame.display.set_mode((1, 1), pygame.HIDDEN)
+            self.gpu.window.focus()
+            self.window = None
+        else:
+            self.window = pygame.display.set_mode(size, pygame.RESIZABLE)
         if self.settings.get('fullscreen'):
             self.set_fullscreen(True, save=False)
 
     def set_fullscreen(self, on, save=True):
         on = bool(on)
-        if not HEADLESS and on != self.fullscreen:
+        if self.gpu and on != self.fullscreen:
+            try:
+                self.gpu.set_fullscreen(on, self.settings.get('window') or self.default_window())
+            except pygame.error as e:
+                print('fullscreen failed', e)
+                return
+        elif not HEADLESS and on != self.fullscreen:
             try:
                 win = pygame.Window.from_display_module()
             except Exception:
@@ -410,7 +453,9 @@ class Game:
         size = self.win_sizes[i]
         self.settings['window'] = list(size)
         self.save_settings()
-        if not HEADLESS and not self.fullscreen:
+        if self.gpu and not self.fullscreen:
+            self.gpu.set_size(size)
+        elif not HEADLESS and not self.fullscreen:
             self.window = pygame.display.set_mode(size, pygame.RESIZABLE)
             try:
                 pygame.Window.from_display_module().position = pygame.WINDOWPOS_CENTERED
@@ -442,11 +487,13 @@ class Game:
             except (TypeError, ValueError):
                 st[k] = DEFAULT_SETTINGS[k]
         if st['fps'] not in FPS_CHOICES:
-            st['fps'] = 60
+            st['fps'] = 0
+        if st.get('scaling') not in SCALINGS:
+            st['scaling'] = 'auto'
         if st['shake'] not in SHAKE_LEVELS:
             st['shake'] = 1.0
-        if st.get('fx') not in ('full', 'simple'):
-            st['fx'] = 'full'
+        if st.get('fx') not in FX_LEVELS:
+            st['fx'] = 'auto'
         if st.get('radio') not in radiomod.BY_ID:
             st['radio'] = None
         if st['speed'] not in DAY_SPEEDS:
@@ -478,9 +525,16 @@ class Game:
             print('settings save failed', e)
 
     def calc_view(self):
-        """Where the 1280x720 picture goes in the real window: (window, rect, scale)."""
-        win = pygame.display.get_surface()
-        ww, wh = win.get_size()
+        """Where the 1280x720 picture goes in the real window: (window, rect, scale).
+        Pixel scaling 'sharp' keeps every art pixel a whole number of screen pixels (a border fills the rest),
+        'fill' uses all the room it can, and 'auto' is sharp unless that would waste much of the window."""
+        win = None if self.gpu else pygame.display.get_surface()
+        ww, wh = self.gpu.size if self.gpu else win.get_size()
+        n = int(min(ww / W, wh / H))
+        mode = self.settings.get('scaling', 'auto')
+        if n >= 1 and mode != 'fill' and (mode == 'sharp' or W * n >= 0.85 * min(ww, wh * W / H)):
+            dw, dh = W * n, H * n
+            return win, pygame.Rect((ww - dw) // 2, (wh - dh) // 2, dw, dh), dw / SW
         k = max(0.05, min(ww / SW, wh / SH))
         dw, dh = max(1, min(ww, int(round(SW * k)))), max(1, min(wh, int(round(SH * k))))
         return win, pygame.Rect((ww - dw) // 2, (wh - dh) // 2, dw, dh), k
@@ -495,6 +549,14 @@ class Game:
             b = self._bufs[key] = pygame.Surface(size, pygame.SRCALPHA if alpha else 0, 32)
         return b
 
+    def _buf_atleast(self, key, size):
+        """A buffer of exactly `size`, cut from one that only grows (sizes that change every frame, like a zooming
+        camera's, then cost nothing to make)."""
+        b = self._bufs.get(key)
+        if b is None or b.get_width() < size[0] or b.get_height() < size[1]:
+            b = self._bufs[key] = pygame.Surface((size[0] + 24, size[1] + 24), 0, 32)
+        return b.subsurface((0, 0, size[0], size[1]))
+
     def _scale_into(self, src, dst, key):
         """Blow a pixel-grid picture up onto dst with square pixels."""
         sw, sh = src.get_size()
@@ -504,8 +566,9 @@ class Game:
         elif size[0] < sw:
             pygame.transform.smoothscale(src, size, dst)
         else:
-            # "sharp bilinear": grow by the next whole number with hard pixels, then ease down to fit
-            n = -(-size[0] // sw)
+            # "sharp bilinear": grow by the biggest whole number that fits with hard pixels, then one smooth
+            # stretch for the rest (edges stay within a pixel, so it reads sharp)
+            n = max(1, size[0] // sw)
             big = self._buf(key + 'big', (sw * n, sh * n), bool(src.get_flags() & pygame.SRCALPHA))
             pygame.transform.scale(src, big.get_size(), big)
             pygame.transform.smoothscale(big, size, dst)
@@ -523,7 +586,7 @@ class Game:
         x1, y1 = min(W, int(xf + wf) + 1), min(H, int(yf + hf) + 1)
         src = self.frame.subsurface((x0, y0, x1 - x0, y1 - y0))
         tw, th = int(round((x1 - x0) * s)), int(round((y1 - y0) * s))
-        big = self._buf('wz', (tw, th))
+        big = self._buf_atleast('wz', (tw, th))
         pygame.transform.scale(src, (tw, th), big)
         out.blit(big, (-int(round((xf - x0) * s)), -int(round((yf - y0) * s))))
 
@@ -546,6 +609,15 @@ class Game:
         self.screen = win
         if view.w < 8 or view.h < 8:
             return
+        self._t_present = time.perf_counter()     # (vsync waits inside present: not counted as work)
+        if self.gpu:
+            # the graphics card scales the world and lays the interface over it
+            try:
+                self.gpu.present(view, world=self.frame, cam=self.cam_f, ui=self.canvas, ui_art=(SW // 2, SH // 2))
+            except pygame.error as e:
+                print('GPU present failed, switching to the CPU:', e)
+                self.gpu_fallback()
+            return
         if view.size != win.get_size():
             win.fill(BAR_COLOR)
         out = win.subsurface(view)
@@ -560,7 +632,7 @@ class Game:
         else:
             # hard pixels at the next whole size up, then one smooth resize to fit (sharp bilinear), with the
             # camera placed at that bigger size so it still glides
-            n = max(1, -(-view.w // W))
+            n = max(1, view.w // W)
             wb = self._buf('wn%d' % n, (W * n, H * n))
             self._world_into(wb)
             pygame.transform.smoothscale(wb, view.size, out)
@@ -631,6 +703,7 @@ class Game:
         self.forecast = {'1': 'clear'}
         self.hat = 'straw'
         self.hats = ['straw']
+        self.look = dict(looks.DEFAULT)          # how you look (look.py); the creator sets it
         self.cat_item = 'none'
         self.cat_items = ['none']
         self.wagon = {}
@@ -688,7 +761,7 @@ class Game:
                     letters=self.letters, basket=self.basket, request=self.request, luck=self.luck,
                     pet_day=self.pet_day, total=self.total, settings=self.settings, tank=self.tank,
                     badges=self.badges, stats=self.stats, trophies=self.trophies, festival=self.festival,
-                    forecast=self.forecast, hat=self.hat, hats=self.hats, cat_item=self.cat_item,
+                    forecast=self.forecast, hat=self.hat, hats=self.hats, look=self.look, cat_item=self.cat_item,
                     cat_items=self.cat_items, wagon=self.wagon, visited=self.visited, dps=DAYS_PER_SEASON,
                     museum=self.museum, friends=self.friends, friend_gifts=self.friend_gifts, buffs=self.buffs,
                     jobs=self.jobs, tickets=self.tickets, projects=self.projects, town_day=self.town_day,
@@ -744,7 +817,16 @@ class Game:
             self.switch_slot(n)
         self.overlay = None
         self.slot_del = None
-        self.start_game(continue_=self.has_save)
+        if self.has_save:
+            self.start_game(True)
+        else:
+            self.new_game()
+
+    def new_game(self):
+        """A fresh start begins in the character creator; it starts the game when you're happy."""
+        self.confirm_new = 0
+        self.overlay = None
+        creator.open_(self, 'new')
 
     def delete_slot(self, n):
         if self.slot_del is None or self.slot_del[0] != n or self.t - self.slot_del[1] > 3.0:
@@ -803,7 +885,7 @@ class Game:
         self.tut = tutorial.DONE         # older saves have long since learned the ropes
         for k in ('coins', 'day', 'minute', 'weather', 'rod', 'rods', 'bait', 'baits', 'owned', 'journal',
                   'letters', 'basket', 'request', 'luck', 'pet_day', 'total', 'tank', 'badges',
-                  'trophies', 'festival', 'forecast', 'hat', 'hats', 'cat_item', 'cat_items', 'wagon', 'visited',
+                  'trophies', 'festival', 'forecast', 'hat', 'hats', 'look', 'cat_item', 'cat_items', 'wagon', 'visited',
                   'museum', 'friends', 'friend_gifts', 'buffs', 'jobs', 'tickets', 'projects', 'town_day',
                   'recipes', 'pantry', 'meal', 'upgrades', 'cook_best', 'story', 'heart_seen', 'market', 'hunts', 'pot', 'sky', 'ice_hole',
                   'cat_bond', 'cat_day', 'cat_gift', 'cat_follow', 'home', 'tut', 'tut_day', 'garden',
@@ -875,6 +957,7 @@ class Game:
             self.bait = 'worm'
         if self.hat not in HAT_BY_ID:
             self.hat = 'straw'
+        self.look = looks.clean(getattr(self, 'look', None))
         if self.cat_item not in CAT_BY_ID:
             self.cat_item = 'none'
         self.forecast = {k: v for k, v in self.forecast.items() if k.isdigit()}
@@ -893,6 +976,10 @@ class Game:
         self.audio.amb_vol = st.get('amb', 0.8) * m
         CLOCK24[0] = bool(st.get('clock24'))
         self.apply_ui_scale()
+        if self.gpu:
+            self.gpu.set_vsync(st.get('fps') == 0)
+        if st.get('fx') != 'auto':
+            self.fx_low = False
 
     def apply_ui_scale(self):
         """Resize the interface canvas. Smaller percentages give the HUD and menus more room (they look smaller)."""
@@ -907,7 +994,7 @@ class Game:
         minigame.CY = SH - 168                                # the reel ring sits in the bottom-left corner
         # at 100% the world is drawn straight into the canvas (fastest); other sizes keep the world on its own
         # and lay the interface over it as a separate see-through layer
-        self.layered = (SW, SH) != (1280, 720)
+        self.layered = bool(getattr(self, 'gpu', None)) or (SW, SH) != (1280, 720)
         self.canvas = pygame.Surface((SW, SH), pygame.SRCALPHA if self.layered else 0, 32)
         self._fadebuf = pygame.Surface((SW, SH), pygame.SRCALPHA)
         self._dim = None
@@ -2360,13 +2447,70 @@ class Game:
         self.audio.play('ui', 0.5)
 
     # ------------------------------------------------------------ main loop
+    def frame_cap_screen(self):
+        try:
+            hz = pygame.display.get_desktop_refresh_rates()[0]
+        except (AttributeError, IndexError, pygame.error):
+            hz = 60
+        return hz if 30 <= hz <= 360 else 60
+
+    def frame_cap(self):
+        """The frame rate to hold. 'Screen' (0) lets vsync pace the GPU path (with a safety cap), and uses the
+        screen's refresh rate on the CPU path."""
+        fps = self.settings.get('fps', 0)
+        if fps:
+            return fps
+        if self.gpu and self.gpu.vsync:
+            return 360
+        return self.frame_cap_screen()
+
+    def watch_speed(self, work, dt):
+        """Light effects on Auto: if frames keep taking longer than the frame rate allows, ease the effects off
+        (and bring them back later if there's plenty of room again)."""
+        p = self._perf
+        p[0] += (work - p[0]) * min(1.0, dt * 2)
+        if self.settings.get('fx') != 'auto' or self.mode != 'play' or self.overlay:
+            p[1] = p[2] = 0.0
+            return
+        fps = self.settings.get('fps') or self.frame_cap_screen()
+        budget = 1.0 / max(30, min(fps, 144))
+        if not self.fx_low:
+            p[1] = p[1] + dt if p[0] > budget * 0.92 else max(0.0, p[1] - dt)
+            if p[1] > 4.0:
+                self.fx_low = True
+                p[1] = p[2] = 0.0
+        else:
+            p[2] = p[2] + dt if p[0] < budget * 0.4 else 0.0
+            if p[2] > 30.0:
+                self.fx_low = False
+                p[1] = p[2] = 0.0
+
+    def gpu_fallback(self):
+        """The graphics card stopped working for us: carry on with the CPU path in a plain window."""
+        size = self.gpu.size if self.gpu else (1280, 720)
+        try:
+            self.gpu.window.destroy()
+        except Exception:
+            pass
+        self.gpu = None
+        self.window = pygame.display.set_mode(size, pygame.RESIZABLE)
+        self.fullscreen = False
+        self._ui_pct = None
+        self.apply_ui_scale()
+
     def run(self):
+        last = time.perf_counter()
         while self.running:
-            dt = min(0.05, self.clock.tick(self.settings.get('fps', 60)) / 1000.0)
+            self.clock.tick(self.frame_cap())
+            now = time.perf_counter()
+            dt = min(0.05, max(0.0, now - last))      # measured, not rounded to whole milliseconds
+            last = now
             self.handle_events()
             self.update(dt)
             self.draw()
-            pygame.display.flip()
+            if not self.gpu:
+                pygame.display.flip()
+            self.watch_speed(max(0.0, getattr(self, '_t_present', now) - now), dt)
         if self.mode == 'play':
             self.save()
         self.net_shutdown()
@@ -2513,7 +2657,7 @@ class Game:
         if self.pad is None and not HEADLESS:
             self.pad = padmod.Pad(self)
         for e in pygame.event.get():
-            if e.type == pygame.QUIT:
+            if e.type == pygame.QUIT or (e.type == pygame.WINDOWCLOSE and self.gpu):
                 self.running = False
             elif self.pad and self.pad.event(e):
                 pass
@@ -2575,7 +2719,7 @@ class Game:
             self.toggle_help()
             return
         ov = self.overlay
-        if self.mode == 'title' or ov in ('pause', 'options', 'quick'):
+        if self.mode == 'title' or ov in ('pause', 'options', 'quick', 'creator'):
             ui = self.ui
             if k in (pygame.K_UP, pygame.K_LEFT, pygame.K_w):
                 ui.nav_move(-1)
@@ -2588,9 +2732,14 @@ class Game:
                 if act:
                     act()
                 elif self.mode == 'title' and ov is None:
-                    self.start_game(continue_=self.has_save)
+                    if self.has_save:
+                        self.start_game(True)
+                    else:
+                        self.new_game()
             elif k == pygame.K_ESCAPE:
-                if ov == 'options':
+                if ov == 'creator':
+                    creator.cancel(self)
+                elif ov == 'options':
                     self.close_options()
                 elif ov == 'pause':
                     self.close_overlay()
@@ -2749,11 +2898,13 @@ class Game:
         self.audio.play('page', 0.5)
         self.next_queue()
 
-    def start_game(self, continue_=True):
+    def start_game(self, continue_=True, look=None):
         if self.radio.station is None and self.settings.get('radio') in radiomod.BY_ID:
             self.radio.tune(self.settings['radio'])
         if not continue_:
             self.new_game_state()
+            if look:
+                self.look = looks.clean(look)        # made in the character creator
             self.env.minute = self.minute
             self.env.day = self.day
             self.env.season = 0
@@ -2775,7 +2926,7 @@ class Game:
         d = os.path.join(HERE, 'screenshots')
         os.makedirs(d, exist_ok=True)
         path = os.path.join(d, time.strftime('lantern_%Y%m%d_%H%M%S.png'))
-        pygame.image.save(pygame.display.get_surface(), path)
+        pygame.image.save(self.gpu.read() if self.gpu else pygame.display.get_surface(), path)
         self.toast('Photo saved to screenshots folder.', (110, 130, 170))
 
     # ------------------------------------------------------------ update
@@ -3096,7 +3247,8 @@ class Game:
         ui.pad_layout = self.prompt_layout()
         ui.hot = []
         ui.nav = []
-        ui.set_nav_owner((self.mode, self.overlay, self.opt_tab if self.overlay == 'options' else None))
+        ui.set_nav_owner((self.mode, self.overlay, self.opt_tab if self.overlay == 'options' else
+                          (self.cre['tab'] if self.overlay == 'creator' else None)))
         cooking = self.cooking if self.overlay == 'cooking' and self.mode == 'play' else None
         if cooking is None and self.overlay == 'ice' and self.icescene and self.mode == 'play':
             cooking = self.icescene          # drawn and framed just like the kitchen scene
@@ -3128,13 +3280,13 @@ class Game:
         scr = cv
         if self.mode == 'title':
             self.draw_title(scr)
-            if self.overlay in ('options', 'lobby', 'slots'):
+            if self.overlay in ('options', 'lobby', 'slots', 'creator'):
                 ui.hot = []
                 ui.nav = []
                 scr = ui.stage()
                 self.dim(scr)
-                {'options': self.draw_options, 'lobby': self.draw_lobby,
-                 'slots': self.draw_slots}[self.overlay](scr)
+                {'options': self.draw_options, 'lobby': self.draw_lobby, 'slots': self.draw_slots,
+                 'creator': lambda sc: creator.draw(self, sc)}[self.overlay](scr)
         elif cooking:
             cooking.draw_ui(scr)
         elif scene:
@@ -3169,6 +3321,8 @@ class Game:
                 self.draw_options(scr)
             elif ov == 'cabin':
                 self.draw_cabin(scr)
+            elif ov == 'creator':
+                creator.draw(self, scr)
             elif ov == 'coop':
                 coop.draw_panel(self, scr)
             elif ov == 'shore':
@@ -3333,13 +3487,13 @@ class Game:
                       sub=sub_t, nav=True)
             y += 84
             if self.confirm_new > 0:
-                ui.button(s, (bx, y, bw, 56), 'Really start over? Click again', lambda: self.start_game(False),
+                ui.button(s, (bx, y, bw, 56), 'Really start over? Click again', self.new_game,
                           'rose', nav=True)
             else:
                 ui.button(s, (bx, y, bw, 56), 'New game', lambda: setattr(self, 'confirm_new', 3.0), font='h2',
                           nav=True)
         else:
-            ui.button(s, (bx, y, bw, 64), 'Begin', lambda: self.start_game(False), 'primary', font='h2', nav=True)
+            ui.button(s, (bx, y, bw, 64), 'Begin', self.new_game, 'primary', font='h2', nav=True)
             y += 8
         y += 70
         ui.button(s, (bx, y, bw, 56), 'Save slots', self.open_slots, font='h2', nav=True)
@@ -4630,6 +4784,8 @@ class Game:
         s.blit(pygame.transform.scale(crop, pv.size), pv)
         pygame.draw.rect(s, (150, 104, 70), pv.inflate(8, 8), 3, border_radius=10)
         ui.blit_text(s, 'Live from the dock', (pv.centerx, pv.bottom + 18), 'small', U.SOFT, 'midtop')
+        ui.button(s, (pv.x, pv.bottom + 54, pv.w, 52), 'Change your look', lambda: creator.open_(self, 'edit'),
+                  'gold', font='bodyb')
         self.ward_hover_now = None
         x0 = rect.x + 400
 
@@ -5280,7 +5436,7 @@ class Game:
                     fest=_num(st.get('fest'), 0, 0, 99999) if st.get('fest') is not None else None,
                     place='town' if st.get('place') == 'town' else 'lake',
                     tx=_num(st.get('tx'), 60, 0, townmod.TOWN_W), face=-1 if st.get('face') == -1 else 1,
-                    walk=bool(st.get('walk')))
+                    walk=bool(st.get('walk')), look=looks.decode(st.get('lk')))
 
     def my_state(self):
         f = self.fishing
@@ -5293,7 +5449,7 @@ class Game:
                 'em': self.emote[0] if self.emote else None,
                 'away': self.overlay is not None or self.typing == 'chat',
                 'place': self.place, 'tx': round(self.town.x, 1), 'face': self.town.face,
-                'walk': self.town.step > 0}
+                'walk': self.town.step > 0, 'lk': looks.encode(self.look)}
 
     def net_update(self, dt):
         if self.fishing.state not in ('fight', 'landing'):     # the chat is hidden while reeling
@@ -5453,7 +5609,7 @@ class Game:
             if t == 'chat':
                 self.chat_text = ''
             self.typing = None
-        elif k == pygame.K_TAB and t in ('mp_name', 'mp_addr'):
+        elif k == pygame.K_TAB and t in ('mp_name', 'mp_addr') and self.overlay == 'lobby':
             self.typing = 'mp_addr' if t == 'mp_name' else 'mp_name'
 
     def start_typing(self, key):
@@ -5672,16 +5828,21 @@ class Game:
             ui_desc = ('HUD and menus, in %%. Sharpest: %s' % ', '.join(str(p) for p in sharp)) if sharp \
                 else 'Size of the HUD and menus, in %'
             cur = tuple(st.get('window') or self.default_window())
-            return [('choice', 'Fullscreen', 'Fills the screen. F11 switches any time',
-                     ['Off', 'On'], int(self.fullscreen), lambda i: self.set_fullscreen(bool(i)), True),
-                    ('choice', 'Window size', 'Used when not in fullscreen', sizes,
-                     self.win_sizes.index(cur) if cur in self.win_sizes else -1, self.set_window_size,
-                     not self.fullscreen),
+            sizes = sizes[-3:]
+            off = len(self.win_sizes) - len(sizes)
+            win_i = len(sizes) if self.fullscreen else (self.win_sizes.index(cur) - off
+                                                        if cur in self.win_sizes[off:] else -1)
+            scl = st.get('scaling', 'auto')
+            return [('choice', 'Window', 'Its size, or the full screen. F11 switches any time',
+                     sizes + ['Full'], win_i, lambda i, o=off, n=len(sizes): self.pick_window(i, o, n), True),
+                    ('choice', 'Pixel scaling', 'Sharp keeps every pixel crisp; Fill uses all the room',
+                     ['Auto', 'Sharp', 'Fill'], SCALINGS.index(scl) if scl in SCALINGS else 0,
+                     lambda i: self.set_opt('scaling', SCALINGS[i]), True),
                     ('choice', 'Interface size', ui_desc, [str(p) for p in UI_SCALES],
                      UI_SCALES.index(st['ui_scale']) if st['ui_scale'] in UI_SCALES else UI_SCALES.index(100),
                      lambda i: self.set_opt('ui_scale', UI_SCALES[i]), True),
-                    ('choice', 'Frame rate limit', 'Lower it to save battery', [str(v) for v in FPS_CHOICES],
-                     FPS_CHOICES.index(st['fps']) if st['fps'] in FPS_CHOICES else 1,
+                    ('choice', 'Frame rate', 'Screen matches your monitor, smooth and tear-free',
+                     FPS_LABELS, FPS_CHOICES.index(st['fps']) if st['fps'] in FPS_CHOICES else 4,
                      lambda i: self.set_opt('fps', FPS_CHOICES[i]), True),
                     ('choice', 'Show frame rate', 'A small counter in the corner', ['Off', 'On'],
                      int(bool(st['show_fps'])), lambda i: self.set_opt('show_fps', bool(i)), True),
@@ -5690,9 +5851,9 @@ class Game:
                      lambda i: self.set_opt('shake', SHAKE_LEVELS[i]), True),
                     ('choice', 'Camera zoom while fishing', 'Leans in on the bobber and the fight', ['Off', 'On'],
                      int(bool(st['zoom'])), lambda i: self.set_opt('zoom', bool(i)), True),
-                    ('choice', 'Light effects', 'Sunbeams, glow and mist. Simple runs lighter',
-                     ['Simple', 'Full'], int(st.get('fx', 'full') == 'full'),
-                     lambda i: self.set_opt('fx', ('simple', 'full')[i]), True)]
+                    ('choice', 'Light effects', 'Sunbeams, glow and mist. Auto eases off on slow PCs',
+                     ['Simple', 'Auto', 'Full'], FX_LEVELS.index(st.get('fx', 'auto')) if st.get('fx') in FX_LEVELS
+                     else 1, lambda i: self.set_opt('fx', FX_LEVELS[i]), True)]
         if tab == 'game':
             return [('choice', 'Relaxed reeling', 'Wider arc, longer warnings, slower leaps', ['Off', 'On'],
                      int(self.assist()), lambda i: self.set_opt('assist', bool(i)), True),
@@ -5861,6 +6022,15 @@ class Game:
         ui.button(s, (rect.x + 56, by, 230, 50), 'Default keys', self.reset_binds, nav=True,
                   enabled=b.changed())
 
+    def pick_window(self, i, off, n):
+        if i == n:
+            self.set_fullscreen(True)
+            self.audio.play('ui', 0.6)
+            return
+        if self.fullscreen:
+            self.set_fullscreen(False)
+        self.set_window_size(i + off)
+
     def set_opt_tab(self, t):
         self.opt_tab = t
         self.audio.play('ui', 0.5)
@@ -5873,7 +6043,7 @@ class Game:
 
     def reset_tab(self):
         keys = {'audio': ('master', 'music', 'sfx', 'amb', 'radio_vol'),
-                'display': ('fps', 'show_fps', 'shake', 'zoom', 'ui_scale', 'fx'),
+                'display': ('fps', 'show_fps', 'shake', 'zoom', 'ui_scale', 'fx', 'scaling'),
                 'game': ('assist', 'speed', 'clock24', 'hud', 'hints', 'bg_pause', 'tutorial', 'rumble')}.get(self.opt_tab, ())
         for k in keys:
             self.settings[k] = DEFAULT_SETTINGS[k]

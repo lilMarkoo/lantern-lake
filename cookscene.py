@@ -19,6 +19,7 @@ import pygame
 
 import art
 import kitchen as K
+import look as looks
 import town
 import ui as U
 from art import darken, lighten, lerp_c
@@ -220,30 +221,42 @@ def build_room(season, minute, copper, g=None):
     return s
 
 
-def draw_cat(s, x, fy, t, face=1, happy=False, ears_down=False):
-    """Biscuit sitting, in the room's pixel scale."""
+def draw_cat(s, x, fy, t, face=1, happy=False, ears_down=False, coat=None, pattern=None):
+    """Biscuit sitting, in the room's pixel scale. coat is look.coat()'s colours (her ginger tabby by default),
+    pattern the coat's id for the calico patches and siamese points."""
     tmp = pygame.Surface((26, 24), pygame.SRCALPHA)
-    orange, white, dark = (232, 150, 78), (250, 240, 228), (192, 110, 56)
+    orange, white, dark, ear = coat or looks.coat(looks.DEFAULT)
+    pts_c = dark if pattern == 'siamese' else orange
     cx, y = 12, 22
     sw = math.sin(t * (7.0 if happy else 2.0)) * 3
     pts = [(cx - 5, y - 2), (cx - 8, y - 3), (cx - 10 + sw * 0.3, y - 6), (cx - 10 + sw, y - 10)]
-    pygame.draw.lines(tmp, orange, False, pts, 2)
+    pygame.draw.lines(tmp, pts_c, False, pts, 2)
     pygame.draw.ellipse(tmp, orange, (cx - 6, y - 9, 11, 9))
-    for i in (-4, -2):
-        tmp.fill(dark, (cx + i, y - 8, 1, 3))
+    if pattern == 'calico':
+        tmp.fill(dark, (cx - 5, y - 7, 3, 3))
+        tmp.fill((60, 54, 58), (cx - 2, y - 9, 3, 2))
+    elif pattern != 'siamese':
+        for i in (-4, -2):
+            tmp.fill(dark, (cx + i, y - 8, 1, 3))
     tmp.fill(white, (cx + 1, y - 6, 3, 5))
     hx, hy = cx + 3, y - 12
     pygame.draw.circle(tmp, orange, (hx, hy), 4)
     if ears_down:
-        pygame.draw.polygon(tmp, orange, [(hx - 4, hy - 1), (hx - 6, hy - 3), (hx - 2, hy - 3)])
-        pygame.draw.polygon(tmp, orange, [(hx + 4, hy - 1), (hx + 6, hy - 3), (hx + 2, hy - 3)])
+        pygame.draw.polygon(tmp, pts_c, [(hx - 4, hy - 1), (hx - 6, hy - 3), (hx - 2, hy - 3)])
+        pygame.draw.polygon(tmp, pts_c, [(hx + 4, hy - 1), (hx + 6, hy - 3), (hx + 2, hy - 3)])
     else:
-        pygame.draw.polygon(tmp, orange, [(hx - 4, hy - 2), (hx - 3, hy - 6), (hx - 1, hy - 3)])
-        pygame.draw.polygon(tmp, orange, [(hx + 4, hy - 2), (hx + 3, hy - 6), (hx + 1, hy - 3)])
-        tmp.set_at((hx - 3, hy - 4), (240, 170, 160))
-        tmp.set_at((hx + 3, hy - 4), (240, 170, 160))
+        pygame.draw.polygon(tmp, pts_c, [(hx - 4, hy - 2), (hx - 3, hy - 6), (hx - 1, hy - 3)])
+        pygame.draw.polygon(tmp, pts_c, [(hx + 4, hy - 2), (hx + 3, hy - 6), (hx + 1, hy - 3)])
+        tmp.set_at((hx - 3, hy - 4), ear)
+        tmp.set_at((hx + 3, hy - 4), ear)
+    if pattern == 'calico':
+        tmp.fill(dark, (hx - 3, hy - 3, 3, 2))
+    elif pattern == 'siamese':
+        tmp.fill(lerp_c(orange, dark, 0.45), (hx - 2, hy, 5, 2))
     tmp.fill(white, (hx - 1, hy + 1, 3, 2))
-    eye = (60, 40, 34)
+    eye = (60, 40, 34) if sum(orange) > 330 else (206, 220, 104)
+    if pattern == 'siamese':
+        eye = (70, 130, 210)
     if happy:
         tmp.fill(eye, (hx - 2, hy - 1, 2, 1))
         tmp.fill(eye, (hx + 1, hy - 1, 2, 1))
@@ -884,7 +897,7 @@ class CookScene:
         if self.cat_hop:
             face = 1
         draw_cat(s, cx, cy, t, face, self.cat_happy > 0, self.result is not None and self.result['stars'] == 0
-                 and self.state == 'plate')
+                 and self.state == 'plate', coat=looks.cat_colors(self.g), pattern=looks.of(self.g)['coat'])
         self._draw_player(s)
         self._draw_parts(s)
         # light: dim the room by the time of day, then the lamp and the stove glow
@@ -1102,9 +1115,9 @@ class CookScene:
 
     def _draw_player(self, s):
         g = self.g
-        from actors import SHIRT
         season = g.env.season
-        shirt = SHIRT[season]
+        lk = looks.of(g)
+        shirt = looks.shirt(lk, season)
         x = int(round(self.px))
         face = self.pface
         fy = FLOOR
@@ -1114,8 +1127,8 @@ class CookScene:
             s.fill((150, 100, 64), (STOOL_X - 6, FLOOR - 5, 12, 2))
             s.fill((120, 80, 52), (STOOL_X - 5, FLOOR - 3, 2, 3))
             s.fill((120, 80, 52), (STOOL_X + 3, FLOOR - 3, 2, 3))
-        town.walker(s, x, fy, face, self.pstep, shirt, (112, 72, 52), g.hat, season)
-        skin = (240, 202, 172)
+        town.walker(s, x, fy, face, self.pstep, shirt, looks.hair(lk), g.hat, season, look=lk)
+        skin = looks.skin(lk)
         arm = darken(shirt, 0.2)
         sh = (x + face, fy - 13)
         hand = None

@@ -13,6 +13,7 @@ import pygame
 
 import actors
 import art
+import look as looks
 import ui as U
 from art import lerp_c, darken, add_glow
 from data import FISH, FISH_BY_ID, RARITY_COLORS
@@ -809,11 +810,11 @@ class AquariumScene:
                     actors.draw_bubble(frame, x + 1, FLOOR - 32, v['em'], t)
         x = int(self.x - sc)
         if self.sitting is not None:
-            town.walker(frame, x, FLOOR - 6, self.face, 0, actors.SHIRT[season], (112, 72, 52), g.hat, season)
+            town.walker(frame, x, FLOOR - 6, self.face, 0, *looks.player_colors(g, season), g.hat, season, look=looks.of(g))
             self._bench(frame, self.sitting - sc, back=False)
         else:
             town.ground_shadow(frame, x, FLOOR, 13, 60)
-            town.walker(frame, x, FLOOR, self.face, self.step, actors.SHIRT[season], (112, 72, 52), g.hat, season)
+            town.walker(frame, x, FLOOR, self.face, self.step, *looks.player_colors(g, season), g.hat, season, look=looks.of(g))
         for p in self.fx:
             frame.fill(p[5], (int(p[0] - sc), int(p[1]), 2, 2))
 

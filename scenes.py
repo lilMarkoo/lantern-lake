@@ -22,6 +22,7 @@ import pygame
 
 import actors
 import art
+import look as looks
 import town as T
 import ui as U
 from art import darken, lerp_c
@@ -439,7 +440,7 @@ class Cutscene:
 
 def you_portrait(g, s, center, scale=4):
     tmp = pygame.Surface((26, 40), pygame.SRCALPHA)
-    T.walker(tmp, 13, 38, 1, 0, actors.SHIRT[g.env.season], (112, 72, 52), g.hat, g.env.season)
+    T.walker(tmp, 13, 38, 1, 0, *looks.player_colors(g, g.env.season), g.hat, g.env.season, look=looks.of(g))
     big = pygame.transform.scale(tmp, (26 * scale, 40 * scale))
     s.blit(big, big.get_rect(center=center))
 
@@ -559,12 +560,12 @@ def paint_portrait(g, s, rect, scale=None):
     s.fill((150, 104, 70), (rect.x, rect.bottom - rect.h // 6, rect.w, rect.h // 6))
     sc = scale or max(1, rect.h // 60)
     tmp = pygame.Surface((26, 40), pygame.SRCALPHA)
-    T.walker(tmp, 13, 38, 1, 0, actors.SHIRT[g.env.season], (112, 72, 52), g.hat, g.env.season)
+    T.walker(tmp, 13, 38, 1, 0, *looks.player_colors(g, g.env.season), g.hat, g.env.season, look=looks.of(g))
     big = pygame.transform.scale(tmp, (26 * sc, 40 * sc))
     s.blit(big, big.get_rect(midbottom=(rect.x + int(rect.w * 0.38), rect.bottom - rect.h // 6 + sc * 2)))
     cat = pygame.Surface((26, 24), pygame.SRCALPHA)
     import cookscene
-    cookscene.draw_cat(cat, 12, 22, 0.0, -1, True)
+    cookscene.draw_cat(cat, 12, 22, 0.0, -1, True, coat=looks.cat_colors(g), pattern=looks.of(g)['coat'])
     bigc = pygame.transform.scale(cat, (26 * sc, 24 * sc))
     s.blit(bigc, bigc.get_rect(midbottom=(rect.x + int(rect.w * 0.6), rect.bottom - rect.h // 6 + sc)))
 

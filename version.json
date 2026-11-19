@@ -1,8 +1,10 @@
 {
-  "version": "0.3.6",
+  "version": "0.3.7",
   "notes": [
-    "Play together over the internet is easier: open your lake online and get a short room code like K7Q2-M9XT. Friends type it to join. No router settings, and it works behind any home network.",
-    "It runs through the new Lantern Lake online server in Europe, which only passes messages between you and your friends and keeps nothing. If it can't be reached, the game falls back to the old router method.",
-    "If your connection to the online server drops for a moment, your lake reconnects with the same code and your friends stay in."
+    "Make your own angler: a new character creator when you start a game. Pick skin, hair, eyes, beard, outfit and colours that change with the seasons, a rod charm, a fishing mood and your cat's coat, and preview them on the dock at any time of day. Change it any time from the cabin's Wardrobe. Friends see your look when you play together.",
+    "Sharper picture: the game no longer goes blurry after changing the window size, going fullscreen or moving to another monitor. New Options > Display > Pixel scaling (Auto, Sharp or Fill).",
+    "Smoother and faster: the game now draws through your graphics card and holds 144 fps on most PCs. Frame rate has a new Screen setting that matches your monitor with no tearing.",
+    "Light effects has a new Auto setting: if your computer falls behind it switches to Simple on its own, and back again when there's room.",
+    "Tip: to get the faster graphics-card drawing, download the full game once from the release page. An update from an older copy stays sharp but draws on the CPU."
   ]
 }

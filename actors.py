@@ -5,6 +5,9 @@ import pygame
 
 from art import DECK_Y, POLES, lerp_c, darken, lighten, bank_top
 from fishing import PLAYER_X, HAND
+import look as looks
+
+LOOK_DEFAULT = looks.DEFAULT
 
 CAT_X = 214
 SHIRT = {0: (214, 128, 112), 1: (236, 196, 96), 2: (196, 98, 66), 3: (122, 144, 196)}
@@ -23,34 +26,181 @@ def light_bulbs():
     return out
 
 
-def draw_person(s, x, fy, shirt, hair, hat, season, breathe, cheer=False):
-    """An angler standing with their feet on y=fy. Returns the y their body is drawn from (for arms, hats)."""
-    boot, pants = (84, 58, 42), (72, 92, 140)
-    skin = (240, 202, 172)
+def draw_person(s, x, fy, shirt, hair, hat, season, breathe, cheer=False, look=None, pose=''):
+    """An angler standing with their feet on y=fy. Returns the y their body is drawn from (for arms, hats).
+
+    look is a look.py dict (you, or a friend); without one they're drawn the way the village folk always are.
+    pose holds little idle flags: 'up' (gazing up), 'tap' (front foot raised), 'yawn', 'shut' (eyes closed).
+    """
+    lk = look or LOOK_DEFAULT
+    pants = looks.pants(lk)
+    skin = looks.skin(lk)
     by = fy - breathe
-    # legs
-    s.fill(pants, (x - 3, fy - 7, 2, 6))
-    s.fill(pants, (x + 1, fy - 7, 2, 6))
-    s.fill(boot, (x - 4, fy - 2, 3, 2))
-    s.fill(boot, (x + 1, fy - 2, 3, 2))
-    # body
-    s.fill(shirt, (x - 4, by - 15, 8, 9))
-    s.fill(pants, (x - 3, by - 9, 6, 3))
-    s.fill(darken(pants, 0.15), (x - 3, by - 14, 1, 6))
-    s.fill(darken(pants, 0.15), (x + 2, by - 14, 1, 6))
-    if season == 3:
-        s.fill((200, 70, 70), (x - 4, by - 16, 9, 2))
-        s.fill((200, 70, 70), (x - 5, by - 15, 2, 4))
+    _legs(s, x, fy, pants, lk['boots'], looks.boots(lk), 'tap' in pose)
+    _top(s, x, by, shirt, pants, lk, season)
     # head
     s.fill(skin, (x - 3, by - 21, 7, 6))
-    s.fill(hair, (x - 4, by - 21, 3, 5))
-    s.set_at((x + 2, by - 19), (50, 40, 40))
-    if cheer:
-        s.set_at((x + 1, by - 16), (180, 90, 80))
-        s.set_at((x + 2, by - 16), (180, 90, 80))
-    s.fill((236, 160, 150), (x + 1, by - 17, 2, 1))
-    draw_hat(s, hat, x, by, season, hair)
+    _hair_front(s, x, by, hair, lk['hstyle'])
+    _face(s, x, by, lk, hair, skin, cheer, pose)
+    draw_hat(s, hat, x, by, season, hair, lk['hstyle'])
     return by
+
+
+def _legs(s, x, fy, pants, kind, boot, tap):
+    f = 1 if tap else 0
+    s.fill(pants, (x - 3, fy - 7, 2, 6))
+    s.fill(pants, (x + 1, fy - 7 - f, 2, 6))
+    if kind in ('yellow', 'red', 'green'):            # wellies come up the shin
+        for bx, up in ((x - 4, 0), (x + 1, f)):
+            s.fill(boot, (bx, fy - 4 - up, 3, 4))
+            s.fill(lighten(boot, 0.25), (bx, fy - 4 - up, 3, 1))
+    elif kind == 'white':
+        for bx, up in ((x - 4, 0), (x + 1, f)):
+            s.fill(boot, (bx, fy - 2 - up, 3, 2))
+            s.fill((150, 150, 158), (bx, fy - 1 - up, 3, 1))
+    else:
+        s.fill(boot, (x - 4, fy - 2, 3, 2))
+        s.fill(boot, (x + 1, fy - 2 - f, 3, 2))
+
+
+def _top(s, x, by, shirt, pants, lk, season):
+    top = lk['top']
+    if top == 'raincoat':
+        s.fill(shirt, (x - 5, by - 15, 10, 11))
+        s.fill(darken(shirt, 0.18), (x - 5, by - 5, 10, 1))
+        s.fill(darken(shirt, 0.12), (x - 5, by - 15, 1, 10))
+        s.fill(darken(shirt, 0.18), (x - 6, by - 17, 2, 4))              # the hood, down
+        for yy in (by - 13, by - 10, by - 7):
+            s.set_at((x + 2, yy), darken(shirt, 0.35))
+    elif top == 'tee':
+        s.fill(shirt, (x - 4, by - 15, 8, 8))
+        acc = looks.accent(lk)
+        s.fill(acc, (x - 4, by - 13, 8, 1))
+        s.fill(acc, (x - 4, by - 10, 8, 1))
+        s.fill(darken(pants, 0.25), (x - 3, by - 8, 6, 1))                 # belt
+        s.set_at((x + 1, by - 8), (226, 196, 110))
+    elif top == 'sweater':
+        s.fill(shirt, (x - 4, by - 15, 8, 9))
+        s.fill(lighten(shirt, 0.2), (x - 3, by - 15, 6, 1))                 # roll neck
+        s.fill(darken(shirt, 0.18), (x - 4, by - 7, 8, 1))                  # ribbed hem
+        acc = looks.accent(lk)
+        for i in range(0, 8, 2):
+            s.set_at((x - 4 + i, by - 12), acc)
+            s.set_at((x - 3 + i, by - 11), acc)
+    elif top == 'vest':
+        s.fill(shirt, (x - 4, by - 15, 8, 9))
+        vest = (134, 128, 90)
+        s.fill(vest, (x - 4, by - 15, 3, 8))
+        s.fill(vest, (x + 1, by - 15, 3, 8))
+        s.fill(darken(vest, 0.25), (x - 3, by - 12, 2, 2))                   # pockets
+        s.fill(darken(vest, 0.25), (x + 2, by - 12, 2, 2))
+        s.set_at((x - 2, by - 14), looks.accent(lk))                         # a fly hooked on the vest
+        s.fill(darken(pants, 0.25), (x - 3, by - 7, 6, 1))
+    else:                                                                    # overalls
+        s.fill(shirt, (x - 4, by - 15, 8, 9))
+        s.fill(pants, (x - 3, by - 9, 6, 3))
+        s.fill(darken(pants, 0.15), (x - 3, by - 14, 1, 6))
+        s.fill(darken(pants, 0.15), (x + 2, by - 14, 1, 6))
+    if season == 3:
+        sc = looks.scarf(lk)
+        s.fill(sc, (x - 4, by - 16, 9, 2))
+        s.fill(sc, (x - 5, by - 15, 2, 4))
+
+
+def _hair_front(s, x, by, hair, style):
+    """Hair as seen side-on, facing right: drawn over the head, under the hat."""
+    dk = darken(hair, 0.2)
+    if style == 'short':
+        s.fill(hair, (x - 4, by - 21, 3, 3))
+        s.set_at((x - 2, by - 18), hair)
+    elif style == 'long':
+        s.fill(hair, (x - 4, by - 21, 3, 5))
+        s.fill(hair, (x - 5, by - 20, 2, 9))
+        s.fill(dk, (x - 5, by - 13, 2, 1))
+        s.set_at((x - 4, by - 18), lighten(hair, 0.18))
+    elif style == 'ponytail':
+        s.fill(hair, (x - 4, by - 21, 3, 5))
+        s.fill(hair, (x - 7, by - 21, 2, 2))
+        s.fill(hair, (x - 8, by - 20, 2, 4))
+        s.set_at((x - 7, by - 16), hair)
+        s.set_at((x - 5, by - 20), (230, 110, 120))                         # hair tie
+    elif style == 'bun':
+        s.fill(hair, (x - 4, by - 21, 3, 5))
+        s.fill(hair, (x - 7, by - 22, 3, 3))
+        s.set_at((x - 7, by - 22), lighten(hair, 0.2))
+    elif style == 'curly':
+        s.fill(hair, (x - 5, by - 22, 4, 7))
+        s.fill(hair, (x - 6, by - 20, 1, 3))
+        for px, py in ((x - 5, by - 21), (x - 3, by - 19), (x - 5, by - 18), (x - 3, by - 16), (x - 6, by - 19)):
+            s.set_at((px, py), dk)
+        s.set_at((x - 4, by - 20), lighten(hair, 0.2))
+    elif style == 'buzz':
+        s.fill(dk, (x - 3, by - 21, 2, 3))
+        s.set_at((x - 1, by - 21), dk)
+    elif style == 'braids':
+        s.fill(hair, (x - 4, by - 21, 3, 5))
+        for i in range(6):
+            s.set_at((x - 4, by - 16 + i), hair if i % 2 == 0 else dk)
+            s.set_at((x - 5, by - 15 + i), dk if i % 2 == 0 else hair)
+        s.set_at((x - 4, by - 10), (230, 110, 120))
+    else:                                                                    # side part
+        s.fill(hair, (x - 4, by - 21, 3, 5))
+
+
+def _face(s, x, by, lk, hair, skin, cheer, pose):
+    eye = looks.eye(lk)
+    up = 1 if 'up' in pose else 0
+    shut = 'shut' in pose or 'yawn' in pose
+    kind = lk['eyes']
+    ey = by - 19 - up
+    if shut and kind != 'shades':
+        s.fill(eye, (x + 1, by - 19, 2, 1))
+    elif kind == 'happy':
+        s.set_at((x + 1, ey), eye)
+        s.set_at((x + 2, ey - 1), eye)
+        s.set_at((x + 3, ey), eye)
+    elif kind == 'sleepy':
+        s.fill(eye, (x + 1, ey, 2, 1))
+        s.set_at((x + 2, ey + 1), eye)
+    else:
+        s.set_at((x + 2, ey), eye)
+    if kind == 'glasses':
+        fr = (64, 52, 52)
+        s.fill(fr, (x + 1, by - 20, 3, 1))
+        s.set_at((x + 1, by - 19), fr)
+        s.set_at((x + 3, by - 19), fr)
+        s.fill(fr, (x - 1, by - 20, 2, 1))
+        s.set_at((x + 2, by - 20), (150, 190, 220))
+    elif kind == 'shades':
+        s.fill((26, 26, 34), (x, by - 20, 4, 2))
+        s.set_at((x + 3, by - 20), (130, 160, 200))
+        s.set_at((x - 1, by - 20), (26, 26, 34))
+    if lk['freckles']:
+        fk = darken(skin, 0.22)
+        s.set_at((x + 1, by - 18), fk)
+        s.set_at((x + 3, by - 18), fk)
+        s.set_at((x, by - 17), fk)
+    if lk['blush']:
+        s.fill(looks.blush(lk), (x + 1, by - 17, 2, 1))
+    beard = lk['beard']
+    if beard == 'stubble':
+        st = lerp_c(skin, hair, 0.45)
+        for px, py in ((x, by - 16), (x + 2, by - 16), (x + 1, by - 17), (x + 3, by - 17), (x - 1, by - 17)):
+            s.set_at((px, py), st)
+    elif beard == 'moustache':
+        s.fill(hair, (x + 2, by - 17, 2, 1))
+        s.set_at((x + 1, by - 17), darken(hair, 0.15))
+    elif beard == 'beard':
+        s.fill(hair, (x - 1, by - 17, 5, 2))
+        s.fill(hair, (x, by - 15, 3, 1))
+        s.set_at((x + 3, by - 18), hair)
+        s.set_at((x + 1, by - 16), darken(hair, 0.2))
+    if 'yawn' in pose:
+        s.fill((120, 50, 60), (x + 2, by - 17, 1, 2))
+    elif cheer:
+        mc = (180, 90, 80) if beard != 'beard' else lighten(hair, 0.3)
+        s.set_at((x + 1, by - 16), mc)
+        s.set_at((x + 2, by - 16), mc)
 
 
 def rod_points(hand, angle, bend, length, target):
@@ -93,15 +243,19 @@ def draw_player(s, g, t):
     breathe = 1 if math.sin(t * 1.6) > 0.6 else 0
     if st == 'caught':
         breathe = -1 if math.sin(t * 10) > 0 else 0
-    shirt = SHIRT[season]
+    lk = looks.of(g)
+    shirt, hair, skin = looks.shirt(lk, season), looks.hair(lk), looks.skin(lk)
+    night = _night(g)
     react = getattr(f, 'react', None)
     hop = 0
     if react and react[0] == 'hop':
         hop = int(round(math.sin(math.pi * min(1.0, react[1] / 0.35)) * 3))      # a start: something bit!
     elif react and react[0] == 'slump':
         breathe = -1                                                               # shoulders drop
-    by = draw_person(s, x, fy - hop, shirt, (112, 72, 52), getattr(g, 'hat', 'straw'), season, breathe,
-                     st == 'caught')
+    idle = st == 'waiting' and not react
+    pose = idle_pose(lk['mood'], t, night) if idle else ''
+    by = draw_person(s, x, fy - hop, shirt, hair, getattr(g, 'hat', 'straw'), season, breathe,
+                     st == 'caught', look=lk, pose=pose)
     if react and react[0] == 'slump' and react[1] > 0.3:
         # a little sigh drifting up
         k = react[1] - 0.3
@@ -111,9 +265,11 @@ def draw_player(s, g, t):
     # arm reaching for the rod handle
     hx, hy = HAND
     pygame.draw.line(s, shirt, (x + 1, by - 13), (hx - 1, hy + breathe))
-    s.fill((240, 202, 172), (hx - 1, hy - 1 + breathe, 2, 2))
+    s.fill(skin, (hx - 1, hy - 1 + breathe, 2, 2))
     if f.rod_pts:
         draw_rod(s, f.rod_pts, g.rod_spec()['color'])
+        agit = 1.0 if st in ('bite', 'fight') else 0.5 if st in ('caught', 'casting', 'fly') else 0.0
+        draw_charm(s, lk['charm'], f.rod_pts[3], t, agit, night)
         if st not in ('caught', 'idle', 'charging', 'fly'):
             # the reel just above your hand, and your other hand turning its handle
             rx, ry = f.rod_pts[1]
@@ -123,15 +279,198 @@ def draw_player(s, g, t):
             cx = rx + int(round(math.cos(f.crank) * 2))
             cy = ry + int(round(math.sin(f.crank) * 2))
             pygame.draw.line(s, darken(shirt, 0.12), (x + 2, by - 12), (cx, cy + 1))
-            s.fill((240, 202, 172), (cx, cy, 2, 2))
+            s.fill(skin, (cx, cy, 2, 2))
     # fish held up
     if st == 'caught' and f.catch:
         draw_held_fish(s, f.catch['spec'], hx, hy)
+    if idle and not getattr(g, 'emote', None):
+        draw_mood(s, lk['mood'], x, by, t, night)
 
 
-def draw_hat(s, hat, x, by, season, hair):
+def _night(g):
+    try:
+        return bool(g.night_now())
+    except AttributeError:
+        return False
+
+
+# ---------------------------------------------------------------- your keepsake and your way of waiting
+_GLOW = {}
+
+
+def _glow(r, col):
+    key = (r, col)
+    if key not in _GLOW:
+        surf = pygame.Surface((r * 2 + 1, r * 2 + 1), pygame.SRCALPHA)
+        for i in range(r, 0, -1):
+            a = int(70 * (1 - i / (r + 1)) ** 1.5)
+            pygame.draw.circle(surf, col + (a,), (r, r), i)
+        _GLOW[key] = surf
+    return _GLOW[key]
+
+
+def charm_swing(t, agit):
+    """How far the keepsake swings from straight down (radians): a slow sway, and a shiver when fish bite."""
+    return math.sin(t * 1.8) * 0.28 + math.sin(t * 2.9 + 1) * 0.08 + agit * math.sin(t * 15) * 0.55
+
+
+def draw_charm(s, kind, anchor, t, agit=0.0, night=False, length=5):
+    """The keepsake tied to your rod, hanging on a short thread from `anchor`."""
+    if kind == 'none' or not anchor:
+        return
+    a = charm_swing(t, agit)
+    ax, ay = anchor
+    ex, ey = int(round(ax + math.sin(a) * length)), int(round(ay + math.cos(a) * length))
+    pygame.draw.line(s, (214, 210, 196), (int(ax), int(ay)), (ex, ey))
+    draw_charm_icon(s, kind, ex, ey + 1, t, agit, night)
+
+
+def draw_charm_icon(s, kind, ex, ey, t, agit=0.0, night=False):
+    """The charm itself, hung from its top at (ex, ey)."""
+    if kind == 'bell':
+        g, d = (244, 204, 76), (178, 132, 40)
+        s.set_at((ex, ey), d)
+        s.fill(g, (ex - 1, ey + 1, 3, 2))
+        s.fill(d, (ex - 1, ey + 3, 3, 1))
+        s.set_at((ex - 1, ey + 1), (255, 240, 170))
+        if agit > 0.6 and int(t * 12) % 2:
+            for dx in (-3, 3):
+                s.set_at((ex + dx, ey + 1), (255, 246, 200))
+                s.set_at((ex + dx + (1 if dx > 0 else -1), ey), (255, 246, 200))
+    elif kind == 'feather':
+        w = (242, 242, 236)
+        for i, (dx, dy) in enumerate(((0, 0), (0, 1), (1, 2), (1, 3), (1, 4), (2, 5))):
+            s.set_at((ex + dx, ey + dy), w)
+        for dx, dy in ((-1, 2), (-1, 3), (0, 4), (2, 3), (2, 2)):
+            s.set_at((ex + dx, ey + dy), (190, 196, 204))
+        s.set_at((ex + 2, ey + 6), (70, 120, 150))
+    elif kind == 'shell':
+        p, d = (246, 186, 180), (214, 128, 128)
+        s.set_at((ex, ey), d)
+        s.fill(p, (ex - 1, ey + 1, 3, 2))
+        s.set_at((ex - 2, ey + 2), p)
+        s.set_at((ex + 2, ey + 2), p)
+        s.set_at((ex, ey + 2), d)
+        s.fill(d, (ex - 1, ey + 3, 3, 1))
+    elif kind == 'ribbon':
+        r, d = (224, 64, 72), (160, 40, 52)
+        fl = int(math.sin(t * 7 + agit * 3) * 1.2)
+        s.set_at((ex, ey), d)
+        s.set_at((ex - 1, ey - 1), r)
+        s.set_at((ex - 2, ey), r)
+        s.set_at((ex + 1, ey - 1), r)
+        s.set_at((ex + 2, ey), r)
+        s.set_at((ex - 1, ey + 1), r)
+        s.set_at((ex - 1 + fl, ey + 2), r)
+        s.set_at((ex + 1, ey + 1), r)
+        s.set_at((ex + 1 + fl, ey + 3), r)
+    elif kind == 'clover':
+        gn, d = (96, 176, 90), (60, 120, 60)
+        s.set_at((ex, ey), d)
+        for dx, dy in ((-1, 1), (1, 1), (-1, 3), (1, 3)):
+            s.set_at((ex + dx, ey + dy), gn)
+        s.set_at((ex, ey + 2), lighten(gn, 0.3))
+        s.set_at((ex + 1, ey + 4), d)
+    elif kind == 'star':
+        y0 = (250, 214, 90) if not night else (255, 240, 170)
+        cy = ey + 2
+        s.set_at((ex, ey), (200, 160, 70))
+        s.fill(y0, (ex - 1, cy, 3, 1))
+        s.fill(y0, (ex, cy - 1, 1, 3))
+        if night:
+            s.blit(_glow(5, (255, 230, 150)), (ex - 5, cy - 5))
+            k = int(t * 3) % 4
+            if k == 0:
+                s.set_at((ex - 2, cy - 2), (255, 255, 230))
+                s.set_at((ex + 2, cy + 2), (255, 255, 230))
+            elif k == 2:
+                s.set_at((ex + 2, cy - 2), (255, 255, 230))
+                s.set_at((ex - 2, cy + 2), (255, 255, 230))
+    elif kind == 'lantern':
+        fr, lit = (70, 56, 50), ((255, 214, 120) if night else (226, 180, 100))
+        if night:
+            fl = 0.8 + 0.2 * math.sin(t * 9) * math.sin(t * 3.1)
+            s.blit(_glow(8, (255, 196, 110)), (ex - 8, ey - 6), special_flags=0)
+            if fl > 0.85:
+                s.blit(_glow(4, (255, 230, 170)), (ex - 4, ey - 2))
+        s.set_at((ex, ey), fr)
+        s.fill(fr, (ex - 1, ey + 1, 3, 1))
+        s.fill(lit, (ex - 1, ey + 2, 3, 2))
+        s.fill(fr, (ex - 1, ey + 4, 3, 1))
+
+
+def idle_pose(mood, t, night):
+    """The small pose flags a mood gives you while you wait for a bite."""
+    if mood == 'stargazer':
+        return 'up'
+    if mood == 'fidget':
+        return 'tap' if (t % 5.0) < 2.0 and math.sin(t * 12) > 0 else ''
+    if mood == 'dozy':
+        if night:
+            return 'shut'
+        return 'yawn' if (t % 9.0) < 1.1 else ''
+    return ''
+
+
+def _note(s, x, y, col):
+    s.fill(col, (x, y + 2, 2, 1))
+    s.fill(col, (x + 1, y, 1, 2))
+    s.set_at((x + 2, y), col)
+
+
+def _zed(s, x, y, col):
+    s.fill(col, (x, y, 3, 1))
+    s.set_at((x + 1, y + 1), col)
+    s.fill(col, (x, y + 2, 3, 1))
+
+
+def draw_mood(s, mood, x, by, t, night):
+    """What your way of waiting looks like: notes, stars, zeds, a word with Biscuit."""
+    if mood == 'hummer':
+        for i in range(2):
+            p = ((t + i * 0.9) % 1.8) / 1.8
+            if p < 0.85:
+                nx = x + 4 + int(p * 7 + math.sin(p * 9) * 1.5)
+                ny = by - 25 - int(p * 11)
+                _note(s, nx, ny, (236, 226, 250) if i == 0 else (250, 220, 200))
+    elif mood == 'stargazer' and night:
+        cyc = int(t / 3.2)
+        p = (t % 3.2) / 3.2
+        if p < 0.4:
+            rx = x + 8 + (cyc * 37) % 34
+            ry = by - 40 - (cyc * 23) % 22
+            c = (255, 250, 220)
+            s.set_at((rx, ry), c)
+            if 0.08 < p < 0.32:
+                for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                    s.set_at((rx + dx, ry + dy), (210, 220, 255))
+    elif mood == 'dozy' and night:
+        for i in range(2):
+            p = ((t + i * 1.2) % 2.4) / 2.4
+            if p < 0.85:
+                _zed(s, x + 4 + int(p * 6), by - 26 - int(p * 10), (226, 232, 250))
+    elif mood == 'chatty':
+        if (t % 7.0) < 2.4:
+            draw_bubble(s, x - 4, by - 24, 'dots', t)
+
+
+def draw_hat(s, hat, x, by, season, hair, hstyle='side'):
     if hat == 'none':
-        s.fill(hair, (x - 3, by - 22, 7, 2))
+        if hstyle == 'buzz':
+            s.fill(darken(hair, 0.2), (x - 3, by - 21, 7, 1))
+            s.fill(darken(hair, 0.2), (x - 2, by - 22, 5, 1))
+        elif hstyle == 'curly':
+            s.fill(hair, (x - 4, by - 23, 9, 3))
+            for i in range(-4, 5, 2):
+                s.set_at((x + i, by - 24), hair)
+                s.set_at((x + i + 1, by - 22), darken(hair, 0.2))
+        else:
+            s.fill(hair, (x - 3, by - 22, 7, 2))
+            if hstyle == 'bun':
+                s.fill(hair, (x - 2, by - 25, 4, 3))
+                s.set_at((x - 1, by - 25), lighten(hair, 0.2))
+            elif hstyle == 'long':
+                s.set_at((x + 3, by - 21), hair)                              # a fringe tip
         return
     if hat == 'chef':
         s.fill((250, 250, 246), (x - 3, by - 24, 7, 3))
@@ -240,7 +579,8 @@ TRICK_TIME = 1.6
 def draw_cat(s, g, t, x=CAT_X, fy=DECK_Y, bed=None, sleep=None, face=1, walk=0.0, trick=True, look=None):
     """Biscuit. By default she sits on the dock; the cabin room and Fernwick pass their own spot."""
     cat = g.cat
-    orange, white, dark = (232, 150, 78), (250, 240, 228), (192, 110, 56)
+    orange, white, dark, ear = looks.cat_colors(g)
+    coat = looks.of(g)['coat']
     sleeping = cat['sleep'] if sleep is None else sleep
     if bed is None:
         bed = g.has('catbed')
@@ -284,10 +624,13 @@ def draw_cat(s, g, t, x=CAT_X, fy=DECK_Y, bed=None, sleep=None, face=1, walk=0.0
         pygame.draw.ellipse(s, orange, (x - 7, fy - 6, 14, 6))
         pygame.draw.ellipse(s, dark, (x - 5, fy - 6, 4, 2))
         pygame.draw.circle(s, orange, (x + 4, fy - 4), 3)
-        s.fill(orange, (x + 3, fy - 8, 2, 2))
-        s.fill(orange, (x + 6, fy - 8, 1, 2))
-        s.fill((80, 50, 40), (x + 4, fy - 4, 2, 1))
-        pygame.draw.line(s, orange, (x - 7, fy - 1), (x + 2, fy - 1))
+        pts = dark if coat == 'siamese' else orange
+        s.fill(pts, (x + 3, fy - 8, 2, 2))
+        s.fill(pts, (x + 6, fy - 8, 1, 2))
+        if coat == 'calico':
+            s.fill((60, 54, 58), (x + 1, fy - 6, 3, 2))
+        s.fill((80, 50, 40) if sum(orange) > 330 else lighten(orange, 0.5), (x + 4, fy - 4, 2, 1))
+        pygame.draw.line(s, pts, (x - 7, fy - 1), (x + 2, fy - 1))
         draw_cat_item(s, getattr(g, 'cat_item', 'none'), x + 4, fy - 5, True)
         return
     bounce = 0
@@ -299,12 +642,16 @@ def draw_cat(s, g, t, x=CAT_X, fy=DECK_Y, bed=None, sleep=None, face=1, walk=0.0
     # tail
     sw = math.sin(t * (2.0 if cat['excited'] <= 0 else 7.0)) * 3
     pts = [(x - 5, y - 2), (x - 8, y - 3), (x - 10 + sw * 0.3, y - 6), (x - 10 + sw, y - 10)]
-    pygame.draw.lines(s, orange, False, pts, 2)
+    pygame.draw.lines(s, dark if coat == 'siamese' else orange, False, pts, 2)
     s.set_at((int(x - 10 + sw), y - 11), dark)
     # body
     pygame.draw.ellipse(s, orange, (x - 6, y - 9, 11, 9))
-    for i in (-4, -2):
-        s.fill(dark, (x + i, y - 8, 1, 3))
+    if coat == 'calico':
+        s.fill(dark, (x - 5, y - 7, 3, 3))
+        s.fill((60, 54, 58), (x - 2, y - 9, 3, 2))
+    elif coat != 'siamese':
+        for i in (-4, -2):
+            s.fill(dark, (x + i, y - 8, 1, 3))
     s.fill(white, (x + 1, y - 6, 3, 5))
     s.fill(white, (x + 1, y - 1, 2, 1))
     s.fill(white, (x + 3, y - 1, 2, 1))
@@ -313,13 +660,20 @@ def draw_cat(s, g, t, x=CAT_X, fy=DECK_Y, bed=None, sleep=None, face=1, walk=0.0
         look = 1 if g.fishing.state in ('waiting', 'bite', 'fight') and g.place == 'lake' else 0
     hx, hy = x + 3 + look, y - 12
     pygame.draw.circle(s, orange, (hx, hy), 4)
-    pygame.draw.polygon(s, orange, [(hx - 4, hy - 2), (hx - 3, hy - 6), (hx - 1, hy - 3)])
-    pygame.draw.polygon(s, orange, [(hx + 4, hy - 2), (hx + 3, hy - 6), (hx + 1, hy - 3)])
-    s.set_at((hx - 3, hy - 4), (240, 170, 160))
-    s.set_at((hx + 3, hy - 4), (240, 170, 160))
+    ec = dark if coat == 'siamese' else orange
+    pygame.draw.polygon(s, ec, [(hx - 4, hy - 2), (hx - 3, hy - 6), (hx - 1, hy - 3)])
+    pygame.draw.polygon(s, ec, [(hx + 4, hy - 2), (hx + 3, hy - 6), (hx + 1, hy - 3)])
+    s.set_at((hx - 3, hy - 4), ear)
+    s.set_at((hx + 3, hy - 4), ear)
+    if coat == 'calico':
+        s.fill(dark, (hx - 3, hy - 3, 3, 2))
+    elif coat == 'siamese':
+        s.fill(lerp_c(orange, dark, 0.45), (hx - 2, hy, 5, 2))             # the dark mask
     s.fill(white, (hx - 1, hy + 1, 3, 2))
     blink = (t % 4.0) < 0.15 or cat['pet'] > 0
-    eye = (60, 70, 40)
+    eye = (60, 70, 40) if sum(orange) > 330 else (206, 220, 104)
+    if coat == 'siamese':
+        eye = (70, 130, 210)
     if blink:
         s.fill(eye, (hx - 2, hy, 2, 1))
         s.fill(eye, (hx + 1, hy, 2, 1))
@@ -526,6 +880,14 @@ def draw_bubble(s, x, y, kind, t=0.0):
                 s.set_at((bx + 2 + i, by + 2 + j), col)
 
 
+def peer_colors(pid, v, season):
+    """(shirt, hair, skin, look) for a friend: their own look if they made one, else a colour of their own."""
+    lk = v.get('look')
+    if lk and not looks.is_default(lk):
+        return looks.shirt(lk, season), looks.hair(lk), looks.skin(lk), lk
+    return PEER_COLORS[pid % 4], PEER_HAIR[pid % 4], (240, 202, 172), None
+
+
 def peer_places(g):
     """Friends fishing at the same spot as you: [(id, view, kind, x, y, scale)], kind 'dock' or 'boat'."""
     net = getattr(g, 'net', None)
@@ -578,15 +940,17 @@ def draw_peer_dock(s, g, t, pid, v, x):
     breathe = 1 if math.sin(t * 1.6 + pid * 1.7) > 0.6 else 0
     if fs == 'caught':
         breathe = -1 if math.sin(t * 10) > 0 else 0
-    shirt = PEER_COLORS[pid % 4]
-    by = draw_person(s, x, DECK_Y, shirt, PEER_HAIR[pid % 4], v['hat'], g.env.season, breathe, fs == 'caught')
+    shirt, hair, skin, lk = peer_colors(pid, v, g.env.season)
+    by = draw_person(s, x, DECK_Y, shirt, hair, v['hat'], g.env.season, breathe, fs == 'caught', look=lk)
     hand = (x + HAND[0] - PLAYER_X, HAND[1] + breathe)
     pygame.draw.line(s, shirt, (x + 1, by - 13), (hand[0] - 1, hand[1]))
-    s.fill((240, 202, 172), (hand[0] - 1, hand[1] - 1, 2, 2))
+    s.fill(skin, (hand[0] - 1, hand[1] - 1, 2, 2))
     rod = ROD_BY_ID[v['rod']]
     bob = v['bob']
     pts = rod_points(hand, v['ang'], v['bend'], rod['length'], bob)
     draw_rod(s, pts, rod['color'])
+    if lk:
+        draw_charm(s, lk['charm'], pts[3], t + pid, 1.0 if fs in ('bite', 'fight') else 0.0, _night(g))
     if bob and fs in ('casting', 'waiting', 'bite', 'fight', 'reel_back'):
         _line(s, pts[-1], bob, 2 if fs in ('casting', 'fight') else 9)
         _water_mark(s, fs, bob[0], bob[1], t)
@@ -606,12 +970,12 @@ def draw_peer_boat(s, g, t, pid, v, x, y, k):
     pygame.draw.line(s, (84, 126, 150), (x - w + 2, y), (x + w - 2, y - 1))
     s.fill((40, 60, 80, 110), (x - w + 4, y + 4, 2 * w - 8, 1))
     # the angler, small with distance
-    shirt = PEER_COLORS[pid % 4]
+    shirt, hair, skin, lk = peer_colors(pid, v, g.env.season)
     fs = v['fs']
     hop = -1 if fs == 'caught' and math.sin(t * 10) > 0 else 0
     s.fill(shirt, (x - 2, y - 8 + hop, 4, 6))
-    s.fill((240, 202, 172), (x - 1, y - 11 + hop, 3, 3))
-    s.fill(PEER_HAIR[pid % 4], (x - 2, y - 11 + hop, 1, 3))
+    s.fill(skin, (x - 1, y - 11 + hop, 3, 3))
+    s.fill(hair, (x - 2, y - 11 + hop, 1, 3))
     s.fill((232, 204, 124) if v['hat'] == 'straw' else (120, 100, 90), (x - 2, y - 12 + hop, 5, 1))
     tip = (x + int(9 * k), y - int(15 * k))
     pygame.draw.line(s, (120, 88, 60), (x + 1, y - 6), tip)
