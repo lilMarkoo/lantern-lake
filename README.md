@@ -10,12 +10,17 @@ Grandma Rosie once tended four lanterns around the lake. Each wakes in a differe
 
 ## What’s new
 
-The latest update, **0.3.4**, gives every spot its own look. Lily Cove closes in with a willow overhead and lily pads at your feet, the Deep opens onto a far, hazy shore with mist on the swells, and Willow Creek runs quick between willow banks. When you row to a new spot, you now watch your boat cross the lake. Look up while you wait and you might see a heron wading the shallows, a canoe paddling past, a big fish leaping, or a breeze sweeping across the water. New written tunes follow the seasons and the time of day, with quiet stretches in between.
+The latest update, **0.3.7**, lets you **make your own angler**. Before your first cast, choose your skin, hair, eyes, beard and outfit. Your colours shift with the seasons. Add a keepsake charm for your rod, a fishing mood, and a coat for Biscuit. Everything shows straight away in a little dock scene that you can try at dawn, noon, dusk or night and in any season. You can change your look any time from the cabin’s Wardrobe, and friends see it when you fish together.
 
-The day flows more smoothly too. Fish you’ve caught before go straight into your basket with a small note, messages wait their turn, and a hint tells you when a fish you’ve never caught could bite right now. Neighbours comment on what you’ve been up to and greet you on the street.
+![The character creator: the angler and Biscuit on a dusk dock beside the clothes, colours, trousers and boots choices](docs/images/creator.png)
+
+The picture stays crisp now. The game no longer goes blurry when you resize the window, go fullscreen, or move to another monitor. It also draws through your graphics card, so it runs smoothly up to 144 fps. A new [Pixel scaling option](docs/player-guide.md#options) keeps pixels perfectly square or fills the screen. On older computers, the Auto light effects setting trims the extra glow by itself when the game starts to fall behind.
 
 Recent updates also let you:
 
+- **Make each spot your own.** Lily Cove closes in under a willow, the Deep opens onto a hazy far shore, and Willow Creek runs quick between its banks. Row there and watch your boat cross the lake.
+- **Wake up to the light.** Low sun throws beams across the water, mist lies on the lake at first light, lanterns glow after dark, and on clear nights the Milky Way shows in the still water.
+- **Play together with a room code.** Open your lake online and share a short code like K7Q2-M9XT, with no router settings. See [Co-op setup](docs/player-guide.md#playing-together).
 - **Feel every fight.** The hooked fish thrashes big and colourful under your line, with the reel ring as a small readout in the corner.
 - **Light the lanterns at dusk.** Light the wick yourself as the evening comes on and watch Fernwick’s windows answer across the water.
 - **Spend time in Fernwick.** Sit on the lookout bench with Biscuit, watch Mabel fetch your bread at the bakery, and collect letters from your mailbox when you’re ready to read them.
@@ -61,7 +66,8 @@ python main.py
 
 ## Field guide
 
-- [Keyboard and controller controls](docs/player-guide.md#controls)
+- [Keyboard and controller controls](docs/player-guide.md#controls) and [display options](docs/player-guide.md#options)
+- [Making your angler](docs/player-guide.md#making-your-angler)
 - [Your first day](docs/player-guide.md#your-first-day), [goals](docs/player-guide.md#goals-q), and [the radio](docs/player-guide.md#the-radio-r)
 - [Reeling](docs/player-guide.md#reeling), [waiting for a bite](docs/player-guide.md#waiting-for-a-bite), and [the worm tin](docs/player-guide.md#the-worm-tin)
 - [Rowboat routes and fishing spots](docs/player-guide.md#the-rowboat-and-fishing-spots)
