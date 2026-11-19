@@ -1,11 +1,11 @@
 {
-  "version": "0.3.4",
+  "version": "0.3.5",
   "notes": [
-    "Each spot looks like itself: a willow and big lily pads close around you at Lily Cove, a far hazy shore with swells and mist out on the Deep, and willow banks with a quick current at Willow Creek. Rowing between spots shows your boat crossing the lake.",
-    "A livelier lake: a heron wading the shallows, a canoe paddling past, big fish leaping, breezes sweeping the water and spring petals falling. Bubble spots are bigger, more frequent and well worth casting at.",
-    "Fewer interruptions: fish you've caught before go straight to your basket with a small note, messages queue up instead of piling up, and tips only show when they make sense.",
-    "Things happen in the world: Wren waits on your dock with her boat, lanterns are lit at dusk, and new things on your dock are pointed out. A note tells you when a fish you've never caught could bite right now.",
-    "The neighbours have more to say, in their own words, about what you've been up to, and they greet you in passing on the street.",
-    "New music: a written tune for each season and for dawn, dusk, night and the village, with quiet in between. Snags in the lilies come loose on their own, a missed bite keeps its worm, and you can dig more worms at the dock when the tin runs out."
+    "The light moves through the day: low sun throws beams across the water (best on a foggy morning), and the sun now rises over the far shore and sets behind the trees, both in view.",
+    "Mist lies on the lake at first light and a haze comes back at dusk. On clear days the sun's path twinkles on the water and cloud shadows slide over the lake and the dock.",
+    "Lanterns, windows and fireflies glow softly after dark, and on clear, moonless nights the Milky Way arcs over the lake and shows in the still water.",
+    "Rain sweeps past in sheets and each drop kicks up a tiny crown. When a fish breaks the surface, white water bursts up, the spray catches the light and a ring of foam spreads out.",
+    "Camera zooms and pans glide smoothly instead of stepping.",
+    "New Options > Display > Light effects: Full, or Simple for slower computers. Controller rumble has moved to the Gameplay tab."
   ]
 }
