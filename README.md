@@ -10,14 +10,15 @@ Grandma Rosie once tended four lanterns around the lake. Each wakes in a differe
 
 ## What’s new
 
-The latest update, **0.3.2**, brings a closer camera, wind moving through the trees and across the water, quicker fights with small fish, and better odds of finding a species you haven’t caught. Stay for the evening rise, when fish feed more eagerly, and watch your dock fill with keepsakes as your catches add up.
+The latest update, **0.3.3**, puts the fish at the centre of every fight: it thrashes big and colourful under your line, while the reel ring sits as a small readout in the corner. The screen is calmer too, with one card for the time and your coins, a single **Menu** button, and hints that tuck away after your first day (**F1** or **?** brings them back). Light a lantern yourself now, wick and all, and watch the village windows answer across the water.
 
 Recent updates also let you:
 
+- **Spend time in Fernwick.** Sit on the lookout bench with Biscuit, watch Mabel fetch your bread at the bakery, and collect letters from your mailbox when you’re ready to read them.
+- **Fish four different places.** At The Deep, hooked fish bolt for the bottom. At Lily Cove, the lily stems can snag your line. Willow Creek’s current carries your bobber, and a kingfisher sometimes visits your own dock post.
+- **Make each day count.** You get a fresh tin of 30 worms every morning, and a rare fish that escapes stays spooked until tomorrow.
 - **Follow the river to Saltmarsh.** Fish the pier and Kelp Rocks, plan around the tides, meet the harbour folk, and help Sol restore the coastal lighthouse.
 - **Walk through your collection.** Donated fish swim in twelve themed aquarium exhibits, with benches, visiting neighbours, and rewards for completing tanks.
-- **Settle into life at the lake.** Follow the first-day welcome quest, pin a goal with **Q**, or tune into three radio stations with **R**.
-- **Read the water.** Twitch your bobber, cast into feeding schools, and learn how circlers, divers, and sulkers fight. Line sounds and controller rumble help you feel the strain.
 
 [Read the latest release notes](https://github.com/lilMarkoo/lantern-lake/releases/latest)
 
@@ -25,8 +26,8 @@ Recent updates also let you:
 
 | On the water | In Fernwick |
 | --- | --- |
-| ![Reeling in a fish with the circular tension gauge beside the dock](docs/images/state_fight.png) | ![The angler outside Mabel's Bakery on Fernwick's main street](docs/images/town_hud.png) |
-| **Land your catch.** Keep the golden arc on the fish and ease off when it lunges. | **Walk into town.** Pick up a recipe at Mabel’s Bakery or see what the neighbours are asking for on the notice board. |
+| ![A hooked perch thrashing under the line off the dock, with the small reel ring in the corner](docs/images/state_fight.png) | ![The angler outside Mabel's Bakery on Fernwick's main street](docs/images/town_hud.png) |
+| **Land your catch.** Watch the fish fight on the line, keep the golden arc on it, and ease off when it lunges. | **Walk into town.** Pick up a recipe at Mabel’s Bakery or see what the neighbours are asking for on the notice board. |
 | ![A fish mid-flip above the stove in the cabin kitchen](docs/images/cook_scene_flip_air.png) | ![The dock lit up at night with the lighthouse on the far shore](docs/images/cook_lighthouse_night.png) |
 | **Cook what you catch.** Time the flip at your cabin stove, then plate the dish. | **Come back after dark.** Help Fernwick build its lighthouse and watch for rare fish by its light. |
 
@@ -56,7 +57,7 @@ python main.py
 
 - [Keyboard and controller controls](docs/player-guide.md#controls)
 - [Your first day](docs/player-guide.md#your-first-day), [goals](docs/player-guide.md#goals-q), and [the radio](docs/player-guide.md#the-radio-r)
-- [Reeling](docs/player-guide.md#reeling) and [waiting for a bite](docs/player-guide.md#waiting-for-a-bite)
+- [Reeling](docs/player-guide.md#reeling), [waiting for a bite](docs/player-guide.md#waiting-for-a-bite), and [the worm tin](docs/player-guide.md#the-worm-tin)
 - [Rowboat routes and fishing spots](docs/player-guide.md#the-rowboat-and-fishing-spots)
 - [Saltmarsh and the tides](docs/player-guide.md#saltmarsh-down-the-river), [the harbour](docs/player-guide.md#the-harbour), and [the coastal lighthouse](docs/player-guide.md#the-lighthouse)
 - [The aquarium](docs/player-guide.md#the-aquarium) and [shoreline projects](docs/player-guide.md#the-shoreline)
