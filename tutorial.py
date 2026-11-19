@@ -20,6 +20,26 @@ def active(g):
             and (not g.tut_day or g.day <= g.tut_day or getattr(g, 'show_help', False)))
 
 
+def relevant(g, sid=None):
+    """Is the current tip worth showing right now? (selling with nothing to sell, resting at noon: not yet)"""
+    if sid is None:
+        if g.tut >= DONE:
+            return False
+        sid = STEPS[g.tut][0]
+    if g.place != 'lake':
+        return False
+    if sid == 'sell':
+        return bool(g.basket)
+    if sid == 'rest':
+        return g.minute >= 18 * 60
+    if sid in ('cast', 'cat', 'town'):
+        return g.fishing.state in ('idle', 'charging')
+    return True
+
+
+TIMEOUT = 40.0           # a tip that has been up this long moves on by itself
+
+
 def _done(g, sid):
     f = g.fishing
     if sid == 'cast':
@@ -44,9 +64,11 @@ def update(g, dt):
         return
     if not g.tut_day:
         g.tut_day = g.day
-    g.tut_t += dt
     sid = STEPS[g.tut][0]
-    if _done(g, sid) and g.tut_t > 0.6:
+    if not relevant(g, sid) and not _done(g, sid):
+        return
+    g.tut_t += dt
+    if (_done(g, sid) and g.tut_t > 0.6) or g.tut_t > TIMEOUT:
         g.tut += 1
         g.tut_t = 0.0
         g.audio.play('chime2', 0.35)
@@ -60,7 +82,7 @@ def skip(g):
 
 
 def draw(g, s):
-    if not active(g) or g.overlay not in (None, 'catch') or g.rest_phase is not None or g.hide_ui:
+    if not active(g) or g.overlay is not None or g.rest_phase is not None or g.hide_ui or not relevant(g):
         return
     ui = g.ui
     parts = STEPS[g.tut][1]

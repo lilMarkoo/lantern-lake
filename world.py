@@ -10,6 +10,56 @@ from data import phase_of
 from fishing import cast_point
 
 WAGON_RECT = pygame.Rect(524, 200, 50, 34)     # Wren's houseboat, clickable on wagon days
+# weeping willow leaves by season (winter: bare grey-brown withies)
+WILLOW = {0: (150, 194, 98), 1: (96, 146, 64), 2: (214, 168, 70), 3: (120, 106, 92)}
+# where the boat sits on the lake when you row between spots (the whole lake in view)
+CROSS_POS = {'dock': (172, 316), 'cove': (520, 300), 'deep': (372, 240), 'creek': (586, 214)}
+
+
+def cross_at(c, k=None):
+    """Where the boat is on its row between spots (k: 0..1 along the way; None for right now)."""
+    x0, y0 = CROSS_POS.get(c['frm'], CROSS_POS['dock'])
+    x1, y1 = CROSS_POS.get(c['to'], CROSS_POS['dock'])
+    if k is None:
+        k = (c['t'] - 0.25) / (c['dur'] - 0.55)
+    k = max(0.0, min(1.0, k))
+    e = k * k * (3 - 2 * k)
+    return x0 + (x1 - x0) * e, y0 + (y1 - y0) * e - math.sin(math.pi * k) * 8
+
+
+def draw_willow(s, x, base, h, season, rng):
+    """A weeping willow: a leaning trunk, a rounded crown and a curtain of strands hanging nearly to the ground."""
+    leaf = WILLOW[season]
+    trunk = (70, 56, 46)
+    top = base - h
+    lean = rng.uniform(-3, 3)
+    pygame.draw.polygon(s, trunk, [(x - 4, base), (x + 4, base), (x + 2 + lean, top + h * 0.3),
+                                   (x - 1 + lean, top + h * 0.28)])
+    for dx in (-1, 1):
+        pygame.draw.line(s, trunk, (x + lean, top + h * 0.38), (x + lean + dx * h * 0.24, top + h * 0.14), 2)
+    cr = int(h * 0.42)
+    cx = x + lean
+    if season != 3:
+        pygame.draw.ellipse(s, darken(leaf, 0.32), (cx - cr, top, cr * 2, int(cr * 1.1)))
+        for _ in range(10):
+            bx = cx + rng.uniform(-0.8, 0.8) * cr
+            by = top + rng.uniform(0.0, 0.5) * cr
+            br = rng.uniform(0.25, 0.42) * cr
+            pygame.draw.ellipse(s, rng.choice([darken(leaf, 0.16), leaf]), (bx - br, by, br * 2, br * 1.2))
+    n = int(cr * (2.4 if season != 3 else 1.2))
+    for _ in range(n):
+        u = rng.uniform(-1, 1)
+        sx = cx + u * cr
+        sy = top + cr * 0.35 + abs(u) ** 2 * cr * 0.45
+        ln = (base - 3 - sy) * rng.uniform(0.55, 0.98)
+        ex = sx + u * cr * 0.18
+        if season == 3:
+            col = rng.choice([leaf, darken(leaf, 0.2)])
+        else:
+            col = rng.choice([leaf, darken(leaf, 0.14), darken(leaf, 0.3), lighten(leaf, 0.14)])
+        pygame.draw.line(s, col, (sx, sy), (ex, sy + ln))
+
+
 FW_COLORS = [(255, 120, 120), (255, 210, 110), (140, 220, 255), (180, 255, 150), (230, 150, 255), (255, 255, 230)]
 
 # minute, sky top, sky mid, sky bottom, ambient light
@@ -170,8 +220,8 @@ class World:
                            ph=rng.uniform(0, 6)) for _ in range(4)]
         self.seal = dict(t=rng.uniform(8, 20), x=0.0, y=0.0, up=0.0)
         self.frogs = [dict(i=i, puff=0.0, cd=rng.uniform(2, 8)) for i in (3, 11, 19)]
-        self.current = [dict(x=rng.uniform(0, W), y=rng.uniform(HORIZON + 6, H - 4), ln=rng.uniform(3, 9),
-                             spd=rng.uniform(0.7, 1.3)) for _ in range(34)]
+        self.current = [dict(x=rng.uniform(0, W), y=rng.uniform(HORIZON + 4, H - 4), ln=rng.uniform(4, 15),
+                             spd=rng.uniform(0.7, 1.4)) for _ in range(70)]
         self.creek_rocks = [(196, 334, 9), (420, 300, 6), (520, 262, 5), (340, 236, 4), (600, 286, 5)]
         self.spot = 'dock'
         self.moons = [art.make_moon(i) for i in range(8)]
@@ -262,7 +312,7 @@ class World:
     def take_spot(self, x, y, persp):
         """True (and the spot is used up) if a bobber landed on a bubbling hotspot."""
         for sp in self.spots:
-            if math.hypot(x - sp['x'], (y - sp['y']) * 2) < 7 + 7 * persp:
+            if math.hypot(x - sp['x'], (y - sp['y']) * 2) < 13 + 13 * persp:
                 self.spots.remove(sp)
                 return True
         return False
@@ -298,7 +348,7 @@ class World:
         if spot == 'creek':
             for c in self.current:
                 persp = 0.5 + (c['y'] - HORIZON) / 170
-                c['x'] += 26 * c['spd'] * persp * dt
+                c['x'] += 46 * c['spd'] * persp * dt
                 if c['x'] > W + 10:
                     c['x'] = rng.uniform(-30, -5)
                     c['y'] = rng.uniform(HORIZON + 6, H - 4)
@@ -414,19 +464,26 @@ class World:
         # bubbling hotspots
         self.spot_cd -= dt
         if self.spot_cd <= 0:
-            self.spot_cd = rng.uniform(10, 20)
-            if len(self.spots) < 2:
+            self.spot_cd = rng.uniform(6, 13)
+            if len(self.spots) < 3:
                 d = rng.uniform(0.15, g.rod_spec()['range'])
                 x, y = cast_point(d, rng.uniform(-1, 1))
                 if not (g.wagon_here() and WAGON_RECT.inflate(16, 16).collidepoint(x, y)):
-                    self.spots.append(dict(x=x, y=y, life=rng.uniform(30, 45), seed=rng.random() * 6, rip=0.0))
+                    self.spots.append(dict(x=x, y=y, life=rng.uniform(35, 50), seed=rng.random() * 6, rip=0.0,
+                                           pop=1.0))
         for sp in self.spots:
             sp['life'] -= dt
             sp['rip'] -= dt
+            sp['pop'] -= dt
+            persp = 0.5 + (sp['y'] - HORIZON) / 170
             if sp['rip'] <= 0:
-                sp['rip'] = rng.uniform(0.7, 1.3)
-                persp = 0.5 + (sp['y'] - HORIZON) / 170
-                self.ripple(sp['x'] + rng.uniform(-3, 3) * persp, sp['y'], 4 + 5 * persp, 8, 150)
+                sp['rip'] = rng.uniform(0.45, 0.9)
+                self.ripple(sp['x'] + rng.uniform(-5, 5) * persp, sp['y'], 7 + 8 * persp, 9, 170)
+            if sp['pop'] <= 0:
+                # a big bubble breaks the surface: a little spout of spray, and a blip you can hear close by
+                sp['pop'] = rng.uniform(1.2, 2.6)
+                self.splash(sp['x'] + rng.uniform(-4, 4) * persp, sp['y'], 4, 0.45 * persp)
+                g.audio.play('plip', 0.18, sp['x'] / W)
         self.spots = [sp for sp in self.spots if sp['life'] > 0]
         # feeding schools: little fins and dimples drifting slowly across the water
         self.school_cd -= dt
@@ -581,6 +638,9 @@ class World:
     def draw(self, frame, env, g):
         t = self.t
         nf = env.nf
+        if getattr(g, 'rest_phase', None) == 'row_cross' and getattr(g, 'crossing', None):
+            self._draw_crossing(frame, env, g, g.crossing)
+            return
         self._sky(frame, env)
         import seasons
         seasons.draw_aurora(frame, env, self, g)
@@ -590,10 +650,16 @@ class World:
             art.draw_coast_lighthouse(frame, self.spot, lerp_c(env.amb, env.sky[2], 0.3), coast.lit(g), env.nf)
         elif 'lighthouse' in getattr(g, 'projects', ()):
             self._lighthouse(frame, env)
+        elif hasattr(g, 'projects'):
+            self._scaffold(frame, env)
         import story
         if hasattr(g, 'story'):
             story.draw_far(g, frame, env, self)
         self._water(frame, env)
+        if self.spot == 'deep':
+            self._deep_mist(frame, env)
+        import lakeshow
+        lakeshow.draw_water(frame, g, t)
         g.fishing.draw_shadow(frame)
         near = self.near
         near.fill((0, 0, 0, 0))
@@ -603,6 +669,7 @@ class World:
         g.fishing.draw_water(near)
         import lakelife
         lakelife.draw(near, g, t)
+        lakeshow.draw(near, g, t)
         near.blit(self.fg, (0, 0))
         import wildlife
         import actors
@@ -630,6 +697,8 @@ class World:
         self._particles(near, lit=True)
         self._reeds(near, env)
         self._foreground(near, env)
+        if self.spot == 'cove':
+            self._cove_willow(near, env)
         na = env.near_amb
         near.fill((na[0], na[1], na[2], 255), special_flags=pygame.BLEND_RGBA_MULT)
         # wobbly reflection of the dock end, cat and angler: broken up by the ripples (some rows drop out,
@@ -751,8 +820,202 @@ class World:
                 frame.set_at((int(bx) - 2, int(by) - 1 + flap), col)
                 frame.set_at((int(bx) + 2, int(by) - 1 + flap), col)
 
-    def _far(self, frame, env):
+    def _draw_crossing(self, frame, env, g, c):
+        """Rowing between spots: the whole lake from a little way back, and your boat pulling across it."""
+        self._sky(frame, env)
+        self._far(frame, env, plain=True)
+        if 'lighthouse' in getattr(g, 'projects', ()):
+            self._lighthouse(frame, env)
+        self._water(frame, env, plain=True)
+        near = self.near
+        near.fill((0, 0, 0, 0))
+        fg = getattr(self, '_dock_fg', None)
+        if fg is None or fg[0] != env.season:
+            fg = self._dock_fg = (env.season, art.make_foreground(env.season, 'dock'))
+        self._ripples(near)
+        self._cross_marks(near, env)
+        near.blit(fg[1], (0, 0))
+        self._cross_boat(near, env, g, c)
+        self._particles(near, lit=True)
+        na = env.near_amb
+        near.fill((na[0], na[1], na[2], 255), special_flags=pygame.BLEND_RGBA_MULT)
+        frame.blit(near, (0, 0))
+        self._particles(frame, lit=False)
+        self._weather(frame, env)
+        frame.blit(self.vig, (0, 0))
+
+    def _cross_marks(self, near, env):
+        """Landmarks for the other spots, seen from afar: the cove's lilies, the Deep's buoy, the creek's reeds."""
+        t = self.t
+        season = env.season
+        if season != 3:
+            leaf = {0: (92, 150, 82), 1: (78, 140, 70), 2: (150, 140, 70)}[season]
+            for i, (lx, ly, r) in enumerate(((488, 292, 5), (510, 306, 6), (548, 296, 5), (566, 312, 7),
+                                              (604, 300, 6), (530, 284, 4), (586, 288, 4))):
+                bob = math.sin(t * 0.8 + i) * 0.4
+                pygame.draw.ellipse(near, darken(leaf, 0.25), (lx - r, ly + bob - r * 0.35 + 1, r * 2, max(2, r * 0.7)))
+                pygame.draw.ellipse(near, leaf, (lx - r, ly + bob - r * 0.35, r * 2, max(2, r * 0.7)))
+                if i % 3 == 0 and season in (0, 1):
+                    pygame.draw.circle(near, (250, 200, 220), (lx - 1, int(ly + bob) - 2), 2)
+        reed = [(66, 104, 58), (58, 98, 50), (150, 120, 64), (150, 146, 140)][season]
+        for i, x in enumerate(range(612, 640, 3)):
+            h_ = 10 + (i * 7) % 9
+            sw = math.sin(t * 1.2 + i) * 1.2
+            pygame.draw.line(near, reed, (x, 298), (x + sw, 298 - h_))
+        for i, x in enumerate(range(596, 640, 4)):
+            h_ = 6 + (i * 5) % 6
+            pygame.draw.line(near, reed, (x, 208), (x + math.sin(t * 1.2 + i), 208 - h_))
+        self._buoy(near, env, 404, 232 + math.sin(t * 1.4) * 1.0, 0.8)
+
+    def _buoy(self, near, env, bx, by, s=1.0):
+        """The red and white buoy that marks the deep water."""
+        t = self.t
+        by = int(by)
+        u = max(1, int(round(s * 5)))
+        pygame.draw.ellipse(near, (60, 80, 100, 120), (bx - u - 1, by + 3, u * 2 + 3, 3))
+        near.fill((224, 70, 60), (bx - u // 2, by - int(7 * s), u, int(4 * s)))
+        near.fill((244, 240, 230), (bx - u // 2, by - int(3 * s), u, max(1, int(3 * s))))
+        near.fill((224, 70, 60), (bx - u // 2 - 1, by, u + 2, max(2, int(3 * s))))
+        near.fill((90, 80, 70), (bx, by - int(11 * s), 1, int(4 * s)))
+        if env.nf > 0.3 and int(t * 1.5) % 3 == 0:
+            near.fill((255, 230, 150), (bx - 1, by - int(12 * s), 3, 2))
+
+    def _cross_boat(self, near, env, g, c):
+        """Your rowboat on its way: you at the oars, Biscuit up at the bow, a wake opening out behind."""
+        t = self.t
+        dur = c['dur']
+        x0 = CROSS_POS.get(c['frm'], CROSS_POS['dock'])[0]
+        x1 = CROSS_POS.get(c['to'], CROSS_POS['dock'])[0]
+
+        def at(k):
+            return cross_at(c, k)
+
+        k = min(1.0, max(0.0, (c['t'] - 0.25) / (dur - 0.55)))
+        x, y = at(k)
+        d = 1 if x1 >= x0 else -1
+        s = (0.55 + (y - HORIZON) / 170 * 0.85) * 1.25
+        # the wake: two lines of foam spreading back from the stern
+        px, py = at(k - 0.03)
+        dx, dy = x - px, y - py
+        ln = math.hypot(dx, dy) or 1.0
+        dx, dy = dx / ln, dy / ln
+        for i in range(1, 16):
+            q = i / 16
+            wx, wy = at(k - q * 0.22)
+            spread = q * 14 * s
+            a = int(200 * (1 - q) * min(1.0, k * 8))
+            if a < 10:
+                continue
+            for side in (-1, 1):
+                ox, oy = -dy * spread * side, dx * spread * side * 0.45
+                near.set_at((int(wx + ox), int(wy + oy + 2 * s)), (236, 246, 252, a))
+        bob = math.sin(t * 2.6) * 0.7
+        yb = y + bob
+        hw, hh = 15 * s, 3.4 * s
+        pygame.draw.ellipse(near, (24, 40, 52, 90), (x - hw - 2, yb + hh * 0.2, hw * 2 + 4, hh * 1.6))
+        hull = [(x - hw, yb - hh), (x + hw, yb - hh), (x + hw * 0.72, yb + hh * 0.7), (x - hw * 0.76, yb + hh * 0.7)]
+        bow = 1 if d > 0 else 0
+        hull[bow] = (hull[bow][0], hull[bow][1] - 2 * s)
+        pygame.draw.polygon(near, (128, 82, 52), hull)
+        pygame.draw.line(near, (178, 124, 80), hull[0], hull[1], max(1, int(s)))
+        # you, facing the stern as you row; Biscuit at the bow, looking where you're going
+        rx = x - d * 2 * s
+        top = yb - hh
+        pygame.draw.rect(near, (198, 82, 70), (rx - 2 * s, top - 7 * s, 4 * s + 1, 7 * s))
+        near.fill((236, 200, 168), (int(rx - 1.5 * s), int(top - 10 * s), int(3 * s) + 1, int(3 * s)))
+        near.fill((222, 190, 112), (int(rx - 3 * s), int(top - 11 * s), int(6 * s) + 1, max(1, int(s * 1.4))))
+        cxp = x + d * 9 * s
+        pygame.draw.ellipse(near, (232, 150, 70), (cxp - 2.5 * s, top - 4 * s, 5 * s, 4 * s))
+        near.fill((232, 150, 70), (int(cxp + d * 1.5 * s - 1), int(top - 6 * s), 2, max(1, int(2 * s))))
+        # the oars, sweeping round: the blades dip and splash at the catch
+        ph = t * 5.2
+        sw = math.cos(ph)
+        sx, sy = rx, top - 4 * s
+        for side in (-1, 1):
+            ex = sx - d * sw * 9 * s + side * 2 * s
+            ey = yb + (2.5 + side * 0.8) * s - max(0.0, math.sin(ph)) * 3 * s
+            pygame.draw.line(near, (150, 110, 72), (sx, sy), (ex, ey), max(1, int(s)))
+            if math.sin(ph) < -0.2:
+                pygame.draw.ellipse(near, (232, 244, 250, 170), (ex - 2 * s, ey - s * 0.5, 4 * s, 1.6 * s), 1)
+        if int(t * 5.2 / math.pi) != int((t - 1 / 30) * 5.2 / math.pi) and len(self.ripples) < 60:
+            self.ripple(sx - d * 9 * s, yb + 2 * s, r=5 * s, speed=10, alpha=140)
+
+    def _deep_mist(self, frame, env):
+        """Out on the Deep: long slow swells rolling in, and low mist lying on the water."""
+        t = self.t
+        sw = getattr(self, '_swell', None)
+        if sw is None:
+            sw = self._swell = pygame.Surface((W, H - HORIZON), pygame.SRCALPHA)
+        sw.fill((0, 0, 0, 0))
+        hl = lerp_c((210, 226, 236), env.sky[2], 0.3)
+        for i in range(10):
+            yy = 3 + ((t * 2.6 + i * 17.0) % 168)
+            persp = yy / 170
+            a = int(min(1.0, yy / 24) * min(1.0, (170 - yy) / 18) * (26 + 44 * persp) * (1 - env.nf * 0.5))
+            if a < 4:
+                continue
+            seg = 14 + 46 * persp
+            x = -((t * 5 + i * 37) % (seg * 2))
+            while x < W:
+                pygame.draw.line(sw, (*hl, a), (x, yy), (x + seg, yy + math.sin(x * 0.02 + i) * 0.8),
+                                 1 if persp < 0.45 else 2)
+                x += seg * 2
+        frame.blit(sw, (0, HORIZON))
+        m = env.minute
+        dawn = max(0.0, 1 - abs(m - 400) / 120)
+        base = 0.22 + 0.4 * dawn + env.fog * 0.3
+        col = lerp_c(lerp_c(env.sky[2], (255, 255, 255), 0.35), env.fog_color, env.fog)
+        col = mul_c(col, lerp_c(env.amb, (255, 255, 255), 0.4))
+        for i in range(4):
+            x = (i * 230 + t * (4 + i)) % (W + 320) - 320
+            y = HORIZON - 14 + i * 12
+            spr = self.fog_sprite.copy()
+            spr.fill((*col, 255), special_flags=pygame.BLEND_RGBA_MULT)
+            spr.set_alpha(int(255 * base * (1 - i * 0.15)))
+            frame.blit(spr, (int(x), int(y)))
+
+    def _cove_willow(self, near, env):
+        """A willow on the cove's bank leans out over you: its long strands hang into the top of the view and sway."""
+        t = self.t
+        season = env.season
+        leaf = WILLOW[season]
+        st = getattr(self, '_cove_strands', None)
+        if st is None:
+            rng = random.Random(21)
+            st = self._cove_strands = []
+            for x in range(330, W + 8, 2):
+                u = (x - 330) / (W - 330)
+                y0 = 168 - u * 22 + rng.uniform(-2, 2)
+                ln = (26 + 52 * math.sin(math.pi * min(1.0, u * 1.25)) ** 0.7) * rng.uniform(0.6, 1.0)
+                st.append((x, y0, ln, rng.uniform(0, 6.28), rng.randrange(4)))
+        cols = ([leaf, darken(leaf, 0.14), darken(leaf, 0.3), lighten(leaf, 0.14)] if season != 3 else
+                [leaf, darken(leaf, 0.2), leaf, darken(leaf, 0.1)])
+        limb = (60, 48, 40)
+        pygame.draw.lines(near, limb, False, [(W + 10, 138), (560, 150), (470, 158), (400, 165), (338, 170)], 5)
+        pygame.draw.lines(near, limb, False, [(470, 158), (430, 150), (396, 152)], 2)
+        gust = 1.2 + env.wind * 4 + self.sway * 3
+        for (x, y0, ln, ph, ci) in st:
+            if season == 3 and ci % 2:
+                continue
+            l2 = ln * (0.6 if season == 3 else 1.0)
+            sw = math.sin(t * 0.9 + ph + x * 0.012) * gust
+            col = cols[ci]
+            px, py = x, y0
+            for j in range(1, 5):
+                k = j / 4
+                nx, ny = x + sw * k * k, y0 + l2 * k
+                pygame.draw.line(near, col, (px, py), (nx, ny))
+                px, py = nx, ny
+        if season != 3:
+            # the crown's underside along the limb
+            for x in range(336, W, 7):
+                u = (x - 330) / (W - 330)
+                y = 166 - u * 22
+                pygame.draw.ellipse(near, darken(leaf, 0.22) if x % 2 else leaf, (x - 6, y - 8, 14, 9))
+
+    def _far(self, frame, env, plain=False):
         top, mid, bot = env.sky
+        spot = 'dock' if plain else self.spot
         amb = env.amb
         far = lerp_c(bot, mul_c((86, 96, 136), amb), 0.4)
         if env.season == 3:
@@ -772,6 +1035,28 @@ class World:
                 fogl.fill((*env.fog_color, int(env.fog * 150)))
                 frame.blit(fogl, (0, HORIZON - 40))
             return
+        if spot == 'deep':
+            # out in the middle of the lake: the far shore is a low, hazy line a long way off
+            def squash(pts, k):
+                return [(x, HORIZON - (HORIZON - y) * k) for x, y in pts]
+            pygame.draw.polygon(frame, far, [(-8, HORIZON)] + squash(self.mtn_far, 0.3) + [(W + 16, HORIZON)])
+            pygame.draw.polygon(frame, lerp_c(near, far, 0.4),
+                                [(-8, HORIZON)] + squash(self.mtn_near, 0.26) + [(W + 16, HORIZON)])
+            sm = getattr(self, '_tl_small', None)
+            if sm is None or sm[0] is not self.treeline:
+                th = self.treeline.get_height()
+                sm = self._tl_small = (self.treeline, pygame.transform.scale(self.treeline, (W, max(4, int(th * 0.3)))))
+            tl = sm[1].copy()
+            tl.fill((*lerp_c(env.amb, bot, 0.45), 255), special_flags=pygame.BLEND_RGBA_MULT)
+            frame.blit(tl, (0, HORIZON - tl.get_height()))
+            hz = getattr(self, '_haze', None)
+            if hz is None:
+                hz = self._haze = pygame.Surface((W, 44), pygame.SRCALPHA)
+            hc = lerp_c(bot, env.fog_color, env.fog)
+            for i in range(44):
+                hz.fill((*hc, int(150 * (i / 43) ** 1.7)), (0, i, W, 1))
+            frame.blit(hz, (0, HORIZON - 44))
+            return
         pygame.draw.polygon(frame, far, [(-8, HORIZON)] + self.mtn_far + [(W + 16, HORIZON)])
         if env.season == 3:
             cap = lighten(far, 0.35)
@@ -789,6 +1074,40 @@ class World:
             fogl = pygame.Surface((W, 40), pygame.SRCALPHA)
             fogl.fill((*env.fog_color, int(env.fog * 150)))
             frame.blit(fogl, (0, HORIZON - 40))
+        if spot == 'creek':
+            bank = self._creek_bank(env.season).copy()
+            bank.fill((*tint, 255), special_flags=pygame.BLEND_RGBA_MULT)
+            frame.blit(bank, (0, 0))
+
+    def _creek_bank(self, season):
+        """The creek's far bank, close enough to touch: weeping willows, grass and stones at the water's edge."""
+        cb = getattr(self, '_cbank', None)
+        if cb is not None and cb[0] == season:
+            return cb[1]
+        rng = random.Random(5)
+        s = pygame.Surface((W, HORIZON + 1), pygame.SRCALPHA)
+        for x, h in ((70, 96), (166, 84), (236, 66), (392, 90), (470, 74), (552, 100), (632, 80)):
+            draw_willow(s, x, HORIZON - 6, h, season, rng)
+        gr, grd = art.GRASS[season], art.GRASS_D[season]
+        pts = [(0, HORIZON + 1)]
+        for x in range(0, W + 8, 6):
+            gap = 294 <= x <= 346                      # low at the footbridge, so the falls show
+            y = HORIZON - (2 if gap else 7 + 2 * math.sin(x * 0.05) + rng.random() * 2)
+            pts.append((x, y))
+        pts.append((W, HORIZON + 1))
+        pygame.draw.polygon(s, grd, pts)
+        for (x, y) in pts[1:-1]:
+            s.fill(gr, (x, int(y), 6, 1))
+            if rng.random() < 0.5:
+                tx = x + rng.randint(0, 5)
+                pygame.draw.line(s, gr, (tx, y), (tx + rng.choice((-1, 1)), y - rng.randint(2, 4)))
+        stone = (112, 110, 104) if season != 3 else (150, 154, 162)
+        for x in list(range(4, 290, 23)) + list(range(352, W, 19)):
+            w_ = rng.randint(5, 11)
+            pygame.draw.ellipse(s, darken(stone, 0.2), (x, HORIZON - 3, w_, 4))
+            pygame.draw.ellipse(s, stone, (x + 1, HORIZON - 4, w_ - 2, 3))
+        self._cbank = (season, s)
+        return s
 
     def _trees(self, frame, tl):
         """The far treeline, its tops swaying a pixel or two as the wind passes (tiles overlap, so no seams)."""
@@ -804,6 +1123,24 @@ class World:
                 off = int(round(math.sin(ph + row * 0.04) * amp * (1 - row / th) ** 1.5))
                 sx = max(0, x0 - 1)
                 frame.blit(tl, (sx + off, HORIZON - 64 + row), (sx, row, 34, 4))
+
+    def _scaffold(self, frame, env):
+        """Where Fernwick's lighthouse will stand: a timber frame waiting for the town to fund it."""
+        x, base = 598, HORIZON
+        col = mul_c((150, 120, 90), lerp_c(env.amb, env.sky[2], 0.35))
+        if env.fog > 0.01:
+            col = lerp_c(col, env.fog_color, env.fog * 0.6)
+        dk = darken(col, 0.25)
+        pygame.draw.polygon(frame, mul_c((120, 116, 110), env.amb), [(x - 14, base), (x - 8, base - 4),
+                                                                    (x + 9, base - 4), (x + 15, base)])
+        for dx in (-5, 5):
+            pygame.draw.line(frame, col, (x + dx, base - 4), (x + dx * 0.5, base - 30))
+        for yy in range(base - 8, base - 30, -6):
+            pygame.draw.line(frame, dk, (x - 5, yy), (x + 5, yy))
+        pygame.draw.line(frame, dk, (x - 5, base - 6), (x + 3, base - 18))
+        pygame.draw.line(frame, col, (x + 6, base - 30), (x + 6, base - 38))
+        pygame.draw.line(frame, col, (x + 6, base - 38), (x - 4, base - 36))         # a little crane arm
+        frame.set_at((x - 4, base - 35), dk)
 
     def _lighthouse(self, frame, env):
         """Fernwick's lighthouse on the far shore (drawn before the water, so the lake reflects it)."""
@@ -843,8 +1180,9 @@ class World:
                                                                (end, ly + 10 * abs(sweep))])
                 frame.blit(beam, (0, 0))
 
-    def _water(self, frame, env):
+    def _water(self, frame, env, plain=False):
         t = self.t
+        deep = self.spot == 'deep' and not plain
         top_region = frame.subsurface((0, 0, W, HORIZON)).copy()
         refl = pygame.transform.flip(top_region, False, True)
         frame.fill(env.sky[2], (0, HORIZON, W, H - HORIZON))
@@ -861,11 +1199,13 @@ class World:
         wc = lerp_c(wc, grayish(wc, 0.3), env.rain * 0.5)
         if env.fog > 0.01:
             wc = lerp_c(wc, env.fog_color, env.fog * 0.4)
+        if deep:
+            wc = darken(lerp_c(wc, (30, 60, 96), 0.35), 0.22)      # deep water: darker and bluer
         strip = self.water_strip
         n = H - HORIZON
         for y in range(n):
             k = y / (n - 1)
-            strip.set_at((0, y), (*wc, int(60 + 150 * k ** 0.8)))
+            strip.set_at((0, y), (*wc, int(96 + 140 * k ** 0.7) if deep else int(60 + 150 * k ** 0.8)))
         frame.blit(pygame.transform.scale(strip, (W, n)), (0, HORIZON))
         # shore line glint
         pygame.draw.line(frame, lerp_c(env.sky[2], (255, 255, 255), 0.25), (0, HORIZON), (W, HORIZON))
@@ -946,7 +1286,10 @@ class World:
                 rect.center = (int(l['x']), int(l['y']))
                 pygame.draw.ellipse(near, (226, 236, 246, 200), rect)
                 pygame.draw.line(near, (255, 255, 255), rect.midtop, (rect.right - 2, rect.top + 1))
-        # ripples
+        self._ripples(near)
+        self._water_things2(near, env, g)
+
+    def _ripples(self, near):
         for (x, y, r, rmax, sp, a) in self.ripples:
             k = r / rmax
             alpha = int(a * (1 - k))
@@ -956,6 +1299,9 @@ class World:
             rect = pygame.Rect(int(x - r), int(y - ry), int(r * 2), ry * 2)
             if rect.w >= 2:
                 pygame.draw.ellipse(near, (230, 242, 250, alpha), rect, 1)
+
+    def _water_things2(self, near, env, g):
+        t = self.t
         # ducks
         if self.ducks:
             d = self.ducks
@@ -986,20 +1332,26 @@ class World:
         for sp in self.spots:
             persp = 0.5 + (sp['y'] - HORIZON) / 170
             fade = min(1.0, sp['life'] / 3, 1)
-            pw, ph_ = max(4, int(14 * persp)), max(2, int(4 * persp))
-            pygame.draw.ellipse(near, (226, 242, 250, int(70 * fade)), (int(sp['x'] - pw / 2), int(sp['y'] - ph_ / 2), pw, ph_))
-            for i in range(7):
-                ph = (t * 1.3 + i * 0.21 + sp['seed']) % 1.0
-                bx = sp['x'] + math.sin(i * 2.3 + sp['seed']) * 4 * persp
-                by = sp['y'] - ph * 4 * persp
-                a = int(220 * fade * (1 - ph))
-                if persp > 0.8 and i % 2:
-                    pygame.draw.circle(near, (236, 248, 255, a), (int(bx), int(by)), 1)
+            # a broad patch of fizzing, paler water with a foam rim, and bubbles welling up all over it
+            pw, ph_ = max(8, int(30 * persp)), max(3, int(9 * persp))
+            breathe = 1 + 0.08 * math.sin(t * 3 + sp['seed'])
+            rect = pygame.Rect(0, 0, int(pw * breathe), int(ph_ * breathe))
+            rect.center = (int(sp['x']), int(sp['y']))
+            pygame.draw.ellipse(near, (214, 236, 246, int(80 * fade)), rect)
+            pygame.draw.ellipse(near, (240, 250, 255, int(150 * fade)), rect, 1)
+            pygame.draw.ellipse(near, (240, 250, 255, int(90 * fade)), rect.inflate(-pw // 2, -ph_ // 2), 1)
+            for i in range(14):
+                ph = (t * 1.5 + i * 0.137 + sp['seed']) % 1.0
+                bx = sp['x'] + math.sin(i * 2.3 + sp['seed']) * pw * 0.42
+                by = sp['y'] + math.cos(i * 1.7 + sp['seed']) * ph_ * 0.35 - ph * 9 * persp
+                a = int(235 * fade * (1 - ph))
+                if persp > 0.7 and i % 3 == 0:
+                    pygame.draw.circle(near, (236, 248, 255, a), (int(bx), int(by)), 2, 1)
                 else:
-                    near.set_at((int(bx), int(by)), (236, 248, 255, a))
+                    near.fill((236, 248, 255, a), (int(bx), int(by), 2 if i % 2 else 1, 1))
         # Wren's Wagon, a little houseboat shop
         if g.wagon_here() and self.spot == 'dock':
-            self._wagon(near, env)
+            self._wagon(near, env, g)
         # rival anglers in rowboats during the festival
         if g.festival_live() and self.spot == 'dock':
             for i, (bx, by, shirt) in enumerate(((392, 236, (90, 120, 190)), (528, 258, (200, 100, 90)),
@@ -1068,8 +1420,11 @@ class World:
             for c in self.current:
                 persp = 0.5 + (c['y'] - HORIZON) / 170
                 ln = int(c['ln'] * persp)
-                a = int(70 + 50 * math.sin(t * 2 + c['x'] * 0.05))
-                pygame.draw.line(near, (*hl, a), (int(c['x']), int(c['y'])), (int(c['x']) + ln, int(c['y'])))
+                a = int(120 + 70 * math.sin(t * 2 + c['x'] * 0.05))
+                y = int(c['y'] + math.sin(t * 3 + c['x'] * 0.08) * 0.8)
+                pygame.draw.line(near, (*hl, a), (int(c['x']), y), (int(c['x']) + ln, y))
+                if ln > 8:
+                    pygame.draw.line(near, (*hl, a // 3), (int(c['x']) - ln // 2, y + 1), (int(c['x']) + ln // 3, y + 1))
             # river stones with foam on the upstream side
             for x, y, r in self.creek_rocks:
                 persp = 0.5 + (y - HORIZON) / 170
@@ -1104,14 +1459,7 @@ class World:
                     pygame.draw.circle(near, (236, 230, 190), (x + 3, y), r)
         elif spot == 'deep':
             # a red and white buoy marking the deep water
-            bx, by = 404, 238 + math.sin(t * 1.4) * 1.2
-            pygame.draw.ellipse(near, (60, 80, 100, 120), (bx - 6, int(by) + 3, 13, 3))
-            near.fill((224, 70, 60), (bx - 2, int(by) - 7, 5, 4))
-            near.fill((244, 240, 230), (bx - 2, int(by) - 3, 5, 3))
-            near.fill((224, 70, 60), (bx - 3, int(by), 7, 3))
-            near.fill((90, 80, 70), (bx, int(by) - 11, 1, 4))
-            if env.nf > 0.3 and int(t * 1.5) % 3 == 0:
-                near.fill((255, 230, 150), (bx - 1, int(by) - 12, 3, 2))
+            self._buoy(near, env, 404, 238 + math.sin(t * 1.4) * 1.2)
 
     def _sea_things(self, near, env, g):
         """The coast: a long swell, rocks the tide covers and uncovers, a buoy, a curious seal and the gulls."""
@@ -1170,9 +1518,20 @@ class World:
             flap = math.sin(t * 6 + gl['ph']) * 2
             pygame.draw.lines(near, (240, 240, 244), False, [(x - 5, y - flap), (x, y), (x + 5, y - flap)], 2)
 
-    def _wagon(self, near, env):
+    def _wagon(self, near, env, g=None):
         t = self.t
         r = WAGON_RECT
+        if g is not None and not g.owns_boat() and g.stats.get('boat_loan') != g.day:
+            # her rowboat for sale, tied alongside, with a price tag on a stick
+            bx, by = r.x - 26, r.bottom - 3 + math.sin(t * 1.3) * 0.6
+            pygame.draw.polygon(near, (92, 130, 150), [(bx, by - 3), (bx + 24, by - 3), (bx + 20, by + 2),
+                                                       (bx + 3, by + 2)])
+            pygame.draw.line(near, (236, 230, 214), (bx, by - 3), (bx + 24, by - 3))
+            pygame.draw.line(near, (200, 190, 170), (bx + 24, by - 2), (r.x + 4, r.bottom - 5))
+            near.fill((110, 80, 56), (bx + 11, int(by) - 12, 1, 9))
+            near.fill((250, 244, 226), (bx + 7, int(by) - 16, 10, 5))
+            near.fill((220, 170, 60), (bx + 9, int(by) - 15, 2, 3))
+            near.fill((90, 70, 56), (bx + 12, int(by) - 14, 3, 1))
         bob = math.sin(t * 1.1) * 0.7
         x0, y0 = r.x + 2, r.bottom - 6 + bob
         hull = [(x0, y0), (x0 + 46, y0), (x0 + 41, y0 + 5), (x0 + 5, y0 + 5)]
@@ -1306,7 +1665,53 @@ class World:
             pygame.draw.line(near, reed, (x, H), (x + sway, H - h_), 2)
             if h_ > 28 and season != 3:
                 pygame.draw.rect(near, darken(reed, 0.3), (int(x + sway) - 1, H - h_ - 5, 3, 6))
+        if self.spot == 'creek':
+            self._creek_near_bank(near, env)
         near.blit(fg, (0, H - 40))
+        if self.spot == 'cove' and season != 3:
+            self._cove_front(near, env)
+
+    def _creek_near_bank(self, near, env):
+        """The creek's near bank, grass running down to the water along the bottom right."""
+        season = env.season
+        gr, grd = art.GRASS[season], art.GRASS_D[season]
+        pts = [(352, H), (390, 346), (430, 336), (480, 330), (540, 326), (600, 322), (W, 320), (W, H)]
+        pygame.draw.polygon(near, darken(grd, 0.1), pts)
+        pygame.draw.lines(near, gr, False, pts[1:-1], 2)
+        t = self.t
+        for i, x in enumerate(range(392, W, 7)):
+            y = 346 - (x - 390) * 0.1 if x < 430 else 336 - (x - 430) * 0.07
+            sw = math.sin(t * 1.4 + i) * (1 + env.wind * 2)
+            pygame.draw.line(near, gr if i % 2 else grd, (x, y + 2), (x + sw, y - 4 - (i * 5) % 6))
+
+    def _cove_front(self, near, env):
+        """Big lily pads and flowers right in front of you, and a stand of cattails: the cove is close and green."""
+        t = self.t
+        season = env.season
+        leaf = {0: (92, 150, 82), 1: (78, 140, 70), 2: (150, 140, 70)}[season]
+        for i, (x, y, r, fl) in enumerate(((310, 352, 19, True), (352, 340, 12, False), (392, 356, 22, False),
+                                          (434, 343, 13, True), (470, 354, 17, False), (520, 346, 14, True))):
+            bob = math.sin(t * 0.7 + i * 1.3) * 0.6
+            rect = pygame.Rect(0, 0, r * 2, int(r * 0.62))
+            rect.center = (x, int(y + bob))
+            pygame.draw.ellipse(near, darken(leaf, 0.35), rect.move(0, 2))
+            pygame.draw.ellipse(near, leaf, rect)
+            pygame.draw.ellipse(near, lighten(leaf, 0.12), rect.inflate(-r // 2, -int(r * 0.3)).move(-2, -1), 1)
+            cx, cy = rect.center
+            pygame.draw.polygon(near, darken(leaf, 0.4), [(cx, cy), (cx + r, cy - 2), (cx + r, cy + 2)])
+            if fl and season in (0, 1):
+                for a in range(6):
+                    ang = a * 1.05 + 0.3
+                    pygame.draw.ellipse(near, (250, 196, 216) if a % 2 else (255, 222, 234),
+                                        (cx - 6 + math.cos(ang) * 4, cy - 7 + math.sin(ang) * 2, 7, 5))
+                pygame.draw.circle(near, (255, 226, 130), (cx - 2, cy - 5), 2)
+        reed = [(40, 70, 44), (36, 66, 40), (110, 86, 48), (110, 108, 104)][season]
+        for i, x in enumerate(range(548, 600, 4)):
+            h_ = 44 + (i * 13) % 26
+            sw = math.sin(t * 1.1 + i * 0.7) * (1.5 + env.wind * 3)
+            pygame.draw.line(near, reed, (x, H), (x + sw, H - h_), 2)
+            if i % 3 == 0:
+                pygame.draw.rect(near, (84, 56, 36), (int(x + sw) - 1, H - h_ - 7, 4, 9))
 
     def _reeds(self, near, env):
         t = self.t

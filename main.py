@@ -69,6 +69,8 @@ import goals as goalmod
 import radio as radiomod
 import pad as padmod
 import lakelife
+import lakeshow
+import fishing as fishmod
 import ui as U
 from art import W, H, DECK_Y
 from audio import Audio
@@ -80,7 +82,13 @@ from data import (FISH, FISH_BY_ID, ALL_BY_ID, LETTERS, VILLAGERS, REQUEST_REASO
 import tank as tankmod
 from data import LAKE_SPOTS, COAST_SPOTS, COAST_IDS, SEA_FISH
 from fishing import Fishing, PLAYER_X, HAND, cast_point, aim_for, clamp, spot_depth
-from world import World, Env, WAGON_RECT
+from world import World, Env, WAGON_RECT, CROSS_POS, cross_at
+
+# where a new dock decoration sits, so the game can point at it when it arrives
+DOCK_PROP_POS = {'bench': (156, DECK_Y - 12), 'pinwheel': (197, DECK_Y - 14), 'lantern': (104, 246),
+                 'lanterns': (330, 300), 'telescope': (89, 222), 'feeder': (44, 222), 'chimes': (104, 252),
+                 'flowers': (120, DECK_Y - 4), 'gnome': (112, DECK_Y - 4), 'catbed': (206, DECK_Y - 6),
+                 'teaset': (170, DECK_Y - 6), 'lights': (180, 252)}
 
 SW, SH = 1280, 720
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -278,6 +286,8 @@ class Game:
         self.overlay = None
         self.queue = []
         self.toasts = []
+        self.toast_q = []            # toasts waiting their turn (two show at a time at most)
+        self.quick_pop = None        # a repeat common catch: a little note in the corner instead of the full card
         self.mouse_hold = False
         self.space_hold = False
         self.holding = False
@@ -292,6 +302,8 @@ class Game:
         self.fade_dir = -1
         self.rest_phase = None
         self.confirm_new = 0
+        self.crossing = None
+        self.spot_mark = None         # something new on the dock: a bouncing arrow over it for a few seconds          # rowing between spots: you see the boat cross the lake
         self.card = None
         self.letter = None
         self.j_tab = 'fish'
@@ -887,6 +899,52 @@ class Game:
         """A boat to row out in: your own, or Wren's, lent to you for the day on her first visit."""
         return self.owns_boat() or self.stats.get('boat_loan') == self.day
 
+    def note(self, kind, **kw):
+        """Remember something you just did (for the neighbours to mention). Kept for today only, not saved."""
+        rec = getattr(self, 'recent', None)
+        if rec is None:
+            rec = self.recent = []
+        rec.append(dict(kind=kind, day=self.day, **kw))
+        del rec[:-24]
+
+    def loan_waiting(self):
+        """Wren's boat is tied at the dock for today and you haven't taken it out yet."""
+        return (self.stats.get('boat_loan') == self.day and not self.owns_boat()
+                and self.stats.get('rowed_day') != self.day and self.place == 'lake' and self.spot == 'dock')
+
+    def mark(self, x, y, label, secs=10.0):
+        """Point at something new on the dock for a few seconds (a bouncing arrow and its name)."""
+        self.spot_mark = dict(x=x, y=y, label=label, t=secs)
+        self.world.sparkles(x, y - 4, 18, (255, 240, 170), 12)
+
+    def draw_world_marks(self, s):
+        """Labels for the things the world is pointing at: Wren calling you over, something new on the dock."""
+        if self.place != 'lake' or self.overlay is not None or self.rest_phase is not None:
+            return
+        ui = self.ui
+        items = []
+        f = self.fishing
+        if f.state == 'waiting' and getattr(f, 'snag', False):
+            x, y = f.dst
+            items.append((x, y - 8, 'Snagged! Tap to work it loose'))
+        if self.spot != 'dock':
+            items = items[:1]
+        if self.loan_waiting():
+            items.append((actors.WREN_X, DECK_Y - 30, "She's yours for today! Press B to row out."))
+        m = self.spot_mark if self.spot == 'dock' else None
+        if m:
+            items.append((m['x'], m['y'] - 24, 'New: %s' % m['label']))
+        for wx, wy, text in items:
+            x, y = self.w2s(wx, wy)
+            tw = ui.fonts['smallb'].size(text)[0] + 28
+            r = pygame.Rect(0, 0, tw, 38)
+            r.midbottom = (x, y - 6)
+            r.clamp_ip(pygame.Rect(8, 8, SW - 16, SH - 16))
+            r = ui.panel(s, r, radius=14)
+            pygame.draw.polygon(s, U.INK, [(x - 7, r.bottom - 1), (x + 7, r.bottom - 1), (x, r.bottom + 8)])
+            pygame.draw.polygon(s, (255, 248, 232), [(x - 5, r.bottom - 2), (x + 5, r.bottom - 2), (x, r.bottom + 5)])
+            ui.blit_text(s, text, r.center, 'smallb', U.INK, 'center')
+
     def toast_few(self, key, text, color=(120, 100, 80), limit=3):
         """A toast that stops once it has been said a few times (the game shows it in other ways after that)."""
         told = self.stats.setdefault('told', {})
@@ -919,6 +977,7 @@ class Game:
         self.release_holds()
         self.travel_to = spot
         self.rest_phase = 'row_out'
+        self.stats['rowed_day'] = self.day
         self.audio.play('plop', 0.6)
 
     def arrive(self):
@@ -1074,6 +1133,7 @@ class Game:
         self.basket = [b for b in self.basket if id(b) not in ids]
         self.coins += total
         self.stats['sold'] = self.stats.get('sold', 0) + len(items)
+        self.note('sell', coins=total)
         return total
 
     def dish_quote(self, rid, n=None):
@@ -1267,6 +1327,22 @@ class Game:
         tn = self.town
         if self.overlay is not None or self.rest_phase is not None:
             return
+        for k, (text, left) in getattr(tn, 'says', {}).items():
+            f = tn.folk[k]
+            sx, sy = self.w2s(f['x'] - tn.scroll, townmod.GROUND - 36)
+            a = int(255 * min(1.0, left / 0.4, (3.2 - left) / 0.2))
+            w = ui.fonts['smallb'].size(text)[0] + 28
+            r = pygame.Rect(0, 0, w, 36)
+            r.midbottom = (sx, sy - 8)
+            r.x = max(12, min(SW - 12 - w, r.x))
+            bub = pygame.Surface((w, 46), pygame.SRCALPHA)
+            rr = ui.panel(bub, (0, 0, w, 36), fill=(255, 250, 238), radius=14)
+            tx = max(10, min(w - 10, sx - r.x))
+            pygame.draw.polygon(bub, U.INK, [(tx - 7, 35), (tx + 7, 35), (tx, 44)])
+            pygame.draw.polygon(bub, (255, 250, 238), [(tx - 5, 34), (tx + 5, 34), (tx, 41)])
+            ui.blit_text(bub, text, rr.center, 'smallb', U.INK, 'center')
+            bub.set_alpha(a)
+            s.blit(bub, r.topleft)
         p = tn.prompt(self)
         if p and self.typing != 'chat':
             sx, sy = self.w2s(tn.x - tn.scroll, townmod.GROUND - 40)
@@ -1480,8 +1556,21 @@ class Game:
         return ((day - 1) // DAYS_PER_SEASON) % 4
 
     def toast(self, text, color=(120, 100, 80)):
-        self.toasts.append([text, 3.6, color])
-        self.toasts = self.toasts[-4:]
+        """A note at the top of the screen. Two at most at a time; the rest wait their turn (no repeats)."""
+        q = getattr(self, 'toast_q', None)
+        if q is None:
+            q = self.toast_q = []
+        if any(t[0] == text for t in self.toasts) or any(t[0] == text for t in q):
+            return
+        if len(self.toasts) < 2:
+            self.toasts.append([text, 3.6, color])
+        else:
+            q.append([text, 3.6, color])
+            del q[:-6]
+
+    def toasted(self, part):
+        """Is a toast with this text showing or waiting? (for tests)"""
+        return any(part in t[0] for t in self.toasts + getattr(self, 'toast_q', []))
 
     WORM_TIN = 30                    # the worm tin fills back up to this every morning
     WORM_PACK, WORM_PRICE = 15, 20
@@ -1498,9 +1587,27 @@ class Game:
             self.bait = other[0]
             self.toast('The worm tin is empty. On with the %s.' % BAIT_BY_ID[other[0]]['name'], (150, 130, 100))
             return True
-        self.toast("The worm tin is empty! More at the shop, or fresh ones dug in the morning.", (200, 120, 100))
+        if self.place == 'lake' and self.spot == 'dock':
+            self.dig_worms()
+            return False
+        self.toast("The worm tin is empty! Row home to dig for more, or buy some at the shop.", (200, 120, 100))
         self.audio.play('nibble', 0.5)
         return False
+
+    DIG_WORMS = 10                   # worms you dig up along the bank when the tin runs out
+    DIG_MINUTES = 30
+
+    def dig_worms(self):
+        """Out of worms at the dock: dig along the bank for a few more. It takes half an hour."""
+        self.advance_time(self.DIG_MINUTES)
+        self.baits['worm'] = self.worms() + self.DIG_WORMS
+        self.bait = 'worm'
+        self.audio.play('rustle', 0.6)
+        self.world.splash(70, 250, 6, 0.4, (120, 90, 60))
+        self.stats['dug'] = self.stats.get('dug', 0) + 1
+        self.toast('The tin was empty, so you dug along the bank: +%d worms (half an hour went by).'
+                   % self.DIG_WORMS, (150, 120, 90))
+        self.save()
 
     def buy_worms(self):
         if self.coins < self.WORM_PRICE:
@@ -1753,6 +1860,9 @@ class Game:
         entry['count'] += 1
         entry['best'] = max(entry['best'], size)
         self.total += 1
+        if not spec.get('junk'):
+            self.note('catch', fish=spec['id'], new=new, record=record)
+            self.stats['caught_day'] = self.day
         lakelife.dock_progress(self)
         goalmod.on_catch(self, spec)
         if not spec.get('junk'):
@@ -1778,6 +1888,23 @@ class Game:
                     self.toast('%s: %s%s' % (f['name'], self.fest_score(rule, f['best']),
                                              '  - you are in the lead!' if f['best'] > lead else ''), (200, 120, 160))
         legends.on_catch(self, spec, size)
+        req = self.request
+        wanted = bool(req and not req.get('done') and req['fish'] == spec['id'])
+        if (not new and not record and not spec.get('junk') and spec['rarity'] <= 2 and not wanted
+                and not self.festival_live() and self.settings.get('quick_commons', True)):
+            # one you've caught before, nothing special: into the basket, a little note in the corner, cast again
+            self.basket.append(dict(id=spec['id'], size=size, price=price))
+            self.quick_pop = dict(spec=spec, size=size, price=price, t=0.0, n=entry['count'])
+            self.fishing.quick_t = 0.55
+            self.audio.play('jingle1', 0.45)
+            self.world.sparkles(PLAYER_X + 8, DECK_Y - 30, 6, (255, 240, 180))
+            self.cat['excited'] = max(self.cat['excited'], 1.0)
+            if self.net.online:
+                self.net.send({'t': 'catch', 'fish': spec['id'], 'size': round(size, 1), 'new': False, 'rec': False})
+                coop.on_catch(self, spec)
+            self.check_badges()
+            self.save()
+            return
         # before the card: a moment holding it up for everyone to see (any key or click moves on)
         show = 0.0 if spec.get('junk') else 1.0 + 0.2 * spec['rarity'] + (0.4 if new or record else 0.0)
         self.card = dict(spec=spec, size=size, price=price, new=new, record=record, old=old_best, t=-show,
@@ -2159,9 +2286,13 @@ class Game:
         elif kind == 'boat':
             self.owned.append('boat')
             self.toast('The rowboat is tied up by your dock. Press B to open the lake map!', (90, 140, 180))
+            self.mark(172, 300, 'your rowboat')
         else:
             self.owned.append(item['id'])
             self.toast('%s added to the dock.' % item['name'], (110, 150, 100))
+            x, y = DOCK_PROP_POS.get(item['id'], (190, DECK_Y - 8))
+            self.mark(x, y, item['name'])
+            self.note('buy', name=item['name'])
         self.audio.play('coin', 0.8)
         self.check_badges()
         self.save()
@@ -2641,6 +2772,7 @@ class Game:
             gardenmod.update(self, dt)
             wildlife.update(self, dt)
             lakelife.update(self, dt)
+            lakeshow.update(self, dt)
             tutorial.update(self, dt)
             goalmod.update(self, dt)
             coop.update(self, dt)
@@ -2681,9 +2813,35 @@ class Game:
         else:
             actx = dict(feeder=self.has('feeder'), chimes=self.has('chimes'))
         self.audio.update(dt, env, actx)
+        hurry = 1.5 if self.toast_q else 1.0          # with more waiting, each one moves along a little sooner
         for tt in self.toasts:
-            tt[1] -= dt
+            tt[1] -= dt * hurry
         self.toasts = [tt for tt in self.toasts if tt[1] > 0]
+        while self.toast_q and len(self.toasts) < 2:
+            self.toasts.append(self.toast_q.pop(0))
+        self._new_t = getattr(self, '_new_t', 0.0) - dt
+        if self._new_t <= 0 and self.mode == 'play':
+            # every few seconds: is there a fish you've never caught that could bite here right now?
+            self._new_t = 4.0
+            fish = fishmod.new_now(self) if self.place == 'lake' else []
+            why = fishmod.why_now(self, fish)
+            ids = {f['id'] for f in fish}
+            seen = getattr(self, '_new_seen', None)
+            if fish and why and seen is not None and ids - seen and self.overlay is None and self.rest_phase is None:
+                self.toast('Something new is stirring %s. A fish you have never caught could bite now!'
+                           % ' and '.join(why), (110, 150, 190))
+            self._new_seen = ids
+            self._new_now = (fish, why) if fish else None
+        sm = self.spot_mark
+        if sm:
+            sm['t'] -= dt
+            if sm['t'] <= 0:
+                self.spot_mark = None
+        qp = self.quick_pop
+        if qp:
+            qp['t'] += dt
+            if qp['t'] > 3.2:
+                self.quick_pop = None
         if self.card:
             self.card['t'] += dt
         # fades
@@ -2695,6 +2853,24 @@ class Game:
         elif self.rest_phase == 'row_out':
             self.fade = min(1.0, self.fade + dt / 0.7)
             if self.fade >= 1:
+                to = self.travel_to or 'dock'
+                if to in CROSS_POS and self.spot in CROSS_POS and self.place == 'lake':
+                    # a short row across the lake: you watch the boat cross (three seconds or so)
+                    self.crossing = dict(t=0.0, dur=3.2, frm=self.spot, to=to)
+                    self.rest_phase = 'row_cross'
+                    bx, by = cross_at(self.crossing)
+                    self.cam = [1.45, clamp(bx, W / 2.9, W - W / 2.9), clamp(by - 20, H / 2.9, H - H / 2.9)]
+                else:
+                    self.arrive()
+                    self.rest_phase = 'row_in'
+        elif self.rest_phase == 'row_cross':
+            c = self.crossing
+            c['t'] += dt
+            k, dur = c['t'], c['dur']
+            self.fade = max(0.0, 1 - k / 0.45) if k < dur - 0.5 else min(1.0, (k - (dur - 0.5)) / 0.45)
+            if k >= dur:
+                self.fade = 1.0
+                self.crossing = None
                 self.arrive()
                 self.rest_phase = 'row_in'
         elif self.rest_phase == 'walk_out':
@@ -2721,6 +2897,19 @@ class Game:
 
     # ------------------------------------------------------------ camera and input helpers
     HOME_Z = 2.0           # how close the camera sits on you and the dock between casts
+
+    def view_lift(self):
+        """How much sky the resting shot shows: the far horizon out on the Deep, the willows over the creek,
+        and more of the sky at sunrise, sunset and under the stars."""
+        if self.place != 'lake':
+            return 0
+        lift = {'deep': 26, 'creek': 14, 'cove': 4}.get(self.spot, 0)
+        m = self.minute
+        if 300 <= m < 450 or 1050 <= m < 1250:
+            lift += 22
+        elif m >= 1250 or m < 300:
+            lift += 12
+        return min(40, lift)
 
     def update_camera(self, dt):
         f = self.fishing
@@ -2763,7 +2952,7 @@ class Game:
                 self.cam_look += (self.ui.mouse[0] / SW - self.cam_look) * min(1.0, dt * 2.5)
                 # you and Biscuit a third of the way in, the open lake ahead; pointing pans a little
                 fx = clamp(PLAYER_X + w * 0.17 + (self.cam_look - 0.5) * w * 0.55, w / 2, W - w / 2)
-                fy = H - H / z / 2 - 2          # down on the water: most of the sky is cropped away
+                fy = H - H / z / 2 - 2 - self.view_lift()      # down on the water: most of the sky cropped away
         elif self.mode == 'play' and self.place == 'town' and self.overlay is None:
             # Fernwick: in close on the street and the people on it, not on the sky
             tn = self.town
@@ -2779,7 +2968,15 @@ class Game:
                 fy = townmod.GROUND + 36 - H / z / 2     # the street low on screen, with a little sky over the roofs
             w = W / z
             fx = clamp(px, w / 2, W - w / 2)
-        if not self.settings.get('zoom', True):
+        if self.rest_phase == 'row_cross' and self.crossing:
+            # follow the boat across, a little way back so the lake and its far shore are in the shot
+            bx, by = cross_at(self.crossing)
+            z = 1.45
+            w, h = W / z, H / z
+            fx = clamp(bx, w / 2, W - w / 2)
+            fy = clamp(by - 20, h / 2, H - h / 2)
+            rate = 4.0
+        elif not self.settings.get('zoom', True):
             z, fx, fy = 1.0, W / 2, H / 2
         if self.shake_amt > 0.05:
             z = max(z, 1.03)
@@ -2893,8 +3090,10 @@ class Game:
             cooking.draw_ui(scr)
         elif scene:
             scene.draw_ui(scr)
-        elif not self.hide_ui:
-            self.draw_hud(scr)
+        elif not self.hide_ui and self.rest_phase != 'row_cross':
+            if self.overlay != 'catch':
+                self.draw_world_marks(scr)
+                self.draw_hud(scr)
             tutorial.draw(self, scr)
             ov = self.overlay
             showoff = ov == 'catch' and self.card and self.card['t'] < 0
@@ -2939,13 +3138,22 @@ class Game:
                 self.radio.draw_panel(scr)
             elif ov == 'quick':
                 self.draw_quick(scr)
+        elif self.rest_phase == 'row_cross':
+            pass                                     # rowing across: just the lake and the boat
         elif self.mode == 'play' and self.place == 'lake':
             wildlife.draw_viewfinder(self, scr)
         elif self.t % 6 < 2:
             ui.blit_text(scr, 'Photo mode - P to return, F12 to save a picture', (SW // 2, SH - 30),
                          'small', (250, 240, 220), 'center', (30, 20, 30))
+        if self.quick_pop and self.mode == 'play' and not self.hide_ui:
+            self.draw_quick_pop(cv)
         if self.toasts and self.mode == 'play':
             self.draw_toasts(cv)
+        if self.rest_phase == 'row_cross' and self.crossing:
+            c = self.crossing
+            a = max(0.0, min(1.0, c['t'] / 0.5, (c['dur'] - c['t']) / 0.5))
+            ui.blit_text(cv, 'Rowing to %s...' % SPOT_BY_ID[c['to']]['name'], (SW // 2, 70), 'h2',
+                         (252, 246, 232), 'center', alpha=int(255 * a), outline=(30, 26, 40))
         if self.fade > 0.005:
             self._fadebuf.fill((14, 12, 26, int(255 * self.fade)))
             cv.blit(self._fadebuf, (0, 0))
@@ -3366,6 +3574,11 @@ class Game:
         if meal:
             r_ = kitchenmod.RECIPE_BY_ID[meal]
             lines.append(('snack', '%s: %s' % (r_['name'], r_['effect'].lower())))
+        nn = getattr(self, '_new_now', None)
+        if nn and self.place == 'lake':
+            fish, why = nn
+            lines.append(('run', '%s new fish could bite now%s' % (
+                'A' if len(fish) == 1 else len(fish), (' (%s)' % ', '.join(why)) if why else '')))
         if self.mail():
             n_ = len(self.mail())
             lines.append(('mail', 'A letter in the mailbox' if n_ == 1 else '%d letters in the mailbox' % n_))
@@ -3746,10 +3959,37 @@ class Game:
                 what = '%s... %s!' % (what.rstrip('!'), minigame.STYLE_NAMES.get(f.mg.style, 'a fighter').lower())
             minigame.draw(s, ui, f.mg, self.t, what, teach=self.total < 10 and self.settings.get('hints', True))
 
+    def draw_quick_pop(self, s):
+        """The corner note for a repeat catch: what, how big, and that it went in the basket."""
+        qp = self.quick_pop
+        if not qp or self.overlay is not None:
+            return
+        ui = self.ui
+        t = qp['t']
+        k = min(1.0, t / 0.25, max(0.0, (3.2 - t) / 0.4))
+        e = 1 - (1 - k) ** 3
+        spec = qp['spec']
+        name = '%s  %.1f cm' % (spec['name'], qp['size'])
+        w = max(ui.fonts['smallb'].size(name)[0], ui.fonts['small'].size('Into the basket (%d coins)' % qp['price'])[0]) + 112
+        r = pygame.Rect(16 - int((1 - e) * (w + 20)), SH - 16 - 46 - 74, w, 64)
+        r = ui.panel(s, r, radius=18)
+        icon = art.fish_sprite(spec, 2)
+        if icon.get_width() > 64:
+            icon = pygame.transform.scale(icon, (64, max(1, icon.get_height() * 64 // icon.get_width())))
+        s.blit(icon, icon.get_rect(center=(r.x + 46, r.centery)))
+        ui.blit_text(s, name, (r.x + 86, r.y + 10), 'smallb', U.INK, maxw=w - 96)
+        ui.blit_text(s, 'Into the basket (%d coins)' % qp['price'], (r.x + 86, r.y + 36), 'small', U.SOFT,
+                     maxw=w - 96)
+
     def draw_toasts(self, s):
         ui = self.ui
-        bottom = bool(self.overlay and self.overlay not in ('pause', 'options'))
-        y, step = (SH - 66, -54) if bottom else (18, 54)
+        # over a panel they sit at the very top, clear of its buttons; on the lake, under any tip
+        bottom = False
+        y, step = 18, 54
+        if self.overlay and self.overlay not in ('pause', 'options'):
+            y = 6
+        elif tutorial.active(self) and tutorial.relevant(self) and self.overlay is None:
+            y = 88
         for text, life, col in self.toasts:
             k = max(0.0, min(1.0, (3.6 - life) / 0.3, life / 0.35))
             e = 1 - (1 - k) ** 3

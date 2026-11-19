@@ -118,3 +118,182 @@ def pick(g, k, base, rng):
     if g.festival_today() and rng.random() < 0.4:
         return rng.choice(FESTIVAL_LINES)
     return rng.choice(pool)
+
+
+# ---------------------------------------------------------------- more to say (0.3.4)
+MORE_LINES = {
+    'mabel': ["I put a pinch of salt in the caramel. Don't tell anyone, it's the whole secret.",
+              "Old Tom buys one bun and says it's for his gnome. The gnome is very well fed.",
+              "If the oven's singing, the bread's ready. If it's shouting, run.",
+              "I knead best when I'm cross. My best loaves were baked the day Pip spilled the jam.",
+              "You smell like lake water and sunshine. Good day out there, I hope?"],
+    'tom': ["Worms in a tin, a flask of tea, and no hurry. That's the whole secret.",
+            "I lost a hook in that lake in nineteen-something. Still think about it.",
+            "Fish don't read the almanac. But they do seem to agree with it.",
+            "The best fishing spot is the one nobody's told you about. I'm not telling you either.",
+            "Some days you catch fish. Some days you catch a nice sit down. Both count."],
+    'juniper': ["I reorganised the tanks by colour. Then by size. Then back to colour. Science is hard.",
+                "A fish's scales have rings, like a tree. You can tell how old it is. Isn't that wonderful?",
+                "I named the aquarium snail Professor. He has never once been late.",
+                "Some fish can hear thunder before we can. I believe them completely.",
+                "Bring me anything strange you pull up. Even boots. Especially boots."],
+    'pip': ["I'm saving up for a fishing rod. I have eleven coins and a button.",
+            "Biscuit looked at me today. Like, really looked. I think we're friends now.",
+            "Do fish sleep? Mayor Hazel says yes. Juniper says sort of. I say they're pretending.",
+            "I can whistle with two fingers. Not today, my fingers are tired.",
+            "When I'm big I'm going to catch the Muskie and name it Gerald."],
+    'hazel': ["The town clock is four minutes fast. I've decided that's a feature.",
+              "I'm drafting a bylaw that every Friday is a little bit of a holiday. Fridays approve.",
+              "Every lantern lit on the lake makes Fernwick feel a little more like home.",
+              "Someone left a single perfect plum on my desk. I suspect Pip. I'm touched.",
+              "I keep a list of everyone who helps the town. You're on it, in ink."],
+    'fen': ["I mix my greys with a bit of lake water. Don't ask me why it works. It just does.",
+            "There's a heron at the cove that won't let me finish its portrait. Rude. Beautiful.",
+            "I traded a painting for a loaf of bread once. Best deal I ever made.",
+            "The reflections are the tricky part. The lake paints everything upside down and better.",
+            "Paint the thing you love badly, and keep at it. That's the whole lesson."],
+    'librarian': ["Someone has been dog-earing the fish atlas. I will find them.",
+                  "I read the almanac every Sunday. It's the only book that promises the weather.",
+                  "A library is just a quiet place where everybody is somewhere else.",
+                  "We have a book on knots, a book on boats, and a book on knots in boats.",
+                  "The old lantern keepers kept a log. Half of it is about the weather. The rest is about fish."],
+    'rowan': ["I still wake at three to check a light that isn't mine any more.",
+              "A lake's tide is just the wind. Took me a week to stop waiting for it.",
+              "Out at sea you learn to love a grey day. Here they're almost cosy.",
+              "Fog's an old friend of mine. It came along when I moved, I think.",
+              "I made a model lighthouse out of matchsticks. It's on the windowsill, lit."],
+}
+
+# their own words for a rainy day (instead of everyone saying the same thing)
+RAIN_LINES = {
+    'mabel': ["When it rains, everybody wants cinnamon. I don't blame them.",
+              "Rain on the bakery roof sounds like applause. I bow to it."],
+    'tom': ["Rain stirs the bottom up. The fish come up to see what's for dinner.",
+            "My knees told me this was coming yesterday. Never wrong, my knees."],
+    'juniper': ["Rainy days, the trout come up right under the surface. Go and look!",
+                "The aquarium gets so busy when it rains. Everybody wants to see fish that are drier than them."],
+    'pip': ["I'm jumping in every puddle between here and the fountain. That's the plan.",
+            "My boots are full of rain. It's like having a pond on each foot."],
+    'hazel': ["Rain is good for the flower beds. I'm counting it as town work.",
+              "I've declared this an official Indoor Afternoon. It's binding."],
+    'fen': ["Grey sky, grey lake, a hundred greys. I'm in heaven.",
+            "Rain on the lake makes it look like it's simmering. I'll never paint that."],
+    'librarian': ["Rain is excellent for the library. Everybody remembers they like books.",
+                  "Please shake your umbrella outside. The books have strong feelings about puddles."],
+    'rowan': ["This? This is barely weather. At the lighthouse we'd call this a nice day.",
+              "Rain on a lake is gentle. At sea it came in sideways and angry."],
+}
+SNOW_LINES = {
+    'mabel': ["Snow on the rooftops! Fernwick looks like a cake."],
+    'tom': ["Snow's quiet. Fish like quiet. I like quiet."],
+    'pip': ["I caught a snowflake on my tongue. It tasted like nothing. Amazing."],
+    'fen': ["Snow is just white paint that falls from the sky for free."],
+    'hazel': ["The snow plough committee meets as soon as I find my boots."],
+    'juniper': ["Under the snow the lake keeps going. The fish are fine. I checked!"],
+    'librarian': ["A snowy day is a reading day. That's the law, or it should be."],
+    'rowan': ["Snow on a lake. I never once saw that at the lighthouse. It's lovely."],
+}
+
+# a quick word in passing on the street (shown in a speech bubble, no window)
+PASSING = {
+    'mabel': ["Buns are warm!", "Morning, dear!", "Mind the flour!", "Off fishing?"],
+    'tom': ["Tight lines.", "Mm. Good day for it.", "Watch your knots.", "Hrm. Afternoon."],
+    'juniper': ["Found anything new?", "Hi hi hi!", "Fish facts later!", "Ooh, a lake day!"],
+    'pip': ["Ring toss!", "Hi! Hi! HI!", "Where's Biscuit?", "Race you!"],
+    'hazel': ["Lovely day, officially.", "Good to see you!", "Busy busy!", "Citizen!"],
+    'fen': ["Hold that pose!", "The light's good today.", "Ah, my muse.", "Mind the wet paint."],
+    'librarian': ["Shh. Hello.", "Books are due Friday.", "Good afternoon.", "Read anything good?"],
+    'rowan': ["Ahoy.", "Calm water today.", "Evening, neighbour.", "Fair winds."],
+}
+
+
+def passing(g, k, rng):
+    """A short hello for the street: who you are to them, what you've just done, or the hour."""
+    hello = react(g, k, short=True)
+    if hello and rng.random() < 0.6:
+        return hello
+    m = g.minute
+    if m < 660 and rng.random() < 0.35:
+        return 'Morning!'
+    if m >= 1140 and rng.random() < 0.35:
+        return 'Evening!'
+    return rng.choice(PASSING.get(k, ['Hello!']))
+
+
+def react(g, k, short=False):
+    """Something about what you've just been up to, if there's anything worth mentioning (or None)."""
+    ev = [e for e in getattr(g, 'recent', []) if e['day'] == g.day]
+    if not ev:
+        if not short and g.minute > 900 and not g.stats.get('caught_day') == g.day and g.place == 'town':
+            return "Quiet on the water today? They'll come round. They always do."
+        return None
+    from data import ALL_BY_ID
+    loves = None
+    import town
+    spec = town.FOLK.get(k)
+    if spec:
+        loves = spec['loves']
+    last = ev[-1]
+    fish = [e for e in ev if e['kind'] == 'catch']
+    for e in reversed(fish):
+        if e['fish'] == loves:
+            name = ALL_BY_ID[loves]['name']
+            return ('A %s? My favourite!' % name if short else
+                    "You caught a %s today? That's my favourite fish in the whole lake!" % name)
+    for e in reversed(fish):
+        if e.get('new'):
+            name = ALL_BY_ID[e['fish']]['name']
+            return ('Your first %s!' % name if short else
+                    "I heard you caught your very first %s today! What was it like?" % name)
+        if e.get('record'):
+            name = ALL_BY_ID[e['fish']]['name']
+            if k == 'tom':
+                return ('A record %s, eh?' % name if short else
+                        "A record %s! I've been telling everyone. Well, I told the gnome." % name)
+            return ('A record %s!' % name if short else
+                    "A record %s! Old Tom's been telling everyone. Well, he told me." % name)
+    if last['kind'] == 'lantern':
+        return ('You lit a lantern!' if short else
+                "I saw the lantern come on last night across the water. The whole street went quiet.")
+    if last['kind'] == 'buy':
+        return ('A new %s!' % last['name'].lower() if short else
+                "A new %s on your dock? Very fancy. I'll have to row past and see." % last['name'].lower())
+    if last['kind'] == 'sell' and last.get('coins', 0) >= 200:
+        return ('Big day at market!' if short else
+                "I heard the market did well out of you today. Treat yourself to a bun!")
+    if len(fish) >= 8:
+        return ('Busy day on the lake!' if short else
+                "%d fish today? Leave a few for tomorrow!" % len(fish))
+    if fish and not short:
+        name = ALL_BY_ID[fish[-1]['fish']]['name']
+        return "How's the lake today? Catch anything nice? A %s, I heard!" % name.lower()
+    return None
+
+
+def talk_line(g, k, base, rng):
+    """What neighbour k says this time you talk: something about your day, the weather in their own words,
+    or one of their lines (never one you've just heard from them)."""
+    heard = g.stats.setdefault('heard', {}).setdefault(k, [])
+    said = g.town_day.setdefault('reacted', {})
+    r = react(g, k)
+    if r and said.get(k) != r and rng.random() < 0.65:
+        said[k] = r
+        return _remember(heard, r)
+    w = g.env.weather
+    if w in ('rain', 'storm') and k in RAIN_LINES and rng.random() < 0.35:
+        opts = [ln for ln in RAIN_LINES[k] if ln not in heard] or RAIN_LINES[k]
+        return _remember(heard, rng.choice(opts))
+    if w == 'snow' and k in SNOW_LINES and rng.random() < 0.3:
+        return _remember(heard, SNOW_LINES[k][0])
+    pool = [ln for ln in base if 'rains' not in ln] + MORE_LINES.get(k, [])
+    for _ in range(8):
+        line = pick(g, k, pool, rng)
+        if line not in heard:
+            break
+    return _remember(heard, line)
+
+
+def _remember(heard, line):
+    heard.append(line)
+    del heard[:-8]
+    return line

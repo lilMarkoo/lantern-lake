@@ -54,6 +54,9 @@ class Audio:
         self.beat_t = 0.0
         self.beat_n = 0
         self.chord_i = 0
+        self.tune = None             # the written tune playing now: dict(tune, n, t, mood)
+        self.tune_rest = 3.0         # seconds of quiet before the next one
+        self.pad_cache = {}
         self.bird_t = 3.0
         self.chime_t = 6.0
         self.cur_amb = {k: 0.0 for k in AMB_CH}
@@ -490,50 +493,73 @@ class Audio:
         if n % 32 == 0:
             self.chord_i = (self.chord_i + 1) % 4
 
-    # each season has its own feel: bright spring, lazy summer (with a lydian lift), autumn in a minor key,
-    # and slow, high, bell-like winter
-    SEASON_TONES = {0: [60, 62, 64, 67, 69, 72, 74, 76], 1: [62, 64, 66, 67, 69, 71, 74, 76, 78],
-                    2: [57, 60, 62, 64, 67, 69, 72], 3: [64, 67, 69, 72, 74, 76, 79, 81]}
-    SEASON_BEAT = {0: 0.62, 1: 0.58, 2: 0.7, 3: 0.78}
-    SEASON_P = {0: 0.42, 1: 0.46, 2: 0.36, 3: 0.3}
+    def pad_for(self, chord):
+        """A slow, soft pad for any chord (made the first time it's needed)."""
+        snd = self.pad_cache.get(chord)
+        if snd is None:
+            t = self._t(9.0)
+            env = np.minimum(1, t / 2.0) * np.minimum(1, (9.0 - t) / 3.0)
+            x = np.zeros(len(t))
+            for m in chord:
+                f = self.mf(m)
+                x += (np.sin(2 * np.pi * f * t) + 0.5 * np.sin(2 * np.pi * f * 1.004 * t)
+                      + 0.15 * np.sin(2 * np.pi * f * 2 * t))
+            x *= env * (0.85 + 0.15 * np.sin(2 * np.pi * 0.25 * t))
+            snd = self.pad_cache[chord] = self._snd(x, 0.5)
+        return snd
 
     def _music(self, dt, env, quiet=False, town=False):
+        """A written tune for the moment (tunes.py), played once through, then a rest while the lake talks."""
         if self.music_vol <= 0.001:
             return
-        season = env.season if env.season in self.SEASON_BEAT else 0
-        beat = self.SEASON_BEAT[season] if env.nf < 0.5 else 0.8
-        if town and env.nf < 0.5:
-            beat *= 0.9                              # a little brisker in the village
-        self.beat_t += dt
-        if self.beat_t < beat:
+        import tunes
+        md = tunes.mood(env, town)
+        st = self.tune
+        if st is None:
+            self.tune_rest -= dt * (2.5 if town else 1.0)        # the village doesn't stay quiet long
+            if self.tune_rest > 0:
+                return
+            st = self.tune = dict(tune=tunes.pick(md), n=0, t=10.0, mood=md)
+        tune = st['tune']
+        beat = tune['beat']
+        st['t'] += dt
+        if st['t'] < beat:
             return
-        self.beat_t -= beat
-        if self.beat_n % 16 == 0:
-            self.chord_i = (self.chord_i + 1) % 4
+        st['t'] = min(st['t'] - beat, beat)
+        bi, k = divmod(st['n'], 8)
+        if bi >= len(tune['bars']) or (k == 0 and md != st['mood'] and bi > 0):
+            # the end of the tune (or the moment changed): let the pad fade and rest a while
+            for ch in self.pads:
+                ch.fadeout(4000)
+            self.tune = None
+            self.tune_rest = tunes.rest() if bi >= len(tune['bars']) else 2.5
+            return
+        st['n'] += 1
+        chord, mel = tune['bars'][bi]
+        if k == 0:
             old = self.pads[self.pad_i]
-            old.fadeout(3000)
+            old.fadeout(2500)
             self.pad_i = 1 - self.pad_i
             ch = self.pads[self.pad_i]
-            ch.play(self.pad_sounds[self.chord_i], fade_ms=1500)
-            ch.set_volume(self.music_vol * 0.32)
-        self.beat_n += 1
-        p = self.SEASON_P[season] if env.nf < 0.5 else 0.3
-        if quiet:
-            p *= 0.2
-        if town and not quiet and self.beat_n % 4 == 0:   # Fernwick gets a soft walking bass
-            ch = self.note(self.chord_tones[self.chord_i][0] - 24).play()
-            if ch:
-                ch.set_volume(self.music_vol * 0.3)
-        if random.random() < p:
-            tones = self.chord_tones[self.chord_i] + self.SEASON_TONES[season]
-            m = random.choice(tones)
-            if env.nf > 0.5 and m > 72:
-                m -= 12
-            ch = self.note(m).play()
-            if ch:
-                v = self.music_vol * random.uniform(0.25, 0.45)
-                pan = random.uniform(0.3, 0.7)
-                ch.set_volume(v * min(1, 2 * (1 - pan)), v * min(1, 2 * pan))
+            ch.play(self.pad_for(chord), fade_ms=1200)
+            ch.set_volume(self.music_vol * (0.18 if quiet else 0.28))
+            b = self.note(chord[0] + 12 if chord[0] < 45 else chord[0]).play()
+            if b:
+                b.set_volume(self.music_vol * 0.22)
+        if town and not quiet and k % 2 == 0:              # Fernwick gets a soft walking bass
+            b = self.note(chord[0] if chord[0] >= 45 else chord[0] + 12).play()
+            if b:
+                b.set_volume(self.music_vol * 0.2)
+        m = mel[k]
+        if m is None or (quiet and k % 2):
+            return
+        if env.nf > 0.5 and m > 76:
+            m -= 12
+        ch = self.note(m).play()
+        if ch:
+            v = self.music_vol * (0.4 if not quiet else 0.18)
+            pan = 0.5 + 0.18 * ((bi % 2) * 2 - 1) * (k / 8)
+            ch.set_volume(v * min(1, 2 * (1 - pan)), v * min(1, 2 * pan))
 
     # ------------------------------------------------------------ the radio
     RADIO_CH = 7

@@ -103,6 +103,17 @@ request. At the sea, the harbour's jobs (the lighthouse, Morwen's orders, Kit's 
 asking for a lake fish. Under it are the day's notes: snacks, visitors, fish runs, the sky. Away at the sea,
 the lake's chores (the garden, the wagon, the crab pot) stay at home.
 
+When a fish you have never caught could bite **right now** (because it's dusk, or raining, or you're at the one
+spot it lives), the notes say so, for example *2 new fish could bite now (at dusk)*, and a note pops up the
+moment it starts.
+
+Notes at the top of the screen come two at a time; the rest wait their turn instead of piling up, and over a
+window they sit at the very top, clear of its buttons. A fish you've caught before that's nothing special (not
+new, not a record, not rare, not wanted for a request) goes straight into your basket with a small note in the
+bottom corner, so you can cast again. New fish, records and anything rare still get the full card. First-day
+tips show only when they make sense (no "sell your catch" with an empty basket, no "rest" at noon) and move on
+by themselves.
+
 With the Calm or Compact HUD, the cards fade nearly away once your bobber has settled and all through the
 fight, so it's just you and the water. With the Calm HUD they also fade when nothing has changed for a few
 seconds. Point at them, or earn some coins, and they come back. While a cast is out the goal card shrinks to a
@@ -221,21 +232,29 @@ up, tail going, at every nibble. Every so often a kingfisher comes to sit on the
 dives for a minnow and flies back up with it (it's off as soon as you hook something). The wind moves through the trees in gusts
 and you can see each gust ruffle across the water.
 
+About once a minute something bigger happens on the lake: a **heron** wades slowly through the shallows and
+stabs at a fish (it flies off when you hook one), a **canoe** paddles past with a lantern at the bow after dark,
+a big fish **leaps** clear of the water two or three times, or a **breeze** sweeps across the whole lake,
+darkening the water and setting the reeds and willows swaying. In spring, blossom petals drift down and float.
+At dawn, dusk and under the stars the camera sits a little higher, so you see more of the sky.
+
 **The evening rise**: at dusk on the lake (not in a storm, and not under ice), fish come up to feed. Fish jump
 and rise all over the water, bites come about a third quicker and the better fish are likelier.
 
 Two things on the water are worth casting at:
 
-- **Bubbles**: something hungry is down there. Bites come quicker and rarer fish are likelier
+- **Bubbles**: a wide fizzing patch with big bubbles breaking the surface. Something hungry is down there:
+  bites come much quicker and rarer fish are a lot likelier. They come often, and they're easy to hit
 - **Feeding schools**: a dark patch with little fins breaking the surface, drifting slowly across the water.
   Cast into one for quick bites (a school is good for a couple of fish before it moves on)
 
 ### The worm tin
 
-Garden worms are free, but you get one tin a day: **30 worms**, dug fresh every morning. A worm goes when a
-fish takes your bait (hooked, or one that got away with it because you struck too late). When the tin is empty
-you switch to whatever other bait you have, or buy another 15 worms at the shop for 20 coins (extras you buy
-carry over). The bait label at the top right shows how many are left.
+Garden worms are free, but you get one tin a day: **30 worms**, dug fresh every morning. A worm goes when you
+hook a fish (a bite you miss keeps its worm). When the tin is empty you switch to whatever other bait you have.
+With none, casting at the dock digs along the bank for 10 more (half an hour goes by); away from the dock, row
+home to dig, or buy another 15 worms at the shop for 20 coins (extras you buy carry over). The bait label at the
+top right shows how many are left.
 
 **Spooked fish**: a rare fish (rare, very rare or legendary) that snaps your line or gets away is spooked. It
 won't bite again until tomorrow.
@@ -244,20 +263,25 @@ won't bite again until tomorrow.
 
 Wren's Wagon sells a rowboat for 500 coins. Fen's birthday gift, the Little Rowboat, works too. On her very
 first visit (if you have no boat yet) Wren lends you her rowboat for the day, so you can try the other spots
-before you save up; she takes it back at bedtime. Once you have one, open the lake map (B) and row to one of
-three new places. Biscuit comes along. You row home
-automatically when you rest for the night.
+before you save up; she takes it back at bedtime. That day Wren waits on your dock beside her boat, waving,
+with an arrow over the boat, until you take it out. On other wagon days her rowboat for sale is tied up beside
+the wagon with a price tag. Once you have one, open the lake map (B) and row to one of three new places.
+Biscuit comes along. You see the whole lake as you row across it (a few seconds, with the wake opening out
+behind you). You row home automatically when you rest for the night.
 
-- **Lily Cove**: shallow water full of lily pads and frogs. Bites come quickly, but casts never reach deep water.
-  The hook sometimes **snags in the lily stems**: tap to try to work it loose (it keeps your bait), or hold to
-  tear it free (the bait stays in the weeds)
+- **Lily Cove**: shallow water full of lily pads and frogs, with big pads and cattails right in front of you
+  and a willow hanging over the boat. Bites come quickly, but casts never reach deep water.
+  The hook sometimes **snags in the lily stems**: tap to try to work it loose (it keeps your bait), hold to
+  tear it free (the bait stays in the weeds), or just wait a few seconds and it comes loose by itself
   Home of the Mud Bullhead, the Lily Gourami and the Velvet Tench
-- **The Deep**: the middle of the lake, marked by a red buoy. A fish hooked here **bolts for the bottom**
+- **The Deep**: the middle of the lake, marked by a red buoy. Open, darker water with long swells and low mist,
+  and the shore far away. A fish hooked here **bolts for the bottom**
   first: it's heavy on the line and out of sight, so follow its bubbles. Bites are slow, but there are few small
   fish and more rare ones,
   bigger catches and more pearl clams. Home of the Silver Cisco, the Midnight Burbot and the legendary Mossback
   Muskie
-- **Willow Creek**: where the river comes in. The current carries your bobber downstream while you wait.
+- **Willow Creek**: where the river comes in, between close grassy banks under weeping willows, with stones at
+  the water's edge. The current runs fast and carries your bobber downstream while you wait.
   Home of the Creek Chub, the Sail Grayling and the River King Salmon. In autumn the salmon run upstream at
   any hour
 
@@ -401,8 +425,11 @@ Talk to anyone (E) once a day to grow your friendship, and give them a fish. Eve
 loved fish counts for a lot. At 3, 6 and 10 hearts they send you a letter with a gift. Finishing a mailbox
 request also makes a friend. Resting for the night walks you home to the lake.
 
-What people say changes with the season, the weather, the time of day and festivals, and close friends talk
-more openly. At **5 hearts** each neighbour has a short scene with you, played out on the street the next time
+What people say changes with the season, the weather (each in their own words), the time of day and
+festivals, and close friends talk more openly. They pick something new each time you talk, and they notice what
+you've been up to: your first catch of a fish, a record, their favourite fish, a new dock decoration, a lantern
+you lit, a big day at the market. Walk past a neighbour on the street and they say a word or two in a speech
+bubble, no window, and you keep walking. At **5 hearts** each neighbour has a short scene with you, played out on the street the next time
 you talk to them:
 
 - **Mabel** finds Grandma Rosie's Sunny Tart recipe card in her flour bin
@@ -477,7 +504,8 @@ things done first. Press L to see them:
 | Deep Lantern | Autumn | 3 kinds of rare fish, cook 5 different recipes, 5 hearts with 3 neighbours |
 | Creek Lantern | Winter | 20 kinds of fish, a home upgrade, cook 15 dishes |
 
-When a lantern is ready it pulses on the far shore. Row to its spot and light it from the lanterns window. You
+When a lantern is ready it pulses on the far shore. Lanterns are lit as the light goes: from **5:30 PM**,
+when a ready lantern calls you out with a note. Row to its spot and light it from the lanterns window. You
 row across and the view closes in on the old lantern; **hold Space or the mouse** (or keep tapping) to light the
 wick, and the flame catches and flares with its own little tune. Then the view pulls back over the whole lake,
 the windows of Fernwick light up one by one along the far shore, the old bell rings on the hill, and someone
@@ -708,12 +736,15 @@ The calendar (K) shows a three-day weather forecast, the moon phase and every ev
 - Co-op for up to four players: over the internet with a room code, or on your home Wi-Fi, with gifts, races
   and shared expeditions
 - Shop: rods, bait, a dock lantern and nine dock decorations, including a telescope that brings more and luckier
-  shooting stars
+  shooting stars. Anything new on the dock gets a bouncing arrow and its name for a few seconds, so you see where
+  it went. Until the town funds the lighthouse, its timber frame waits on the far shore
 - Daily fish requests from the villagers through the mailbox
 - Luck: pet Biscuit once a day, release fish, wish on shooting stars
 - Generated ambience (water, rain, crickets, wind, birds, wind chimes, and the town sounds) and gentle kalimba
-  music that changes with the seasons (bright spring, lazy summer, a minor-key autumn, slow winter bells), with a
-  soft walking bass in Fernwick
+  music: a written tune for each season by day (*Thaw*, *Long Afternoon*, *Woodsmoke*, *First Snow*), for dawn
+  (*Mist on the Water*), dusk (*Lanterns*), night (*Stars on the Lake*) and the village (*Market Day*, with a
+  soft walking bass). Each plays once through, then the music rests for half a minute or so and you just hear
+  the lake
 - Three save slots (title screen, *Save slots*). Slot 1 is `save.json` and slots 2 and 3 are `save2.json` and
   `save3.json`. Deleting a slot keeps a `.bak` copy. The game saves automatically. Older saves are moved onto
   the new seven-day calendar

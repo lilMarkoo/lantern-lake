@@ -32,6 +32,69 @@ def clamp(v, a=0.0, b=1.0):
     return a if v < a else b if v > b else v
 
 
+SNAG_FREE = 7.0          # seconds before a snag in the lily stems works itself loose
+
+
+def new_now(g):
+    """Fish you have never caught that could bite right here, right now, with the rod in your hand."""
+    env = g.env
+    phase, season, weather = env.phase, env.season, env.weather
+    spot = getattr(g, 'spot', 'dock')
+    reach = g.rod_spec()['range']
+    out = []
+    for f in FISH:
+        if f['id'] in g.journal or f['rarity'] == 5:
+            continue
+        if spot == 'dock':
+            if f['spot']:
+                continue
+        elif f['spot'] != spot and f['id'] not in SPOT_FISH.get(spot, ()):
+            continue
+        if f.get('event') and not g.event_active(f['event']):
+            continue
+        if f.get('tide') and not coast.fish_ok(g, f):
+            continue
+        if g.spooked(f['id']) or (f.get('year') and seasons.year(g) < f['year']):
+            continue
+        if f['phases'] and phase not in f['phases']:
+            continue
+        if f['seasons'] is not None and season not in f['seasons']:
+            continue
+        if f['weather'] and weather not in f['weather']:
+            continue
+        if f['needs'] and g.rod != f['needs']:
+            continue
+        lo, hi = f['depth']
+        if spot_depth(spot, 0.1) > hi + 0.05 or spot_depth(spot, reach) < lo:
+            continue
+        if not _special(f, spot):
+            continue                   # an everyday fish: no need to point out the moment
+        out.append(f)
+    return out
+
+
+def _special(f, spot):
+    """Only bites at some hours, in some weather, at one spot, or during an event: now is the moment."""
+    return bool((f['phases'] and 'day' not in f['phases']) or (f['weather'] and 'clear' not in f['weather'])
+                or (f['spot'] and spot != 'dock') or f.get('event'))
+
+
+def why_now(g, fish):
+    """What makes now the moment for these fish: 'at dusk', 'in the rain', 'here'..."""
+    env = g.env
+    why = []
+    if any(f['phases'] and 'day' not in f['phases'] for f in fish):
+        why.append({'dawn': 'at dawn', 'day': 'by day', 'dusk': 'at dusk', 'night': 'tonight'}[env.phase])
+    if any(f['weather'] and 'clear' not in f['weather'] for f in fish):
+        why.append({'rain': 'in the rain', 'storm': 'in the storm', 'fog': 'in the fog',
+                    'snow': 'in the snow'}.get(env.weather, 'in this weather'))
+    if any(f['spot'] for f in fish) and getattr(g, 'spot', 'dock') != 'dock':
+        why.append('here')
+    if not why:
+        why.append('today')
+    return why
+
+
 def spot_depth(spot, d):
     """How deep a cast of distance d reaches at each spot (the cove is shallow, the Deep is deep everywhere)."""
     if spot == 'cove':
@@ -252,6 +315,9 @@ class Fishing:
         self.snag = self.snag_rolled = False
         if self.hot:
             g.toast_few('bubbles', 'Right on the bubbles! Something is down there...', (90, 150, 190))
+            w.sparkles(x, y - 4, 10, (220, 244, 255), 10)
+            w.splash(x, y, 8, 0.9 * persp)
+            g.audio.play('bloop', 0.5, x / W)
         elif self.school:
             g.toast_few('school', "Into the school! They're feeding.", (90, 150, 190))
         self.catch = self.pick(self.d)
@@ -369,7 +435,7 @@ class Fishing:
             if g.bait == 'storm' and f['weather'] and 'rain' in f['weather'] and weather == 'rain':
                 w *= 3
             if self.hot and r >= 2:
-                w *= 1.8
+                w *= 2.6 if r >= 3 else 2.0         # the bubbles are where the good ones are feeding
             if getattr(self, 'school', False) and r >= 2:
                 w *= 1.3
             if spot == 'deep':
@@ -591,12 +657,14 @@ class Fishing:
             if spot == 'creek':
                 # the current carries the bobber downstream (to the right) until the line pulls tight
                 self.dst = (min(self.dst[0] + CREEK_DRIFT * dt, min(628, self.drift_max)), self.dst[1])
-            elif (spot == 'cove' and not self.snag_rolled and self.t > 2.5 and self.t < self.bite_at - 2.6
+            elif (spot == 'cove' and not self.snag_rolled and not self.snag and self.t > 2.5
+                  and self.t < self.bite_at - 2.6
                   and self.shadow is None):
                 # the cove's lily stems: now and then the hook catches in them
                 self.snag_rolled = True
                 if self.rng.random() < 0.2 and not self.catch['spec'].get('junk'):
                     self.snag = True
+                    self.snag_t = 0.0
                     self.bite_at = 1e9
                     self.nibbles = []
                     g.world.ripple(self.dst[0], self.dst[1], 5, 10, 140)
@@ -613,6 +681,14 @@ class Fishing:
             if self.snag:
                 target = -44                     # the line pulled tight to the weeds, the bobber leaning
                 self.bob = [x, y + 1.6 + hop * 0.5]
+                self.snag_t = getattr(self, 'snag_t', 0.0) + dt
+                if self.snag_t > SNAG_FREE:
+                    # left alone long enough, the stems let go by themselves
+                    self.snag = False
+                    self.bite_at = self.t + self.rng.uniform(3.0, 7.0)
+                    g.world.splash(x, y, 4, 0.4)
+                    g.world.ripple(x, y, 6, 10, 140)
+                    g.audio.play('plop', 0.3, x / W)
             else:
                 self.bob = [x, y + math.sin(self.t * 2.6) * 0.7 + dip + hop]
             self.ring_t -= dt
@@ -636,11 +712,7 @@ class Fishing:
             x, y = self.dst
             self.bob = [x, y + min(9.0, self.t * 70)]       # yanked clean under
             if self.t > self.window:
-                if g.bait == 'worm':
-                    g.use_bait()
-                    self.fail('It got away with the worm... bites are quick!')
-                else:
-                    self.fail('It got away... bites are quick!')
+                self.fail('It got away... bites are quick!')
         elif st == 'fight':
             self._fight(dt)
             if self.state == 'fight':
@@ -679,6 +751,11 @@ class Fishing:
                 g.on_catch(self.catch)
         elif st == 'caught':
             target = -95
+            if getattr(self, 'quick_t', 0) > 0:
+                # a repeat catch: a quick look at it, then it's in the basket and you can cast again
+                self.quick_t -= dt
+                if self.quick_t <= 0:
+                    self.finish()
         elif st == 'reel_back':
             target = -60
             if self.bob is None:

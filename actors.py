@@ -396,9 +396,15 @@ def draw_extras(s, g, t):
     if g.has_boat():
         bob = math.sin(t * 1.2) * 0.6
         x0, y0 = 156, 309 + bob
-        hull = [(x0, y0), (x0 + 28, y0), (x0 + 24, y0 + 5), (x0 + 4, y0 + 5)]
+        hull = [(x0 - 4, y0 - 1), (x0 + 34, y0 - 1), (x0 + 29, y0 + 6), (x0 + 1, y0 + 6)]
+        pygame.draw.polygon(s, (30, 50, 64), [(p[0], p[1] + 2) for p in hull])
         pygame.draw.polygon(s, (92, 130, 150), hull)
         pygame.draw.line(s, (236, 230, 214), hull[0], hull[1])
+        pygame.draw.line(s, (150, 106, 70), (x0 + 2, y0 - 2), (x0 + 30, y0 - 3), 1)      # the oars, shipped
+        if not g.owns_boat():
+            pygame.draw.line(s, (110, 80, 56), (x0 + 30, y0 - 1), (x0 + 30, y0 - 10))
+            fl = math.sin(t * 4) * 1.2
+            pygame.draw.polygon(s, (70, 140, 150), [(x0 + 31, y0 - 10), (x0 + 37, y0 - 8 + fl), (x0 + 31, y0 - 6)])
         s.fill((150, 106, 70), (x0 + 9, int(y0) - 1, 3, 2))
         s.fill((150, 106, 70), (x0 + 18, int(y0) - 1, 3, 2))
         pygame.draw.line(s, (120, 88, 60), (x0 + 6, y0 + 1), (x0 - 4, y0 + 7))
@@ -711,10 +717,53 @@ def rim_light(near, g, env):
         del a, rgb, px
 
 
+WREN_X = 160              # where Wren waits on the dock, the day she lends you her boat
+
+
+def draw_wren(s, g, t):
+    """Wren on your dock beside her boat, waving you over until you take it out."""
+    if not g.loan_waiting():
+        return
+    x, fy = WREN_X, DECK_Y
+    by = draw_person(s, x, fy, (60, 132, 142), (150, 150, 156), 'none', g.env.season, int(t * 1.2) % 2)
+    s.fill((150, 150, 156), (x - 2, by - 24, 4, 3))            # her grey bun
+    s.fill((230, 110, 90), (x - 4, by - 15, 8, 1))             # a red neckerchief
+    wave = math.sin(t * 7)
+    sh = (x + 3, by - 13)
+    hand = (x + 7 + wave * 2, by - 24)
+    pygame.draw.line(s, (60, 132, 142), sh, (sh[0] + 2, by - 18), 2)
+    pygame.draw.line(s, (240, 202, 172), (sh[0] + 2, by - 18), hand, 2)
+    # a bobbing marker over the boat: this one's yours today
+    draw_marker(s, 172, 318, t)
+
+
+def draw_marker(s, x, y, t, col=(255, 210, 90)):
+    """A bouncing arrow over something new."""
+    b = abs(math.sin(t * 3.2)) * 5
+    yy = int(y - 10 - b)
+    pygame.draw.polygon(s, (60, 40, 30), [(x - 5, yy - 6), (x + 5, yy - 6), (x, yy + 1)])
+    pygame.draw.polygon(s, col, [(x - 4, yy - 5), (x + 4, yy - 5), (x, yy)])
+    s.fill(lighten(col, 0.4), (x - 2, yy - 5, 2, 1))
+    s.fill((60, 40, 30), (x - 2, yy - 11, 5, 6))
+    s.fill(col, (x - 1, yy - 10, 3, 5))
+
+
+def draw_marks(s, g, t):
+    m = getattr(g, 'spot_mark', None)
+    if m and g.spot == 'dock':
+        draw_marker(s, int(m['x']), int(m['y']), t)
+        if int(t * 4) % 2 == 0:
+            for i in range(5):
+                a = t * 2 + i * 1.256
+                s.set_at((int(m['x'] + math.cos(a) * 10), int(m['y'] + math.sin(a) * 4)), (255, 244, 190))
+
+
 def draw_all(s, g, t):
     if getattr(g, 'spot', 'dock') == 'dock':
         draw_decor(s, g, t)
         draw_extras(s, g, t)
+        draw_wren(s, g, t)
+        draw_marks(s, g, t)
         draw_peers(s, g, t, 'dock')
         draw_cat(s, g, t)
         draw_player(s, g, t)

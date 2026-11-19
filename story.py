@@ -110,7 +110,12 @@ def can_light(g, lan):
     if g.place != 'lake' or g.spot != lan['spot']:
         from data import SPOT_BY_ID
         return False, 'Row out to %s to light it.' % SPOT_BY_ID[lan['spot']]['name']
+    if 300 <= g.minute < DUSK:
+        return False, 'Lanterns are lit at dusk: come back after %d:%02d PM.' % (DUSK // 60 - 12, DUSK % 60)
     return True, ''
+
+
+DUSK = 17 * 60 + 30          # lanterns are lit as the light goes, not in full sun
 
 
 def hud_line(g):
@@ -220,6 +225,8 @@ def _do_light(g, lid):
     g.shake(0.6)
     g.stats['lanterns'] = len(g.story['lit'])
     g.luck = min(3.0, g.luck + 1.0)
+    if hasattr(g, 'note'):
+        g.note('lantern', id=lid)
 
 
 def _after_light(g):
@@ -234,6 +241,15 @@ def update(g, dt):
             and g.rest_phase is None and g.place == 'lake' and g.spot == 'dock' and g.minute >= 1170
             and g.fishing.state == 'idle' and g.mode == 'play'):
         festival(g)
+    # as the light goes, a ready lantern calls you out to light it
+    if st['started'] and g.mode == 'play' and DUSK <= g.minute < DUSK + 90 and st.get('dusk_call') != g.day:
+        lan = current(g)
+        if lan and lan['id'] not in st['lit'] and awake(g, lan) and tasks_done(g, lan):
+            st['dusk_call'] = g.day
+            from data import SPOT_BY_ID
+            where = '' if (g.place == 'lake' and g.spot == lan['spot']) else (
+                ' Row out to %s.' % SPOT_BY_ID[lan['spot']]['name'])
+            g.toast('The light is going: time to light the %s.%s' % (lan['name'], where), (220, 160, 80))
 
 
 FOLK_ON_DOCK = [('mabel', 112), ('tom', 126), ('hazel', 140), ('juniper', 154), ('fen', 168), ('librarian', 182),

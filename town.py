@@ -35,7 +35,6 @@ FOLK = {
                       "Flour on my nose again? It's a baker's freckle, dear.",
                       "A Lakeside Tea before fishing, and the fish practically queue up.",
                       "I tried a fish pie once. Biscuit ate the whole crust.",
-                      "When it rains, everybody wants cinnamon. I don't blame them.",
                       "My mother ran this bakery, and her mother before that. Same oven!"]),
     'tom': dict(name='Old Tom', shirt=(100, 124, 92), hair=(214, 214, 210), hat='bucket', home=226,
                 work=(420, 1140), loves='catfish', req='Old Tom', lines=[
@@ -1494,6 +1493,7 @@ class Town:
             c[2] += 120 * dt
             c[3] -= dt
         self.coins_fx = [c for c in self.coins_fx if c[3] > 0]
+        self._passing(dt, g)
         rt = self.rt
         if rt['rings'] > 0 or rt['fly']:
             rt['t'] += dt
@@ -1501,6 +1501,32 @@ class Town:
             rt['fly'][1] += dt / 0.55
             if rt['fly'][1] >= 1:
                 self._ring_lands(g)
+
+    def _passing(self, dt, g):
+        """Walk past a neighbour and they say a word or two in a speech bubble (no window, you keep walking)."""
+        say = getattr(self, 'says', None)
+        if say is None:
+            say = self.says = {}            # k -> [text, seconds left]
+            self.say_cd = {}
+        for k in list(say):
+            say[k][1] -= dt
+            if say[k][1] <= 0:
+                del say[k]
+        for k in list(self.say_cd):
+            self.say_cd[k] -= dt
+            if self.say_cd[k] <= 0:
+                del self.say_cd[k]
+        if g.overlay is not None or g.rest_phase is not None or self.sitting is not None or say:
+            return
+        for k, f in self.folk.items():
+            if k in self.say_cd or k in self.scene_folk or not self.folk_here(k, g.minute):
+                continue
+            d = abs(f['x'] - self.x)
+            if 18 < d < 70:
+                say[k] = [dialogue.passing(g, k, random.Random()), 3.2]
+                self.say_cd[k] = 45.0
+                g.audio.chat(0.3)
+                break
 
     # ------------------------------------------------------------ input
     def click(self, g, wx, wy):
@@ -1709,12 +1735,9 @@ class Town:
         self.talk_to = k
         self.gift_mode = False
         spec = FOLK[k]
-        rng = random.Random(g.day * 13 + FOLK_ORDER.index(k))
-        line = dialogue.pick(g, k, spec['lines'], rng)
+        rng = random.Random()                 # a new pick every time you stop to talk
+        line = dialogue.talk_line(g, k, spec['lines'], rng)
         env = g.env
-        if env.weather in ('rain', 'snow') and rng.random() < 0.5:
-            line = {'rain': "Lovely rain, isn't it? The fish think so too.",
-                    'snow': 'Snow on the rooftops! Fernwick looks like a cake.'}[env.weather]
         b = BIRTHDAYS.get((env.season, (g.day - 1) % 7 + 1))
         if b and b['fish'] == spec['loves']:
             line = "It's my birthday today! Don't tell anyone. Well, you can tell a few people."
