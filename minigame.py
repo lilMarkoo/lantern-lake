@@ -622,10 +622,12 @@ def draw(s, ui, mg, t, title, teach=True):
         s.blit(halo, (int(fx) - 24, int(fy) - 24))
     cw = mg.fv >= 0
     heading = mg.fa + (90 if cw else -90)              # direction of travel on screen
-    key = ('fm', spec['id'], int(round(heading / 15)) % 24)
+    mv = getattr(mg, 'morph', None)
+    key = ('fm', spec['id'], mv, int(round(heading / 15)) % 24)
     spr = _cache.get(key)
     if spr is None:
-        base = art.fish_sprite(spec, 1)
+        import morphs
+        base = morphs.sprite(spec, mv, 1)
         base = pygame.transform.scale(base, (int(base.get_width() * 1.0), int(base.get_height() * 1.0)))
         h = int(round(heading / 15)) * 15
         if 90 < h % 360 < 270:                          # keep the fish upright when it swims left

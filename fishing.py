@@ -297,6 +297,10 @@ class Fishing:
         self.bob = list(self.src)
         self.g.audio.play('cast', 0.7)
 
+    def _catch_sprite(self):
+        import morphs
+        return morphs.sprite(self.catch['spec'], self.catch.get('v'), 1)
+
     def land(self):
         g = self.g
         w = g.world
@@ -482,7 +486,8 @@ class Fishing:
         r = min(1.0, self.rng.random() ** 1.7 + g.luck * 0.03 + (0.12 if spot == 'deep' else 0)
                 + g.boost('size'))
         size = round(lo + (hi - lo) * r, 1)
-        return dict(spec=spec, size=size)
+        import morphs
+        return dict(spec=spec, size=size, v=morphs.roll(g, spec, self.rng, bool(getattr(self, 'hot', False))))
 
     def bite(self):
         g = self.g
@@ -521,6 +526,7 @@ class Fishing:
             g.audio.play('warn', 0.8)
         else:
             self.mg = ReelGame(spec, g.rod_spec(), g.assist(), self.rng, size_k)
+        self.mg.morph = self.catch.get('v')
         self.drop_t = 0.0
         if getattr(g, 'spot', 'dock') == 'deep' and not isinstance(self.mg, LegendGame):
             # deep water: it bolts straight for the bottom, heavy on the line, and you follow the bubbles
@@ -1052,7 +1058,8 @@ class Fishing:
         harder when it lunges, the water tinting it more toward its belly."""
         import numpy as np
         size = min(56.0, w * 2.3)
-        base = art.fish_sprite(spec, 1)
+        import morphs
+        base = morphs.sprite(spec, self.catch.get('v') if self.catch else None, 1)
         bw, bh = base.get_size()
         sulk = getattr(mg, 'sulk', 0) > 0
         busy = mg.lunge > 0 or mg.warn > 0
@@ -1140,7 +1147,7 @@ class Fishing:
         bx, by = self.bob
         if st == 'fight' and self.leap_h > 1:
             # the fish jumps clear of the water
-            spr = art.fish_sprite(self.catch['spec'])
+            spr = self._catch_sprite()
             persp = 0.5 + (self.fish_pos[1] - HORIZON) / 170
             k = 0.3 + 0.12 * persp
             small = pygame.transform.scale(spr, (int(spr.get_width() * k), int(spr.get_height() * k)))
@@ -1152,7 +1159,7 @@ class Fishing:
             rot = pygame.transform.rotate(small, tilt)
             near.blit(rot, (int(bx - rot.get_width() / 2), int(by - rot.get_height() / 2)))
         if st == 'landing' or st == 'caught':
-            spr = art.fish_sprite(self.catch['spec'])
+            spr = self._catch_sprite()
             sw = spr.get_width()
             if st == 'landing':
                 k = 0.42

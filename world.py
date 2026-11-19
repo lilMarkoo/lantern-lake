@@ -700,6 +700,11 @@ class World:
             biscuit.draw_gift(near, g, t)
             import garden
             garden.draw_world(near, g, t)
+            if hasattr(g, 'hatch'):
+                import hatchery
+                hatchery.draw_world(near, g, t)
+                import dungeon
+                dungeon.draw_world(near, g, t)
             if hasattr(g, 'shore'):
                 import shore
                 shore.draw_world(near, g, t)

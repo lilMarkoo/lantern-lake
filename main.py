@@ -68,6 +68,10 @@ import screen as screenmod
 import creator
 import look as looks
 import garden as gardenmod
+import cabinui
+import hatchery
+import dungeon
+import morphs
 import wildlife
 import shore as shoremod
 import discover
@@ -224,8 +228,8 @@ def fmt_clock(minute):
     return '%d:%02d %s' % (h12, mm, ap)
 
 
-CABIN_TABS = (('tank', 'Fish tank'), ('kitchen', 'Kitchen'), ('garden', 'Garden'), ('home', 'Home'),
-              ('biscuit', 'Biscuit'), ('wardrobe', 'Wardrobe'))
+CABIN_TABS = (('tank', 'Fish tank'), ('kitchen', 'Kitchen'), ('garden', 'Garden'), ('hatchery', 'Hatchery'),
+              ('home', 'Home'), ('biscuit', 'Biscuit'), ('wardrobe', 'Wardrobe'))
 
 
 class Game:
@@ -315,6 +319,7 @@ class Game:
         self.snap_card = None
         self.n_sel = 0               # the Nature page's chosen animal
         self.garden_sel = None       # the Garden tab's chosen bed
+        self.hatch_sel = None        # the Hatchery tab's chosen pond fish
         self.garden_fx = 0.0
         self.fade = 1.0
         self.fade_dir = -1
@@ -665,6 +670,8 @@ class Game:
         self.exp = None              # an expedition with friends online (coop.py)
         self.gift_to = None
         self.garden = gardenmod.new()   # the cabin garden (garden.py)
+        self.hatch = hatchery.new()     # the hatchery pond and the colours found (hatchery.py, morphs.py)
+        self.delve = dungeon.new_rec()  # the Drowned Stair's records (dungeon.py): runs are never saved
         self.shore = shoremod.new()     # restoring the shore by the dock (shore.py)
         self.finds = discover.new()     # what Biscuit has found in Fernwick (discover.py)
         self.disc = None
@@ -728,6 +735,7 @@ class Game:
         self.sky = None              # tonight's rare sky: 'storm' or 'aurora'
         self.ice_hole = 0            # the day you last drilled through the ice
         self.icescene = None         # ice fishing (icefish.py), under overlay 'ice'
+        self.dungeon = None          # a run down the Drowned Stair (dungeon.py), under overlay 'dungeon'
         aqmod.HEADLESS, aqmod.fmt_clock = HEADLESS, fmt_clock
         hbmod.HEADLESS, hbmod.fmt_clock = HEADLESS, fmt_clock
         self.aqscene = None          # also Saltmarsh harbour (harbour.py), under overlay 'harbour'
@@ -771,7 +779,7 @@ class Game:
                     cat_bond=self.cat_bond, cat_day=self.cat_day, cat_gift=self.cat_gift,
                     cat_follow=self.cat_follow, home=self.home, tut=self.tut, tut_day=self.tut_day,
                     garden=self.garden, nature=self.nature, shore=self.shore, finds=self.finds,
-                    coast=self.coast, goals=self.goals)
+                    coast=self.coast, goals=self.goals, hatch=self.hatch, delve=self.delve)
         if self.solo:
             data.update(self.solo)       # visiting a friend: your own lake keeps its own day and weather
         try:
@@ -889,7 +897,7 @@ class Game:
                   'museum', 'friends', 'friend_gifts', 'buffs', 'jobs', 'tickets', 'projects', 'town_day',
                   'recipes', 'pantry', 'meal', 'upgrades', 'cook_best', 'story', 'heart_seen', 'market', 'hunts', 'pot', 'sky', 'ice_hole',
                   'cat_bond', 'cat_day', 'cat_gift', 'cat_follow', 'home', 'tut', 'tut_day', 'garden',
-                  'nature', 'shore', 'finds', 'coast'):
+                  'nature', 'shore', 'finds', 'coast', 'hatch', 'delve'):
             if k in d:
                 setattr(self, k, d[k])
         self.place = 'lake'
@@ -912,6 +920,8 @@ class Game:
         biscuit.clean(self)
         self.home = homemod.clean(self.home)
         self.garden = gardenmod.clean(self.garden)
+        self.hatch = hatchery.clean(self.hatch)
+        self.delve = dungeon.clean_rec(self.delve)
         self.shore = shoremod.clean(self.shore)
         self.finds = discover.clean(self.finds)
         self.coast = coast.clean(self.coast)
@@ -1582,6 +1592,10 @@ class Game:
             'curator': len(self.stats.get('exhibits', [])) >= aqmod.CURATOR,
             'sealegs': coast.sea_known(self) >= 10,
             'keeper': coast.lit(self),
+            'breeder': self.hatch['raised'] >= 1,
+            'colours': all(self.hatch['found'].get(m) for m in morphs.IDS),
+            'delver': self.delve['bosses'] >= 1,
+            'abyss': self.delve['best'] >= 20,
         }
         for b in BADGES:
             if b['id'] not in self.badges and cond.get(b['id']):
@@ -1821,6 +1835,7 @@ class Game:
         biscuit.morning(self)
         yeartwo.morning(self)
         gardenmod.morning(self)
+        hatchery.morning(self)
         shoremod.morning(self)
         coast.morning(self)
         """Morning routine: forecast, the day's letter, birthdays and events."""
@@ -1972,11 +1987,14 @@ class Game:
     # ------------------------------------------------------------ catching
     def on_catch(self, c):
         spec, size = c['spec'], c['size']
+        v = c.get('v') if not spec.get('junk') else None
         lo, hi = spec['size']
         k = (size - lo) / max(0.01, hi - lo)
         price = spec['price'] if spec.get('junk') else int(round(spec['price'] * (0.8 + 0.6 * k)))
         if self.run_fish(self.day) == spec['id']:
             price = int(round(price * 1.5))
+        price *= morphs.mult(v)
+        new_colour = hatchery.note_found(self, spec['id'], v)
         entry = self.journal.get(spec['id'])
         new = entry is None and not spec.get('junk')
         record = entry is not None and size > entry.get('best', 0) and not spec.get('junk')
@@ -2017,7 +2035,7 @@ class Game:
         legends.on_catch(self, spec, size)
         req = self.request
         wanted = bool(req and not req.get('done') and req['fish'] == spec['id'])
-        if (not new and not record and not spec.get('junk') and spec['rarity'] <= 2 and not wanted
+        if (not new and not record and not spec.get('junk') and spec['rarity'] <= 2 and not wanted and not v
                 and not self.festival_live() and self.settings.get('quick_commons', True)):
             # one you've caught before, nothing special: into the basket, a little note in the corner, cast again
             self.basket.append(dict(id=spec['id'], size=size, price=price))
@@ -2034,8 +2052,15 @@ class Game:
             return
         # before the card: a moment holding it up for everyone to see (any key or click moves on)
         show = 0.0 if spec.get('junk') else 1.0 + 0.2 * spec['rarity'] + (0.4 if new or record else 0.0)
+        if v:
+            show += 0.6
         self.card = dict(spec=spec, size=size, price=price, new=new, record=record, old=old_best, t=-show,
-                         show=show)
+                         show=show, v=v, new_colour=new_colour)
+        if v:
+            m = morphs.MORPH_BY_ID[v]
+            self.stats['morphs'] = self.stats.get('morphs', 0) + 1
+            self.toast('A %s! %s' % (morphs.name(spec, v), 'A new colour for your collection.' if new_colour
+                                     else 'Its colours shimmer in the light.'), m['col'])
         self.overlay = 'catch'
         self.release_holds()
         r = spec['rarity']
@@ -2069,7 +2094,8 @@ class Game:
             else:
                 self.toast('Request: %d / %d %s' % (req['have'], req['need'], FISH_BY_ID[req['fish']]['name']))
         if self.net.online:
-            self.net.send({'t': 'catch', 'fish': spec['id'], 'size': round(size, 1), 'new': new, 'rec': record})
+            self.net.send({'t': 'catch', 'fish': spec['id'], 'size': round(size, 1), 'new': new, 'rec': record,
+                           'v': v})
             coop.on_catch(self, spec)
         self.check_badges()
         self.save()
@@ -2083,6 +2109,15 @@ class Game:
             if idx not in self.letters:
                 self.letters.append(idx)
             self.queue.insert(0, ('letter', LETTERS[idx]))
+        elif c.get('v'):
+            # a colour morph: into the hatchery pond, or to a collector if the pond is full
+            if not hatchery.add_catch(self, spec, c['size'], c['v'], c['price']):
+                self.coins += c['price']
+                self.note('sell', coins=c['price'])
+                self.audio.play('coin', 0.7)
+                self.toast('The pond is full, so a collector paid %d coins for it.' % c['price'], (200, 160, 70))
+            else:
+                self.toast_few('pond', 'Into the hatchery pond by the garden.', (90, 140, 170))
         else:
             self.basket.append(dict(id=spec['id'], size=c['size'], price=c['price']))
         self.audio.play('ui', 0.6)
@@ -2093,7 +2128,7 @@ class Game:
         c = self.card
         if c['spec'].get('junk') or len(self.tank) >= self.tank_size():
             return
-        self.tank.append(dict(id=c['spec']['id'], size=c['size']))
+        self.tank.append(dict(id=c['spec']['id'], size=c['size'], v=c.get('v')))
         self.audio.play('splash_small', 0.6)
         self.toast_few('tank', '%s is settling into the cabin tank.' % c['spec']['name'], (90, 140, 190))
         self.close_card()
@@ -2102,6 +2137,7 @@ class Game:
     def release_from_tank(self, i):
         if 0 <= i < len(self.tank):
             fish = self.tank.pop(i)
+            hatchery.stock(self, fish)
             self.luck = min(3.0, self.luck + 0.3)
             self.stats['released'] += 1
             self.audio.play('splash_small', 0.6)
@@ -2117,6 +2153,8 @@ class Game:
         self.stats['released'] += 1
         self.check_badges()
         self.luck = min(3.0, self.luck + 0.3)
+        if c.get('v'):
+            hatchery.stock(self, dict(id=c['spec']['id'], v=c['v']))
         self.world.hearts(300, 312, 3)
         self.world.ripple(300, 314, 12)
         self.audio.play('splash_small', 0.5)
@@ -2170,6 +2208,7 @@ class Game:
             if self.has('pot'):
                 items.append(('Crab pot', lambda: seasons.pot_action(self)))
             items.append(('Mailbox', self.open_mailbox))
+            items.append(('The Drowned Stair', lambda: dungeon.open_stair(self)))
             if self.shore.get('told') and self.visit_shore is None:
                 items.append(('The Shore', lambda: shoremod.open_panel(self)))
             if self.wagon_here():
@@ -2268,6 +2307,12 @@ class Game:
             return True
         if gardenmod.AREA.collidepoint(wx, wy):
             self.open_cabin_tab('garden')
+            return True
+        if hatchery.AREA.collidepoint(wx, wy):
+            self.open_cabin_tab('hatchery')
+            return True
+        if dungeon.AREA.collidepoint(wx, wy):
+            dungeon.open_stair(self)
             return True
         if self.overlay is None and shoremod.click(self, wx, wy):
             return True
@@ -2546,6 +2591,9 @@ class Game:
         if self.overlay == 'ice' and self.icescene:
             self.icescene.press('mouse')
             return
+        if self.overlay == 'dungeon' and self.dungeon:
+            self.dungeon.press('mouse')
+            return
         if self.walk_scene():
             self.aqscene.press('mouse')
             return
@@ -2573,6 +2621,8 @@ class Game:
             self.cooking.release('mouse')
         if self.icescene:
             self.icescene.release('mouse')
+        if self.dungeon:
+            self.dungeon.release('mouse')
         if self.mouse_hold:
             self.mouse_hold = False
             if not self.space_hold:
@@ -2583,6 +2633,8 @@ class Game:
             self.cooking.release('key')
         if k == pygame.K_SPACE and self.icescene:
             self.icescene.release('key')
+        if k == pygame.K_SPACE and self.dungeon:
+            self.dungeon.release('key')
         if k == pygame.K_SPACE and self.space_hold:
             self.space_hold = False
             if not self.mouse_hold:
@@ -2756,6 +2808,9 @@ class Game:
             return
         if ov == 'ice' and self.icescene:
             self.icescene.key(k)
+            return
+        if ov == 'dungeon' and self.dungeon:
+            self.dungeon.key(k)
             return
         if self.walk_scene():
             self.aqscene.key(k)
@@ -2955,6 +3010,8 @@ class Game:
             self.cooking.update(dt)
         if self.overlay == 'ice' and self.icescene:
             self.icescene.update(dt)
+        if self.overlay == 'dungeon' and self.dungeon:
+            self.dungeon.update(dt)
         if self.walk_scene():
             self.aqscene.update(dt)
         if self.mode == 'play':
@@ -3252,6 +3309,8 @@ class Game:
         cooking = self.cooking if self.overlay == 'cooking' and self.mode == 'play' else None
         if cooking is None and self.overlay == 'ice' and self.icescene and self.mode == 'play':
             cooking = self.icescene          # drawn and framed just like the kitchen scene
+        if cooking is None and self.overlay == 'dungeon' and self.dungeon and self.mode == 'play':
+            cooking = self.dungeon           # so is the Drowned Stair
         if cooking is None and self.walk_scene() and self.mode == 'play':
             cooking = self.aqscene           # so is the walk round the aquarium, or the harbour
         if cooking:
@@ -4220,6 +4279,10 @@ class Game:
         el = c['show'] + c['t']                       # seconds since it landed in your hands
         hx, hy = self.w2s(HAND[0] + 2, HAND[1] - 22)
         rc = RARITY_COLORS[r] if r >= 2 else (255, 236, 180)
+        nm = morphs.name(spec, c.get('v'))
+        if c.get('v'):
+            rc = morphs.MORPH_BY_ID[c['v']]['col']
+            r = max(r, 3)                             # a morph gets the full show
         # rays of light turning slowly behind the fish
         grow = min(1.0, el / 0.35)
         rad = max(8, int((90 + 30 * r) * grow))
@@ -4239,7 +4302,7 @@ class Game:
         # the banner over the angler
         k = min(1.0, el / 0.3)
         e = 1 - (1 - k) ** 3
-        bw = max(300, ui.fonts['h2'].size(spec['name'])[0] + 70)
+        bw = max(300, ui.fonts['h2'].size(nm)[0] + 70)
         bx, by = hx - bw // 2, hy - 190 + int((1 - e) * 24)
         bx = max(16, min(SW - 16 - bw, bx))
         rect = pygame.Rect(bx, by, bw, 104)
@@ -4253,7 +4316,7 @@ class Game:
             pygame.draw.rect(s, tc, pill, border_radius=14)
             ui.blit_text(s, tag, pill.center, 'smallb', (90, 60, 30) if c['record'] and not c['new'] else
                          (255, 255, 250), 'center')
-        ui.blit_text(s, spec['name'], (rect.centerx, rect.y + 34), 'h2', U.INK, 'center')
+        ui.blit_text(s, nm, (rect.centerx, rect.y + 34), 'h2', U.INK, 'center')
         grow_k = min(1.0, max(0.0, (el - 0.15) / 0.7))
         grow_k = 1 - (1 - grow_k) ** 2
         ui.blit_text(s, '%.1f cm' % (c['size'] * grow_k), (rect.centerx, rect.y + 64), 'bodyb', U.SOFT, 'center')
@@ -4315,7 +4378,7 @@ class Game:
         for i in range(10, 0, -1):
             pygame.draw.ellipse(halo, (*hc, 10 + (10 - i) * 4), (150 - i * 14, 85 - i * 8, i * 28, i * 16))
         s.blit(halo, (rect.centerx - 150, cy - 85))
-        spr = art.fish_sprite(spec, 4)
+        spr = morphs.sprite(spec, c.get('v'), 4)
         wob = math.sin(self.t * 2.2) * 4
         rot = pygame.transform.rotate(spr, math.sin(self.t * 1.7) * 4)
         s.blit(rot, rot.get_rect(center=(rect.centerx, cy + wob)))
@@ -4327,7 +4390,17 @@ class Game:
                 U.star(s, (int(px), int(py)), 5 + (i % 2) * 2, (255, 236, 160))
         # text
         y = rect.y + 252
-        ui.blit_text(s, spec['name'], (rect.centerx, y), 'h1', U.INK, 'center')
+        ui.blit_text(s, morphs.name(spec, c.get('v')), (rect.centerx, y), 'h1', U.INK, 'center', maxw=w - 40)
+        if c.get('v'):
+            mr = morphs.badge(s, ui, c['v'], (rect.centerx, rect.y + 64), 'smallb')
+            if c.get('new_colour'):
+                ui.blit_text(s, 'New colour!', (mr.right + 10, mr.centery), 'tiny', U.ROSE, 'midleft')
+            for i in range(8):
+                a = self.t * 0.9 + i * math.tau / 8
+                px = rect.centerx + math.cos(a) * 150
+                py = rect.y + 150 + math.sin(a) * 60
+                if math.sin(self.t * 3 + i * 1.7) > 0:
+                    U.star(s, (int(px), int(py)), 4 + (i % 3), U.lighten(morphs.MORPH_BY_ID[c['v']]['col'], 0.4))
         y += 36
         if r >= 1:
             for i in range(5):
@@ -4362,7 +4435,12 @@ class Game:
         else:
             # the buttons show the key, or the controller button, that picks them (A keep, X tank, Y release)
             full = len(self.tank) >= self.tank_size()
-            ui.button(s, (rect.centerx - 244, by, 156, 52), 'Keep', self.keep_catch, 'primary', icon=keep)
+            if c.get('v'):
+                pond = hatchery.room(self) > 0 and hatchery.can_live(spec)
+                ui.button(s, (rect.centerx - 244, by, 156, 52), 'To pond' if pond else 'Sell', self.keep_catch,
+                          'primary', icon=keep)
+            else:
+                ui.button(s, (rect.centerx - 244, by, 156, 52), 'Keep', self.keep_catch, 'primary', icon=keep)
             ui.button(s, (rect.centerx - 78, by, 156, 52), 'Tank full' if full else 'To tank',
                       self.tank_catch, 'normal', enabled=not full, icon=None if full else self.cap_icon('T', 'X'))
             ui.button(s, (rect.centerx + 88, by, 156, 52), 'Release', self.release_catch, 'rose',
@@ -4720,11 +4798,15 @@ class Game:
 
     def draw_cabin(self, s):
         ui = self.ui
-        rect = self.big_panel(s, 'Cozy Cabin')
-        for i, (key, label) in enumerate(CABIN_TABS):
-            st = 'tab_on' if self.cabin_tab == key else 'tab'
-            ui.button(s, (rect.x + 278 + i * 114, rect.y + 26, 108, 40), label,
-                      lambda k=key: setattr(self, 'cabin_tab', k), st, font='smallb')
+        if cabinui.fits(SW):
+            rect = cabinui.frame(self, s, CABIN_TABS, self.cabin_tab, SW, SH)
+        else:
+            # the biggest interface size: no room for the rail, so the tabs go along the top
+            rect = self.big_panel(s, 'Cabin')
+            for i, (key, label) in enumerate(CABIN_TABS):
+                st = 'tab_on' if self.cabin_tab == key else 'tab'
+                ui.button(s, (rect.x + 168 + i * 114, rect.y + 26, 108, 40), label,
+                          lambda k=key: setattr(self, 'cabin_tab', k), st, font='smallb')
         if self.cabin_tab == 'wardrobe':
             return self.draw_wardrobe(s, rect)
         if self.cabin_tab == 'home':
@@ -4735,6 +4817,8 @@ class Game:
             return kitchenmod.draw_kitchen(self, s, rect)
         if self.cabin_tab == 'garden':
             return gardenmod.draw_tab(self, s, rect)
+        if self.cabin_tab == 'hatchery':
+            return hatchery.draw_tab(self, s, rect)
         tx, ty = rect.x + 40, rect.y + 86
         frame = pygame.Rect(tx - 10, ty - 10, 960 + 20, 396 + 20)
         pygame.draw.rect(s, (120, 80, 54), frame, border_radius=10)
@@ -4751,7 +4835,7 @@ class Game:
         if sel is not None and sel < len(self.tank):
             f = self.tank[sel]
             spec = FISH_BY_ID[f['id']]
-            ui.blit_text(s, spec['name'], (rect.x + 40, iy), 'h3', U.INK)
+            ui.blit_text(s, morphs.name(spec, f.get('v')), (rect.x + 40, iy), 'h3', U.INK)
             ui.blit_text(s, '%.1f cm  -  %s' % (f['size'], RARITY_NAMES[spec['rarity']]), (rect.x + 40, iy + 30),
                          'small', U.SOFT)
             ui.button(s, (rect.x + 300, iy + 4, 220, 48), 'Release to the lake', lambda: self.release_from_tank(sel),
@@ -5553,11 +5637,13 @@ class Game:
             if spec.get('junk'):
                 text = '%s fished up %s.' % (p['name'], spec['name'].lower())
             else:
-                text = '%s caught a %s (%.1f cm)%s' % (p['name'], spec['name'], size,
+                mv = m.get('v') if m.get('v') in morphs.MORPH_BY_ID else None
+                text = '%s caught a %s (%.1f cm)%s' % (p['name'], morphs.name(spec, mv), size,
                                                         '  - a new record!' if m.get('rec') else '')
             self.add_chat('', text, self.peer_color(ev[1]))
-            if not spec.get('junk') and spec['rarity'] >= 3:
-                self.toast('%s landed a %s!' % (p['name'], spec['name']), RARITY_COLORS[spec['rarity']])
+            if not spec.get('junk') and (spec['rarity'] >= 3 or mv):
+                self.toast('%s landed a %s!' % (p['name'], morphs.name(spec, mv)),
+                           morphs.MORPH_BY_ID[mv]['col'] if mv else RARITY_COLORS[spec['rarity']])
             for pid, v, kd, x, y, sc in actors.peer_places(self):
                 if pid == ev[1]:
                     r = spec.get('rarity', 0)
@@ -6850,6 +6936,11 @@ def run_bot(seconds):
                 tb['hb_seen'] = g.aqscene
                 did('harbour')
             g.aqscene.auto(dt, rng)              # a stroll round the quay: orders, Nell, chowder, Sol, the beach
+        elif g.overlay == 'dungeon' and g.dungeon:
+            if tb.get('dg_seen') is not g.dungeon:
+                tb['dg_seen'] = g.dungeon
+                did('dungeon')
+            g.dungeon.auto(dt, rng, rng.uniform(0.6, 1.0))   # down the Drowned Stair: fish, gear up, camp or climb
         elif g.overlay == 'ice' and g.icescene:
             sc = g.icescene                       # ice fishing: jig, reel, and now and then get up and go
             sc.auto(dt, rng, rng.uniform(0.6, 1.0))
@@ -6858,6 +6949,8 @@ def run_bot(seconds):
                 did('ice_leave')
         elif g.overlay == 'catch':
             stats['caught'] += 1
+            if g.card and g.card.get('v'):
+                stats['morphs'] = stats.get('morphs', 0) + 1
             rr = rng.random()
             (g.keep_catch if rr < 0.7 else g.tank_catch if rr < 0.8 else g.release_catch)()
             if g.overlay == 'catch':      # tank was full or it was junk
@@ -7003,6 +7096,22 @@ def run_bot(seconds):
             for cid, n in list(g.garden['produce'].items()):
                 if n > 4:
                     gardenmod.sell(g, cid)
+            # the hatchery: collect young, start a pair from the basket, and make room when it fills
+            for i in range(len(g.hatch['clutches']) - 1, -1, -1):
+                if hatchery.collect(g, i):
+                    did('hatch_collect')
+            if not hatchery.pairs(g) and hatchery.room(g) >= 2 and len(g.hatch['clutches']) < hatchery.CLUTCHES:
+                for sid, n in hatchery.basket_kinds(g):
+                    if n >= 2:
+                        hatchery.from_basket(g, sid)
+                        hatchery.from_basket(g, sid)
+                        did('hatch_pair')
+                        break
+            while hatchery.room(g) < 2 and g.hatch['pond']:
+                pond = g.hatch['pond']
+                i = min(range(len(pond)), key=lambda k: (pond[k]['v'] is not None, pond[k]['price']))
+                (hatchery.sell if rng.random() < 0.6 else hatchery.release)(g, i)
+                did('hatch_make_room')
             if g.shore['told']:                     # the shoreline projects, a step at a time
                 for p in shoremod.PROJECTS:
                     if shoremod.can_do(g, p['id']) and g.coins > shoremod.next_step(g, p['id'])[1].get('coins', 0) + 200:
@@ -7011,7 +7120,7 @@ def run_bot(seconds):
                 shoremod.open_panel(g)
                 g.draw()
             g.overlay = 'cabin'
-            for tab in ('home', 'biscuit', 'tank', 'garden'):
+            for tab in ('home', 'biscuit', 'tank', 'garden', 'hatchery'):
                 g.cabin_tab = tab
                 g.draw()
             g.overlay = None
@@ -7020,6 +7129,10 @@ def run_bot(seconds):
             tb['day'] = g.day
             tb['need_plan'] = True
             g.go_place('town')
+        elif (g.rest_phase is None and f.state in ('idle', 'waiting') and g.overlay is None and g.spot == 'dock'
+              and g.place == 'lake' and tb.get('dg_day') != g.day and 600 <= g.minute < 1080 and rng.random() < 0.01):
+            tb['dg_day'] = g.day
+            dungeon.open_stair(g)                 # down the stone steps under the hill
         elif (g.rest_phase is None and f.state == 'idle' and g.overlay is None and g.spot == 'pier'
               and tb.get('hb_day') != g.day and 420 <= g.minute < 1140):
             tb['hb_day'] = g.day
@@ -7027,7 +7140,7 @@ def run_bot(seconds):
         elif g.rest_phase is None and f.state == 'idle' and g.overlay is None and rng.random() < 0.05:
             g.travel(rng.choice([sid for sid in coast.reachable(g) if sid != g.spot]))
             stats['trips'] = stats.get('trips', 0) + 1
-        if g.rest_phase is not None or g.mp_ready or in_town or g.overlay in ('ice', 'harbour'):
+        if g.rest_phase is not None or g.mp_ready or in_town or g.overlay in ('ice', 'harbour', 'dungeon'):
             pass
         elif f.state == 'idle':
             stats['casts'] += 1
@@ -7097,6 +7210,11 @@ def run_bot(seconds):
                                                          for b in g.garden['beds']],
           'produce', g.garden['produce'], 'food', g.garden['food'], 'planted', g.stats.get('planted', 0),
           'harvested', g.stats.get('harvested', 0), flush=True)
+    print('hatchery:', 'pond', [(f['id'], f['v']) for f in g.hatch['pond']], 'clutches',
+          [(c['id'], c['pv'], c['day']) for c in g.hatch['clutches']], 'raised', g.hatch['raised'],
+          'found', {k: len(v) for k, v in g.hatch['found'].items()}, 'stock', g.hatch['stock'], flush=True)
+    print('dungeon:', g.delve, 'lost', g.stats.get('delve_lost', 0), 'coins', g.stats.get('delve_coins', 0),
+          flush=True)
     print('nature:', {k: v['stars'] for k, v in g.nature.items()}, 'seen', sorted(tb.get('critters', ())),
           'snaps', len(tb.get('snaps', [])), flush=True)
     print('legends:', {k: (v['stage'], v.get('clues'), v.get('day')) for k, v in g.hunts.items()},

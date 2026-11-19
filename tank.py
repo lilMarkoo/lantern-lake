@@ -68,10 +68,11 @@ class Tank:
         if spec['shape'] == 'small':
             base -= 0.1
         k = round((base + rel * 0.15) * 10) / 10
-        key = (s['id'], k)
+        key = (s['id'], s.get('v'), k)
         spr = self.sprites.get(key)
         if spr is None:
-            src = art.fish_sprite(spec)
+            import morphs
+            src = morphs.sprite(spec, s.get('v'), 1)
             spr = pygame.transform.scale(src, (int(src.get_width() * k), int(src.get_height() * k)))
             self.sprites[key] = (spr, pygame.transform.flip(spr, True, False))
             spr = self.sprites[key]

@@ -566,6 +566,10 @@ BADGES = [
     dict(id='curator', name='Curator', desc='Complete five exhibits at the aquarium.', reward=400),
     dict(id='sealegs', name='Sea Legs', desc='Catch 10 kinds of sea fish at Saltmarsh.', reward=300),
     dict(id='keeper', name='Keeper of the Light', desc='Light the Saltmarsh lighthouse again.', reward=500),
+    dict(id='breeder', name='Fish Nursery', desc='Raise a clutch of young fish in the hatchery pond.', reward=150),
+    dict(id='colours', name='Every Colour', desc='Find all six colour morphs.', reward=600),
+    dict(id='delver', name='Into the Deep', desc='Beat a boss fish down the Drowned Stair.', reward=200),
+    dict(id='abyss', name='The Bottom Step', desc='Reach floor 20 of the Drowned Stair.', reward=800),
 ]
 TANK_SIZE = 8
 

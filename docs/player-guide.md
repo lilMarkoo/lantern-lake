@@ -625,6 +625,11 @@ she leads you somewhere new at the end of the street. After that she still turns
 
 ## Your cabin
 
+The cabin window keeps its rooms on a wooden rail down the left: Fish tank, Kitchen, Garden, Hatchery, Home,
+Biscuit and Wardrobe. A dot on a tab means something there wants you, like beds to pick or young fish to collect.
+The little window at the bottom of the rail looks out on the lake as it is right now. At the biggest interface
+size, the tabs sit along the top instead.
+
 The cabin's **Home** tab shows your room. Grandma left her rocking chair, a braided rug, a potted fern, an old
 lake map and a flower garland behind, so it never starts bare. Click a spot on the wall or floor, then pick something from the
 catalogue on the right: paintings, a clock that keeps the lake's time, shelves, an armchair, a wood stove, lamps
@@ -670,6 +675,84 @@ in autumn; winter kale and garlic in winter; dill and catnip all year round.
 - Sell what you pick, turn sweetcorn into crab-pot bait (5 per cob), or give Biscuit some catnip once a day
 - Old boots, tin cans and driftwood from the lake go on the **compost heap**. Every three make one plant food, which
   puts a bed a day ahead and adds one more crop to its harvest
+
+## Colour morphs and the hatchery
+
+Now and then a fish bites in colours it doesn't usually wear. About one catch in fifty is a **colour morph**, and
+every kind of fish in the lake can turn up in all six:
+
+| Morph | Looks like | When | Worth |
+| --- | --- | --- | --- |
+| Golden | Scales like a coin in the sun. The rarest | Any time | x5 |
+| Ghost | Pale as morning mist, with a blush of pink | Any time | x3 |
+| Shadow | Dark as deep water, with a blue sheen | Any time | x3 |
+| Koi | Patched in cream, orange and ink | Any time | x3 |
+| Starry | Night-blue and freckled with stars | After dark | x4 |
+| Prism | Bands of colour, like oil on a puddle | In the rain | x4 |
+
+Fishing on the bubbles makes morphs a little likelier, and so does luck. Crabs, snails, the lake spirit and the
+legends never change colour.
+
+A morph always gets the full catch card, with its name and colour. It never goes into the basket, so a recipe, a
+request or *Sell all* can't use it up by accident. Instead, *To pond* puts it in the **hatchery pond**. If the
+pond is full, or it's a sea fish, the button reads *Sell* and a collector pays the full price. You can also send
+it to the tank, or release it.
+
+**The hatchery pond** is the stone-ringed pool on the slope under the garden. Click it on the lake, or open the
+cabin's **Hatchery** tab.
+
+- It holds 6 fish. Colour morphs come here from the catch card. To bring ordinary fish, click their kind under
+  *Add from the basket* (the biggest one goes in). Only freshwater fish live here.
+- Two fish of the same kind that have spent a night in the pond lay a **clutch of eggs** at dawn. The pond raises
+  up to two clutches at once.
+- The eggs hatch into fry two days later, and three days after that the young are ready: *Collect* brings 2 to 4
+  young fish into the pond. Young that don't fit swim off into the lake.
+- **Young take after their parents.** If both parents are the same morph, most of the young wear it too. If one
+  parent is a morph, about half of them do. Now and then a young fish comes out in a colour neither parent had.
+- Click a pond fish to **sell** it to a collector (morphs pay their full multiplier and don't flood the market),
+  move it to the **tank**, or **release** it. Plain fish can also go back to the basket.
+- **Releasing a morph stocks the lake.** For a week, that kind of fish bites in that colour far more often. This
+  works whether you release it from the pond, the tank or a catch card. Breed a pair of golden perch, let one go,
+  and golden perch start turning up on your line.
+- *Colours found* along the bottom of the tab tracks every kind you've seen in each morph. Hover over one to see
+  its description, or a hint about when it bites if you haven't found it yet.
+- Badges: **Fish Nursery** for raising your first clutch, and **Every Colour** for finding all six morphs.
+
+## The Drowned Stair
+
+An old stone arch in the bank below the garden leads down into flooded caves. Click it (or pick *The Drowned
+Stair* in the quick menu at the dock) to start a run. The day stands still while you're down there.
+
+**You go down with nothing.** No rod, no reel: just your hands and a bit of string, which gives a narrower reeling
+arc than even the Twig Rod. Everything you use, you find on the way.
+
+- **Floors.** Each floor is a cave with a pool. Press Space or click to cast, wait for the bobber to dip, then hook
+  the fish and reel it in on the usual ring. Catch the number of fish the top-left panel asks for and the stone door
+  on the right opens: press **E** (or *Go down the stair*) to go deeper. You can keep fishing the pool first for
+  more loot.
+- **Loot.** Every fish drops pearls, and often gear or something useful. Gear fills five slots: **rod** (wider arc,
+  faster swing), **reel** (reels in faster), **line** (strains slower), **lure** (quicker bites, better loot) and
+  **charm** (extra hearts, more pearls, or a chance to mend a heart each floor). It comes in five tiers, Worn,
+  Sturdy, Fine, Gleaming and Abyssal, and deeper floors drop better tiers. Gear for an empty slot goes on straight
+  away.
+- **The bag (I or Tab).** Twelve slots. Click an item to see what it does and how it compares with what you're
+  wearing (a green ^ marks an upgrade), then *Equip*, *Use* or *Drop* it. When the bag is full, new loot lands on
+  the floor. You can swap it in from the bag screen, but whatever is on the floor stays behind when you go down.
+- **Things to use:** a *Kelp Wrap* heals a heart, *Glow Worms* make your next three casts bite fast and drop
+  better loot, a *Calm Tonic* halves the line strain for one fight, and a *Homeward Shell* takes you out safely,
+  keeping everything.
+- **Hearts.** You start with three. A snapped line costs one. **Biters** (fish with red eyes) cost one if they get
+  away, but they drop double loot. When a biter swims at your lure, reel in to dodge it.
+- **Sunken chests** sometimes sit on the bottom of a pool. Fish one up for guaranteed gear.
+- **Bosses.** Every fifth floor a boss fish guards the stair: Old Mossjaw, the Lantern Matriarch, the Coral
+  Tyrant and the Drowned King. They fight in three stages, like the lake's legends. If one gets away or snaps
+  your line, you lose a heart and can try again.
+- **The camp.** Beating a boss brings you to a camp. *Climb out* and everything you carry is sold for coins:
+  pearls, gear and leftovers. Or *Go deeper*. The deeper floors are richer, and much meaner.
+- **Failing.** Lose your last heart, or give up with Esc, and the water carries you back up the stair with
+  nothing. **All the loot from that run is lost.** Only your records stay: your deepest floor, runs, bosses beaten
+  and best haul.
+- Badges: **Into the Deep** for beating your first boss, and **The Bottom Step** for reaching floor 20.
 
 ## Wildlife and the Nature page
 
@@ -788,7 +871,11 @@ The calendar (K) shows a three-day weather forecast, the moon phase and every ev
 - A character creator with a living diorama: skin, hair colour and style, eyes, beards, five tops in eight
   seasonal palettes, trousers and boots, a rod keepsake, a way of waiting for bites, and Biscuit's coat
 - Cabin fish tank (8 fish) and a wardrobe with 7 hats and 5 outfits for Biscuit
-- 29 badges with coin rewards (Journal, Badges tab)
+- Six colour morphs that any lake fish can bite in (golden, ghost, shadow, koi, starry and prism), and a hatchery
+  pond where pairs lay eggs and the young can inherit their parents' colours
+- The Drowned Stair: a roguelike fishing dungeon under the hill. Start with nothing, find gear for five slots in
+  a twelve-slot bag, beat a boss fish every fifth floor, and climb out with your haul, or lose it all
+- 33 badges with coin rewards (Journal, Badges tab)
 - A walkable aquarium with twelve themed exhibits, benches and visitors
 - A cabin garden with 13 crops, and 19 animals to photograph for the Nature page and frame on your wall
 - Three shoreline restoration projects that change the lake and bring new animals
