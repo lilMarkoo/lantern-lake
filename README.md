@@ -10,11 +10,26 @@ Grandma Rosie once tended four lanterns around the lake. Each wakes in a differe
 
 ## What’s new
 
-The latest update, **0.3.7**, lets you **make your own angler**. Before your first cast, choose your skin, hair, eyes, beard and outfit. Your colours shift with the seasons. Add a keepsake charm for your rod, a fishing mood, and a coat for Biscuit. Everything shows straight away in a little dock scene that you can try at dawn, noon, dusk or night and in any season. You can change your look any time from the cabin’s Wardrobe, and friends see it when you fish together.
+The latest update, **0.3.8**, opens **the Drowned Stair**, a fishing dungeon beneath the hill by your dock. Start with your hands and a bit of string, catch fish to open the next stair, and find better gear as you descend. A boss guards every fifth floor. At camp, choose whether to cash in your haul or head deeper. Lose your last heart and the run’s loot is gone.
+
+| Beneath the lake | Beside the cabin |
+| --- | --- |
+| ![The first flooded cave in the Drowned Stair, with a fishing pool and the stair to the next floor](docs/images/drowned_stair.png) | ![The cabin’s Hatchery tab showing colour morph perch and a clutch of eggs](docs/images/hatchery.png) |
+| **Pack for the next floor.** Find rods, reels, lines, lures, charms, and supplies for your twelve-slot bag. | **Raise your own fish.** Keep a breeding pair, hatch their eggs, and discover which colours the young inherit. |
+
+- **Six rare colour morphs.** Look for golden, ghost, shadow, koi, starry, and prism fish. Release a morph to make that species and colour more likely to bite for a week.
+- **A roomier cabin.** Browse tabs down the side of a new cabin window with a view of the lake, including the hatchery pond.
+- **Four new badges.** Raise your first clutch, discover every morph, beat your first dungeon boss, and reach floor 20.
+
+[Explore the Drowned Stair](docs/player-guide.md#the-drowned-stair) · [Learn about morphs and the hatchery](docs/player-guide.md#colour-morphs-and-the-hatchery) · [Read the latest release notes](https://github.com/lilMarkoo/lantern-lake/releases/latest)
+
+## Make yourself at home
+
+Make your own angler with skin, hair, eyes, a beard, and an outfit. Add a keepsake charm for your rod, a fishing mood, and a coat for Biscuit. Preview your look at different times and in every season, change it later in the cabin’s Wardrobe, and share it with friends when you fish together.
 
 ![The character creator: the angler and Biscuit on a dusk dock beside the clothes, colours, trousers and boots choices](docs/images/creator.png)
 
-The picture stays crisp now. The game no longer goes blurry when you resize the window, go fullscreen, or move to another monitor. It also draws through your graphics card, so it runs smoothly up to 144 fps. A new [Pixel scaling option](docs/player-guide.md#options) keeps pixels perfectly square or fills the screen. On older computers, the Auto light effects setting trims the extra glow by itself when the game starts to fall behind.
+Display options include sharp scaling when resizing or using fullscreen, accelerated rendering, and frame-rate limits up to 144 fps. A new [Pixel scaling option](docs/player-guide.md#options) keeps pixels perfectly square or fills the screen. On older computers, the Auto light effects setting trims the extra glow by itself when the game starts to fall behind.
 
 Recent updates also let you:
 
@@ -28,8 +43,6 @@ Recent updates also let you:
 - **Make each day count.** You get a fresh tin of 30 worms every morning (dig for more at the dock if you run out), and a rare fish that escapes stays spooked until tomorrow.
 - **Follow the river to Saltmarsh.** Fish the pier and Kelp Rocks, plan around the tides, meet the harbour folk, and help Sol restore the coastal lighthouse.
 - **Walk through your collection.** Donated fish swim in twelve themed aquarium exhibits, with benches, visiting neighbours, and rewards for completing tanks.
-
-[Read the latest release notes](https://github.com/lilMarkoo/lantern-lake/releases/latest)
 
 ## Around the lake and down the river
 
@@ -67,7 +80,8 @@ python main.py
 ## Field guide
 
 - [Keyboard and controller controls](docs/player-guide.md#controls) and [display options](docs/player-guide.md#options)
-- [Making your angler](docs/player-guide.md#making-your-angler)
+- [Making your angler](docs/player-guide.md#making-your-angler) and [your cabin](docs/player-guide.md#your-cabin)
+- [The Drowned Stair](docs/player-guide.md#the-drowned-stair), [colour morphs, and the hatchery](docs/player-guide.md#colour-morphs-and-the-hatchery)
 - [Your first day](docs/player-guide.md#your-first-day), [goals](docs/player-guide.md#goals-q), and [the radio](docs/player-guide.md#the-radio-r)
 - [Reeling](docs/player-guide.md#reeling), [waiting for a bite](docs/player-guide.md#waiting-for-a-bite), and [the worm tin](docs/player-guide.md#the-worm-tin)
 - [Rowboat routes and fishing spots](docs/player-guide.md#the-rowboat-and-fishing-spots)
