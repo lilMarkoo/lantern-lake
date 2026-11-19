@@ -10,13 +10,17 @@ Grandma Rosie once tended four lanterns around the lake. Each wakes in a differe
 
 ## What’s new
 
-The latest update, **0.3.3**, puts the fish at the centre of every fight: it thrashes big and colourful under your line, while the reel ring sits as a small readout in the corner. The screen is calmer too, with one card for the time and your coins, a single **Menu** button, and hints that tuck away after your first day (**F1** or **?** brings them back). Light a lantern yourself now, wick and all, and watch the village windows answer across the water.
+The latest update, **0.3.4**, gives every spot its own look. Lily Cove closes in with a willow overhead and lily pads at your feet, the Deep opens onto a far, hazy shore with mist on the swells, and Willow Creek runs quick between willow banks. When you row to a new spot, you now watch your boat cross the lake. Look up while you wait and you might see a heron wading the shallows, a canoe paddling past, a big fish leaping, or a breeze sweeping across the water. New written tunes follow the seasons and the time of day, with quiet stretches in between.
+
+The day flows more smoothly too. Fish you’ve caught before go straight into your basket with a small note, messages wait their turn, and a hint tells you when a fish you’ve never caught could bite right now. Neighbours comment on what you’ve been up to and greet you on the street.
 
 Recent updates also let you:
 
+- **Feel every fight.** The hooked fish thrashes big and colourful under your line, with the reel ring as a small readout in the corner.
+- **Light the lanterns at dusk.** Light the wick yourself as the evening comes on and watch Fernwick’s windows answer across the water.
 - **Spend time in Fernwick.** Sit on the lookout bench with Biscuit, watch Mabel fetch your bread at the bakery, and collect letters from your mailbox when you’re ready to read them.
 - **Fish four different places.** At The Deep, hooked fish bolt for the bottom. At Lily Cove, the lily stems can snag your line. Willow Creek’s current carries your bobber, and a kingfisher sometimes visits your own dock post.
-- **Make each day count.** You get a fresh tin of 30 worms every morning, and a rare fish that escapes stays spooked until tomorrow.
+- **Make each day count.** You get a fresh tin of 30 worms every morning (dig for more at the dock if you run out), and a rare fish that escapes stays spooked until tomorrow.
 - **Follow the river to Saltmarsh.** Fish the pier and Kelp Rocks, plan around the tides, meet the harbour folk, and help Sol restore the coastal lighthouse.
 - **Walk through your collection.** Donated fish swim in twelve themed aquarium exhibits, with benches, visiting neighbours, and rewards for completing tanks.
 
@@ -30,6 +34,8 @@ Recent updates also let you:
 | **Land your catch.** Watch the fish fight on the line, keep the golden arc on it, and ease off when it lunges. | **Walk into town.** Pick up a recipe at Mabel’s Bakery or see what the neighbours are asking for on the notice board. |
 | ![A fish mid-flip above the stove in the cabin kitchen](docs/images/cook_scene_flip_air.png) | ![The dock lit up at night with the lighthouse on the far shore](docs/images/cook_lighthouse_night.png) |
 | **Cook what you catch.** Time the flip at your cabin stove, then plate the dish. | **Come back after dark.** Help Fernwick build its lighthouse and watch for rare fish by its light. |
+| ![The rowboat at dusk on Willow Creek, between willow banks and under the old footbridge](docs/images/creek_dusk.png) | ![The rowboat crossing the open lake toward Lily Cove, with the dock behind it](docs/images/row_across.png) |
+| **Try a new spot.** Each one looks and fishes differently, from the lily-choked cove to the willow-lined creek. | **Row across the lake.** Watch your boat pull across the water, leaving a wake behind it. |
 
 | Saltmarsh harbour | Fernwick Aquarium |
 | --- | --- |
