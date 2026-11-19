@@ -10,7 +10,23 @@ Grandma Rosie once tended four lanterns around the lake. Each wakes in a differe
 
 ## What’s new
 
-The latest update, **0.3.8**, opens **the Drowned Stair**, a fishing dungeon beneath the hill by your dock. Start with your hands and a bit of string, catch fish to open the next stair, and find better gear as you descend. A boss guards every fifth floor. At camp, choose whether to cash in your haul or head deeper. Lose your last heart and the run’s loot is gone.
+The latest update, **0.3.9**, makes life around the cabin easier to follow. The new default **Clean HUD** puts the time, day, and coins in one slim bar, with a single goal line, clickable daily-note icons, and a small bait count. Open a window such as the shop and the HUD steps aside.
+
+| The Trading Post | Your garden |
+| --- | --- |
+| ![The Trading Post’s tackle cards beside a detailed rod preview and buy button](docs/images/trading_post.png) | ![The cabin Garden tab with individual bed illustrations and gardening controls](docs/images/garden.png) |
+| **Choose your next upgrade.** Browse cards on a shelf, inspect a rod’s range and arc, or check your bait supply before buying. | **Tend each bed.** Spot thirsty crops by their water drops and ready harvests by their twinkles. |
+
+- **Sharper pixels.** The fishing camera’s zoom and larger interface sizes now use crisp pixel scaling, including interface sizes around 85% and up at 1080p.
+- **A living hatchery.** Fish wander, rest, avoid each other, and flick their tails. Fry dart through the reeds, ripples spread at the surface, and fireflies appear after dark.
+- **More help in the garden.** Blooming sunflowers bring bees that boost nearby harvests. A rain barrel waters dry beds, and new controls let you plant every empty bed or sell all your produce at once.
+- **A terraced cabin slope.** Find the garden above a flower-lined fieldstone wall, the pond and compost below, stepping stones from the door, and little lamps along the paths at night.
+
+[HUD and shop guide](docs/player-guide.md#the-hud) · [Garden guide](docs/player-guide.md#the-garden) · [Latest release notes](https://github.com/lilMarkoo/lantern-lake/releases/latest)
+
+## Go deeper, grow your collection
+
+Explore **the Drowned Stair**, introduced in 0.3.8, beneath the hill by your dock. Start with your hands and a bit of string, catch fish to open the next stair, and find better gear as you descend. A boss guards every fifth floor. At camp, choose whether to cash in your haul or head deeper. Lose your last heart and the run’s loot is gone.
 
 | Beneath the lake | Beside the cabin |
 | --- | --- |
@@ -21,7 +37,7 @@ The latest update, **0.3.8**, opens **the Drowned Stair**, a fishing dungeon ben
 - **A roomier cabin.** Browse tabs down the side of a new cabin window with a view of the lake, including the hatchery pond.
 - **Four new badges.** Raise your first clutch, discover every morph, beat your first dungeon boss, and reach floor 20.
 
-[Explore the Drowned Stair](docs/player-guide.md#the-drowned-stair) · [Learn about morphs and the hatchery](docs/player-guide.md#colour-morphs-and-the-hatchery) · [Read the latest release notes](https://github.com/lilMarkoo/lantern-lake/releases/latest)
+[Explore the Drowned Stair](docs/player-guide.md#the-drowned-stair) · [Learn about morphs and the hatchery](docs/player-guide.md#colour-morphs-and-the-hatchery)
 
 ## Make yourself at home
 
