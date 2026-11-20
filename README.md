@@ -10,19 +10,31 @@ Grandma Rosie once tended four lanterns around the lake. Each wakes in a differe
 
 ## What’s new
 
-The latest update, **0.3.9**, makes life around the cabin easier to follow. The new default **Clean HUD** puts the time, day, and coins in one slim bar, with a single goal line, clickable daily-note icons, and a small bait count. Open a window such as the shop and the HUD steps aside.
+The latest update, **0.4.0**, takes you across the lake to **the Far Shore**. Mend the old landing, row over to the woodland trail, and meet Bramwell the forest ranger. Gather seasonal wild finds, cook supper by the fire, sleep under canvas, and return after dark to fish the Hollow Pool. The Far Shore is a solo adventure.
+
+| Along the woodland trail | After dark |
+| --- | --- |
+| ![The angler on the Far Shore’s woodland trail beside Bramwell’s ranger hut](docs/images/far_shore.png) | ![The Far Shore campsite at night, with the tent and glowing campfire](docs/images/far_shore_camp.png) |
+| **Meet Bramwell.** Help with a daily favour and gather wild finds to sell or cook. | **Stay by the fire.** Roast supper, brew forager’s tea, or sleep in the tent and head home at dawn. |
+
+- **Five fish in the Hollow Pool.** Cast between 7:30 PM and 5 AM for the Mothfin, Moonperch, Mossback Tench, and Wisp Eel. Help Bramwell restore the Hollow Lantern to bring out the Hollow King.
+- **Join the Angling Club.** Every Lanternday from 5 to 7 PM, fish at any lake spot against Marlo, Dottie, Ferris, and Old Hen. Weekly rules alternate between the biggest fish and the most species. Earn ribbons, coins, and a winner’s cup, then read Marlo’s letter with the results.
+- **Navigate with the d-pad.** Jump directly between cards, buttons, and beds in the Trading Post, garden, hatchery, journal, and cabin.
+- **A calmer view.** Slimmer event cards, one notification at a time, and a radio that expands when the host speaks leave more room for the lake. The journal’s five fish pages now show collection counts across the top.
+- **Four new badges and update notes.** Track your foraging, camping, lantern restoration, and club victories. A What’s new card introduces each update, and shell swaps now draw from your spare shells across different kinds.
+
+[Far Shore guide](docs/player-guide.md#the-far-shore) · [Angling Club guide](docs/player-guide.md#the-angling-club) · [Latest release notes](https://github.com/lilMarkoo/lantern-lake/releases/latest)
+
+## Life around the cabin
 
 | The Trading Post | Your garden |
 | --- | --- |
 | ![The Trading Post’s tackle cards beside a detailed rod preview and buy button](docs/images/trading_post.png) | ![The cabin Garden tab with individual bed illustrations and gardening controls](docs/images/garden.png) |
 | **Choose your next upgrade.** Browse cards on a shelf, inspect a rod’s range and arc, or check your bait supply before buying. | **Tend each bed.** Spot thirsty crops by their water drops and ready harvests by their twinkles. |
 
-- **Sharper pixels.** The fishing camera’s zoom and larger interface sizes now use crisp pixel scaling, including interface sizes around 85% and up at 1080p.
-- **A living hatchery.** Fish wander, rest, avoid each other, and flick their tails. Fry dart through the reeds, ripples spread at the surface, and fireflies appear after dark.
-- **More help in the garden.** Blooming sunflowers bring bees that boost nearby harvests. A rain barrel waters dry beds, and new controls let you plant every empty bed or sell all your produce at once.
-- **A terraced cabin slope.** Find the garden above a flower-lined fieldstone wall, the pond and compost below, stepping stones from the door, and little lamps along the paths at night.
+Blooming sunflowers bring bees that boost nearby harvests, and a rain barrel helps water dry beds. Down on the lower terrace, fish wander through the hatchery pond while fry dart among the reeds. Plant every empty bed at once, sell your produce, and watch the path lamps come on at night.
 
-[HUD and shop guide](docs/player-guide.md#the-hud) · [Garden guide](docs/player-guide.md#the-garden) · [Latest release notes](https://github.com/lilMarkoo/lantern-lake/releases/latest)
+[Garden guide](docs/player-guide.md#the-garden) · [HUD and shop guide](docs/player-guide.md#the-hud)
 
 ## Go deeper, grow your collection
 
@@ -100,9 +112,9 @@ python main.py
 - [The Drowned Stair](docs/player-guide.md#the-drowned-stair), [colour morphs, and the hatchery](docs/player-guide.md#colour-morphs-and-the-hatchery)
 - [Your first day](docs/player-guide.md#your-first-day), [goals](docs/player-guide.md#goals-q), and [the radio](docs/player-guide.md#the-radio-r)
 - [Reeling](docs/player-guide.md#reeling), [waiting for a bite](docs/player-guide.md#waiting-for-a-bite), and [the worm tin](docs/player-guide.md#the-worm-tin)
-- [Rowboat routes and fishing spots](docs/player-guide.md#the-rowboat-and-fishing-spots)
+- [Rowboat routes and fishing spots](docs/player-guide.md#the-rowboat-and-fishing-spots) and [the Far Shore](docs/player-guide.md#the-far-shore)
 - [Saltmarsh and the tides](docs/player-guide.md#saltmarsh-down-the-river), [the harbour](docs/player-guide.md#the-harbour), and [the coastal lighthouse](docs/player-guide.md#the-lighthouse)
 - [The aquarium](docs/player-guide.md#the-aquarium) and [shoreline projects](docs/player-guide.md#the-shoreline)
-- [Seasonal legends](docs/player-guide.md#legends-of-the-lake) and [festival calendar](docs/player-guide.md#the-calendar)
+- [Seasonal legends](docs/player-guide.md#legends-of-the-lake), [festival calendar](docs/player-guide.md#the-calendar), and [the Angling Club](docs/player-guide.md#the-angling-club)
 - [Biscuit](docs/player-guide.md#biscuit), [the cabin garden](docs/player-guide.md#the-garden) and [wildlife photography](docs/player-guide.md#wildlife-and-the-nature-page)
 - [Developer checks](docs/player-guide.md#developer-checks) and [release workflow](docs/player-guide.md#releasing-an-update)
