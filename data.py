@@ -318,8 +318,32 @@ FISH += [
       depth=(0.5, 1.0), strength=1.0, agility=.6, spot='rocks', **SEA,
       desc='Barnacled and enormous, with an eye like the lighthouse lamp. It came home when the light did.',
       hint='Once the lighthouse shines again: Kelp Rocks, a high tide at night.'),
+    # the Hollow Pool on the Far Shore (farshore.py): only after dark, and only there
+    F('mothfin', 'Mothfin Dace', 1, 16, (6, 12), 'small', (196, 196, 176), (246, 242, 222), c3=(226, 220, 196),
+      glow=(250, 240, 190), phases=('night',), strength=.15, agility=.6, spot='hollow', method='hollow',
+      desc='Rises to any light on the water, like a moth to a lamp.', hint='The Hollow Pool on the Far Shore, '
+      'after dark.'),
+    F('moonperch', 'Moonperch', 2, 40, (14, 26), 'normal', (120, 140, 170), (226, 234, 246), c3=(170, 186, 210),
+      pattern='stripes', pc=(236, 242, 255), phases=('night',), strength=.35, agility=.45, spot='hollow',
+      method='hollow', desc='Its stripes shine like moonlight lying on the water.',
+      hint='The Hollow Pool on the Far Shore, after dark.'),
+    F('mossback', 'Mossback Tench', 3, 85, (30, 50), 'round', (78, 104, 64), (176, 170, 110), c3=(110, 140, 70),
+      pattern='spots', pc=(130, 170, 80), phases=('night',), depth=(0.5, 1.0), strength=.6, agility=.2,
+      behavior='sulker', spot='hollow', method='hollow',
+      desc='So old and so still that moss has grown on its back.',
+      hint='The Hollow Pool on the Far Shore, deep down, after dark.'),
+    F('wispeel', 'Wisp Eel', 3, 110, (40, 70), 'eel', (160, 200, 230), (236, 248, 255), glow=(180, 230, 255),
+      phases=('night',), strength=.45, agility=.75, spot='hollow', method='hollow',
+      desc='A thread of pale light that comes apart if you blink.',
+      hint='The Hollow Pool on the Far Shore, on a dry night.'),
+    F('hollowking', 'The Hollow King', 4, 420, (70, 120), 'catfish', (70, 60, 50), (190, 160, 110),
+      c3=(230, 190, 90), pattern='spots', pc=(220, 180, 90), glow=(255, 220, 140), phases=('night',),
+      depth=(0.6, 1.0), strength=.85, agility=.4, spot='hollow', method='hollow',
+      desc='Bramwell swears it ate his old lantern. It has whiskers like a ranger and eyes like two lamps.',
+      hint='Once the Hollow Lantern shines again: the Hollow Pool at night.'),
 ]
 SEA_FISH = [f for f in FISH if f.get('method') == 'sea']
+HOLLOW_FISH = [f for f in FISH if f.get('method') == 'hollow']
 FISH_BY_ID = {f['id']: f for f in FISH}
 
 # the four places you can fish. The dock is home; the rest need a rowboat
@@ -570,6 +594,11 @@ BADGES = [
     dict(id='colours', name='Every Colour', desc='Find all six colour morphs.', reward=600),
     dict(id='delver', name='Into the Deep', desc='Beat a boss fish down the Drowned Stair.', reward=200),
     dict(id='abyss', name='The Bottom Step', desc='Reach floor 20 of the Drowned Stair.', reward=800),
+    dict(id='forager', name='Forager', desc='Gather 30 finds along the Far Shore trail.', reward=150),
+    dict(id='camper', name='Under Canvas', desc='Spend a night in the tent on the Far Shore.', reward=100),
+    dict(id='hollowlight', name='Keeper of the Hollow', desc='Light the Hollow Lantern in the old oak.',
+         reward=500),
+    dict(id='clubstar', name='Club Champion', desc='Win the Angling Club on Lanternday five times.', reward=400),
 ]
 TANK_SIZE = 8
 

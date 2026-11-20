@@ -53,7 +53,7 @@ Switch B):
 
 | Button (Xbox / PlayStation / Switch) | While playing | In menus and windows |
 |---|---|---|
-| Left stick or d-pad | Walk, aim the cast, steer the reel. Up goes into a door in Fernwick | Moves a pointer (pause and quick menu: steps through the list) |
+| Left stick or d-pad | Walk, aim the cast, steer the reel. Up goes into a door in Fernwick | The stick moves a pointer; the d-pad jumps it to the next button, card or bed in that direction (pause and quick menu: steps through the list) |
 | Right stick | Brings out a pointer: while it shows, the bottom button clicks like the mouse (pet Biscuit, the mailbox, the wagon, shooting stars, the toolbar, shop doors). The left stick puts it away | Also moves the pointer |
 | A / cross / B, or RT / R2 / ZR | Cast and reel (hold), the same as Space | Click |
 | B / circle / A | | Back / close |
@@ -65,6 +65,11 @@ Switch B):
 | Left / right stick click | Lake map / walk to Fernwick or back to the lake | |
 
 In cooking and cutscenes the bottom button works like Space. Moving the mouse hides the controller's pointer.
+
+In windows with a pointer (the Trading Post, the garden, the hatchery, the journal, the cabin...) the **d-pad
+snaps**: each press jumps the pointer straight to the nearest thing you can click in that direction, and holding
+it keeps stepping. The first press starts on whatever is nearest the middle of the window, so you never have to
+steer the pointer across the screen with the stick.
 
 The **quick menu** (View / Share / -) has everything that otherwise needs the keyboard or mouse: Journal, Shop,
 Calendar, Goals, Cabin, Pet Biscuit, Mailbox, Wren's Wagon (when it's moored), Lake map, Lanterns, Walk to
@@ -117,6 +122,9 @@ your save, so they stay the same when you start a new game.
 
 ### The HUD
 
+After an update, the first time you load your game a **What's new** card lists the biggest changes. Click
+*Lovely!* to put it away; it only shows once per version.
+
 The top left shows one slim bar with the clock, the day and your coins (point at it for the date), and under it
 **one tracked goal**: what to do next, where to go, and when (for a fish: the
 spots it swims at, and the hours, seasons, weather and tide it wants). When there's more than one, a small arrow
@@ -130,7 +138,8 @@ When a fish you have never caught could bite **right now** (because it's dusk, o
 spot it lives), the notes say so, for example *2 new fish could bite now (at dusk)*, and a note pops up the
 moment it starts.
 
-Notes at the top of the screen come two at a time; the rest wait their turn instead of piling up, and over a
+Notes at the top of the screen come two at a time (one at a time with the Clean HUD, as a slim pill with a
+small *+2* badge when more are waiting); the rest wait their turn instead of piling up, and over a
 window they sit at the very top, clear of its buttons. A fish you've caught before that's nothing special (not
 new, not a record, not rare, not wanted for a request) goes straight into your basket with a small note in the
 bottom corner, so you can cast again. New fish, records and anything rare still get the full card. First-day
@@ -675,6 +684,36 @@ Rosie's time. Click the litter in the shallows past the dock (or the far shore a
 Finishing all three earns the *Shorekeeper* badge. On a controller, *The Shore* is in the quick menu (View) at
 your dock.
 
+## The Far Shore
+
+Once the old landing is mended, a letter comes from **Bramwell**, the forest ranger who lives in the woods on the
+other side. Click the landing from your dock (or pick *Row to the Far Shore* in the quick menu) to row across; it
+takes a quarter of an hour. It's a place for playing on your own, so it isn't open while playing together.
+
+The Far Shore is a trail you walk like the harbour quay: **A / D** (or the stick) to walk, **E** (X / square / Y)
+to pick things up, talk or use something, and the jetty at the left end takes you home. Along the trail:
+
+- **Wild finds.** A few fresh finds lie by the path each morning, with a pale patch and a twinkle so you can spot
+  them: morels, ramsons and violets in spring, bilberries, chamomile and sorrel in summer, chanterelles, hazelnuts
+  and blackberries in autumn, rose hips, pine tips and oyster mushrooms in winter. They go into the garden
+  basket, sell at the Trading Post, and add a serving to the dishes they suit. Now and then there's a sack of
+  leaf mould instead (+1 plant food)
+- **Bramwell's hut.** He's at home in the day and out on the trail in the evening. Each day he asks for a wild
+  find or a fish and pays coins for it, and his hearts grow as you help him. Talk to him to hear the story of the
+  **Hollow Lantern**, dark in the great oak at the end of the trail for forty years
+- **The campsite.** At the fire you can roast **supper** (a fish from your basket plus one wild find: tonight the
+  Hollow Pool bites quicker) or brew **forager's tea** (two of violet, chamomile, ramsons, pine tips or sorrel: a
+  little luck). After 6 PM you can sleep in the **tent**: you wake to birdsong, row home at first light feeling
+  lucky, and two extra finds wait on the trail
+- **The Hollow Pool.** Its fish only rise between 7:30 PM and 5 AM. Cast with Space as at the dock; the reel is
+  the same ring. Five fish live here and nowhere else: the Mothfin, Moonperch, Mossback Tench, Wisp Eel and,
+  once the lantern is lit, the **Hollow King**. They have their own *Far Shore* page in the journal
+
+**Mending the lantern** takes three things for Bramwell: six wild finds (for the frame), a Mossback Tench (the
+wick) and a Wisp Eel (to hold the light). Then come back after dark and light it. The fireflies gather to it, and
+the Hollow King starts to bite. Badges: *Forager* (pick 30 wild finds), *Under Canvas* (sleep in the tent) and
+*Keeper of the Hollow* (light the lantern).
+
 ## The garden
 
 The slope under the cabin is laid out in two lawns. The garden terrace sits up top, edged by a fieldstone wall
@@ -886,10 +925,27 @@ The calendar (K) shows a three-day weather forecast, the moon phase and every ev
   (most fish, at night, with fireworks and lanterns), autumn Harvest Haul (longest total), winter Frost Cup
   (points by rarity). The Festival Goldfish only bites on festival days
 - **Fishday**: a fish run. One species bites four times as often and sells for 1.5x
+- **Lanternday**: the **Angling Club** meets from 5 to 7 PM (see below)
 - **Starday**: a meteor shower from 9 PM. The sky stays clear, stars fall constantly, and the Starfall Shiner
   only bites tonight
 - **Birthdays**: eight villagers have birthdays. Bring them their favourite fish for a gift (a frog hat, a cat
   bow, a rowboat, a garden gnome and more)
+
+### The Angling Club
+
+Every Lanternday from 5 to 7 PM the Fernwick Angling Club fishes the lake, and you're welcome. There's nothing to
+sign up for: catch something at the lake (any spot, not the coast) during those two hours and you're in. The
+rules alternate week by week: **the biggest single fish**, or **the most different species**.
+
+Four regulars fish it with you: **Marlo** (young, cocky, and your rival), **Dottie** (knits between bites),
+**Ferris** (all gadgets) and **Old Hen** (quiet, and usually right). Their catches come in through the evening, so
+the board moves while you fish. The goal card shows your score against the leader; point at it for the full
+picture. Marlo gets a little better every week you turn up.
+
+At 7 PM the prizes are given out: 150 coins and a **blue ribbon** for first, 80 and a red for second, 40 and a
+yellow for third (10 coins for taking part). A win also puts an Angling Club cup on your trophy shelf, and the
+ribbons are pinned under it in the cabin's Fish tank tab. Marlo writes after every meet with the full results and
+your record against him. Win five meets for the *Club Champion* badge.
 
 ## Features
 

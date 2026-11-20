@@ -56,6 +56,11 @@ def events_on(day):
     if d == FESTIVAL_DAY:
         f = FESTIVALS[s]
         out.append(('festival', f['name'], f['desc'] + ' Festival Goldfish swim in all day.'))
+    if d == 6:
+        import club
+        rule = 'the biggest single fish' if club.rule_for(day) == 'biggest' else 'the most different species'
+        out.append(('club', 'Angling Club', 'From 5 to 7 PM, fish anywhere on the lake against Marlo, Dottie, '
+                    'Ferris and Old Hen. This week: %s. Ribbons for the top three.' % rule))
     if d == FISH_RUN_DAY:
         name = FISH_BY_ID[run_fish(day)]['name']
         out.append(('run', '%s run' % name,
@@ -81,6 +86,9 @@ def event_icon(s, kind, center, scale=1.0):
         U.boat(s, (x, y + 2), 0.9 * scale)
     elif kind == 'festival':
         U.trophy(s, (x, y), 0.75 * scale)
+    elif kind == 'club':
+        import club
+        club.ribbon(s, (x, y - int(4 * scale)), club.RIBBON_COL['blue'], 0.8 * scale)
     elif kind == 'lantern':
         k = scale
         s.fill((80, 66, 56), (x - int(2 * k), y - int(14 * k), int(4 * k), int(4 * k)))

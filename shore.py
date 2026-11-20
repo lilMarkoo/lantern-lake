@@ -313,6 +313,10 @@ def click(g, wx, wy):
     site = site_at(g, wx, wy)
     if not site or not g.shore['told'] or getattr(g, 'solo', None):
         return False
+    if site == 'landing' and done(g, 'landing'):
+        import farshore
+        farshore.go(g)                     # the landing is mended: row across to the Far Shore
+        return True
     open_panel(g, site)
     return True
 

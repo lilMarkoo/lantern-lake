@@ -33,7 +33,7 @@ GLYPHS = {
     'T': (0, ['#####', '..#..', '..#..', '..#..', '..#..', '..#..', '..#..']),
     'U': (0, ['#...#', '#...#', '#...#', '#...#', '#...#', '#...#', '.###.']),
     'V': (0, ['#...#', '#...#', '#...#', '#...#', '.#.#.', '.#.#.', '..#..']),
-    'W': (0, ['#...#', '#...#', '#...#', '#.#.#', '#.#.#', '##.##', '#...#']),
+    'W': (0, ['#...#', '#...#', '#...#', '#.#.#', '#.#.#', '#.#.#', '.#.#.']),
     'X': (0, ['#...#', '#...#', '.#.#.', '..#..', '.#.#.', '#...#', '#...#']),
     'Y': (0, ['#...#', '#...#', '.#.#.', '..#..', '..#..', '..#..', '..#..']),
     'Z': (0, ['#####', '....#', '...#.', '..#..', '.#...', '#....', '#####']),
@@ -110,11 +110,17 @@ SPACE = 3
 UNKNOWN = (0, ['###', '#.#', '#.#', '#.#', '#.#', '#.#', '###'])
 
 
+# hand-drawn bold shapes, where thickening the regular one closes the gaps that make the letter (a bold W read as N)
+BOLD_GLYPHS = {
+    'W': (0, ['##...##', '##...##', '##.#.##', '##.#.##', '##.#.##', '.##.##.', '.##.##.']),
+}
+
+
 def _mask(ch, bold=False):
-    top, rows = GLYPHS.get(ch, UNKNOWN)
+    top, rows = (BOLD_GLYPHS.get(ch) if bold else None) or GLYPHS.get(ch, UNKNOWN)
     w = max(len(r) for r in rows)
     rows = [r.ljust(w, '.') for r in rows]
-    if bold:
+    if bold and ch not in BOLD_GLYPHS:
         # thicken strokes to the right, but never close a one-pixel gap (keeps m, w and B readable)
         thick = []
         for r in rows:

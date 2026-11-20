@@ -52,10 +52,38 @@ CROPS = [
          col=(180, 150, 220), leaf=(110, 170, 110)),
 ]
 CROP_BY_ID = {c['id']: c for c in CROPS}
+# wild finds from the Far Shore trail (farshore.py). They are never planted, but they sit in the same basket as
+# your crops: they sell, show in the garden's Picked row and go with dishes just like a fresh crop
+FORAGE = [
+    dict(id='morel', name='Morels', season=0, sell=30, look='mushroom', col=(176, 140, 96), leaf=(226, 214, 186)),
+    dict(id='ramsons', name='Wild Garlic', season=0, sell=12, look='herb', col=(250, 250, 240), leaf=(90, 160, 80)),
+    dict(id='violet', name='Sweet Violets', season=0, sell=12, look='flower', col=(150, 110, 210),
+         leaf=(90, 150, 80)),
+    dict(id='bilberry', name='Bilberries', season=1, sell=14, look='cluster', col=(70, 80, 150),
+         leaf=(80, 140, 70)),
+    dict(id='chamomile', name='Chamomile', season=1, sell=12, look='flower', col=(250, 250, 244),
+         leaf=(110, 160, 80)),
+    dict(id='sorrel', name='Wood Sorrel', season=1, sell=10, look='leafy', col=(120, 190, 90), leaf=(90, 150, 70)),
+    dict(id='chanterelle', name='Chanterelles', season=2, sell=28, look='mushroom', col=(240, 170, 60),
+         leaf=(250, 210, 120)),
+    dict(id='hazelnut', name='Hazelnuts', season=2, sell=14, look='nut', col=(170, 116, 70), leaf=(120, 150, 70)),
+    dict(id='blackberry', name='Blackberries', season=2, sell=16, look='cluster', col=(60, 40, 70),
+         leaf=(90, 130, 60)),
+    dict(id='rosehip', name='Rosehips', season=3, sell=16, look='cluster', col=(220, 70, 50), leaf=(110, 90, 60)),
+    dict(id='pinetip', name='Pine Tips', season=3, sell=12, look='herb', col=(110, 170, 110), leaf=(60, 110, 70)),
+    dict(id='oyster', name='Oyster Mushrooms', season=3, sell=24, look='mushroom', col=(200, 200, 196),
+         leaf=(236, 232, 224)),
+]
+for _f in FORAGE:
+    _f.update(forage=True, days=0, seed=0, n=1, regrow=None)
+    CROP_BY_ID[_f['id']] = _f
+FORAGE_BY_ID = {f['id']: f for f in FORAGE}
 # a fresh crop that goes with a dish adds one more serving when you cook it (kitchen.py)
-GARNISH = {'fritters': ('dill',), 'chowder': ('corn', 'peas'), 'grilled': ('garlic', 'dill'),
-           'fishpie': ('peas', 'carrot'), 'clam': ('tomato',), 'stew': ('kale', 'carrot', 'pumpkin'),
-           'tart': ('strawberry',), 'feast': ('pumpkin', 'beet', 'radish')}
+GARNISH = {'fritters': ('dill', 'ramsons', 'sorrel'), 'chowder': ('corn', 'peas', 'oyster'),
+           'grilled': ('garlic', 'dill', 'ramsons', 'pinetip'), 'fishpie': ('peas', 'carrot', 'morel', 'chanterelle'),
+           'clam': ('tomato',), 'stew': ('kale', 'carrot', 'pumpkin', 'chanterelle', 'morel', 'oyster'),
+           'tart': ('strawberry', 'bilberry', 'blackberry', 'rosehip'), 'feast': ('pumpkin', 'beet', 'radish',
+                                                                              'hazelnut')}
 CORN_BAIT = 5                          # one cob makes this much Sweet Corn bait
 BARREL_PRICE = 250
 BARREL_HOLDS = 3                       # dry mornings a full barrel can water
@@ -727,6 +755,24 @@ def crop_icon(cid, scale=3):
         for dx in (-4, 0, 4):
             d.line(s, leaf, (8, 15), (8 + dx, 4))
             d.line(s, col, (8 + dx - 2, 4), (8 + dx + 2, 4))
+    elif look == 'mushroom':
+        for k, (mx, my, r) in enumerate(((5, 7, 4), (11, 9, 3))):
+            d.rect(s, leaf, (mx - 1, my, 3, 15 - my))
+            d.ellipse(s, darken(col, 0.25), (mx - r, my - r + 1, r * 2, r + 2))
+            d.ellipse(s, col, (mx - r, my - r, r * 2, r + 1))
+            s.set_at((mx - 1, my - r + 1), lighten(col, 0.4))
+    elif look == 'cluster':
+        for p in ((6, 8), (10, 8), (8, 11), (5, 12), (11, 12), (8, 6)):
+            d.circle(s, col, p, 2)
+            s.set_at((p[0] - 1, p[1] - 1), lighten(col, 0.45))
+        d.line(s, leaf, (8, 5), (8, 1))
+        d.line(s, leaf, (8, 2), (12, 1))
+    elif look == 'nut':
+        for mx, my in ((5, 10), (11, 11)):
+            d.ellipse(s, darken(col, 0.25), (mx - 4, my - 3, 8, 7))
+            d.ellipse(s, col, (mx - 4, my - 4, 8, 7))
+            s.set_at((mx - 2, my - 2), lighten(col, 0.4))
+            d.line(s, leaf, (mx - 3, my - 4), (mx + 3, my - 4), 2)
     else:
         d.ellipse(s, leaf, (2, 7, 12, 8))
         d.line(s, darken(leaf, 0.3), (8, 8), (8, 14))

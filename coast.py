@@ -554,9 +554,12 @@ def swap_cost(sid):
 
 def _spend_spares(g, n):
     sh = g.coast['shells']
+    took = {}
     for _ in range(n):
-        sid = max(sh, key=lambda k: sh[k])               # the one you have most of goes first
+        # the one you have most of goes first; on a tie, one you haven't given yet, so the cost is spread out
+        sid = max(sh, key=lambda k: (sh[k], -took.get(k, 0)))
         sh[sid] -= 1
+        took[sid] = took.get(sid, 0) + 1
 
 
 def swap_glass(g):

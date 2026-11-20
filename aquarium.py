@@ -86,7 +86,7 @@ def exhibit_of(f):
         return 'legends'
     if f.get('method') == 'sea':
         return 'harbour' if f.get('spot') == 'pier' else 'kelp'
-    if f.get('event') or f.get('method') in ('storm', 'aurora'):
+    if f.get('event') or f.get('method') in ('storm', 'aurora', 'hollow'):
         return 'wonders'
     sp = f.get('spot')
     if sp in ('cove', 'deep', 'creek', 'ice'):

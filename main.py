@@ -80,6 +80,9 @@ import coast
 import harbour as hbmod
 import goals as goalmod
 import radio as radiomod
+import news
+import farshore as farmod
+import club as clubmod
 import pad as padmod
 import lakelife
 import lakeshow
@@ -93,7 +96,7 @@ from data import (FISH, FISH_BY_ID, ALL_BY_ID, LETTERS, VILLAGERS, REQUEST_REASO
                   FESTIVALS, WAGON_DAYS, FROST_POINTS, METEOR_DAY, FESTIVAL_DAY, FISH_RUN_DAY, SPOT_BY_ID,
                   fish_at, spots_of, BOAT)
 import tank as tankmod
-from data import LAKE_SPOTS, COAST_SPOTS, COAST_IDS, SEA_FISH
+from data import LAKE_SPOTS, COAST_SPOTS, COAST_IDS, SEA_FISH, HOLLOW_FISH
 from fishing import Fishing, PLAYER_X, HAND, cast_point, aim_for, clamp, spot_depth
 from world import World, Env, WAGON_RECT, CROSS_POS, cross_at
 
@@ -109,12 +112,18 @@ SAVE_PATH = os.path.join(HERE, 'save.json')
 SETTINGS_PATH = os.path.join(HERE, 'settings.json')
 
 
-def _game_version():
+def version_info():
+    """version.json: the version, its release notes and the short highlights for the What's new card."""
     try:
         with open(os.path.join(HERE, 'version.json'), encoding='utf-8') as f:
-            return str(json.load(f).get('version', '')) or '1.5.0'
-    except (OSError, ValueError, AttributeError):
-        return '1.5.0'
+            d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _game_version():
+    return str(version_info().get('version', '')) or '1.5.0'
 
 
 GAME_VERSION = _game_version()
@@ -742,8 +751,11 @@ class Game:
         self.dungeon = None          # a run down the Drowned Stair (dungeon.py), under overlay 'dungeon'
         aqmod.HEADLESS, aqmod.fmt_clock = HEADLESS, fmt_clock
         hbmod.HEADLESS, hbmod.fmt_clock = HEADLESS, fmt_clock
+        farmod.HEADLESS, farmod.fmt_clock = HEADLESS, fmt_clock
         self.aqscene = None          # also Saltmarsh harbour (harbour.py), under overlay 'harbour'
         self.coast = coast.new()     # Saltmarsh, down the river (coast.py)
+        self.far = farmod.new()      # the Far Shore, across from the landing (farshore.py)
+        self.club = clubmod.new()    # the Angling Club on Lanternday evenings (club.py)
         self.goals = goalmod.new()   # the welcome quest and the pinned goal (goals.py)
         goalmod.fmt_clock = fmt_clock
         self.cat_bond = 0            # Biscuit (biscuit.py): bond points, today's little things, a present
@@ -783,7 +795,7 @@ class Game:
                     cat_bond=self.cat_bond, cat_day=self.cat_day, cat_gift=self.cat_gift,
                     cat_follow=self.cat_follow, home=self.home, tut=self.tut, tut_day=self.tut_day,
                     garden=self.garden, nature=self.nature, shore=self.shore, finds=self.finds,
-                    coast=self.coast, goals=self.goals, hatch=self.hatch, delve=self.delve)
+                    coast=self.coast, goals=self.goals, hatch=self.hatch, delve=self.delve, far=self.far, club=self.club)
         if self.solo:
             data.update(self.solo)       # visiting a friend: your own lake keeps its own day and weather
         try:
@@ -901,7 +913,7 @@ class Game:
                   'museum', 'friends', 'friend_gifts', 'buffs', 'jobs', 'tickets', 'projects', 'town_day',
                   'recipes', 'pantry', 'meal', 'upgrades', 'cook_best', 'story', 'heart_seen', 'market', 'hunts', 'pot', 'sky', 'ice_hole',
                   'cat_bond', 'cat_day', 'cat_gift', 'cat_follow', 'home', 'tut', 'tut_day', 'garden',
-                  'nature', 'shore', 'finds', 'coast', 'hatch', 'delve'):
+                  'nature', 'shore', 'finds', 'coast', 'hatch', 'delve', 'far', 'club'):
             if k in d:
                 setattr(self, k, d[k])
         self.place = 'lake'
@@ -929,6 +941,8 @@ class Game:
         self.shore = shoremod.clean(self.shore)
         self.finds = discover.clean(self.finds)
         self.coast = coast.clean(self.coast)
+        self.far = farmod.clean(getattr(self, 'far', None))
+        self.club = clubmod.clean(getattr(self, 'club', None))
         self.goals = goalmod.clean(d.get('goals'))
         self.nature = {k: {'stars': max(1, min(3, int(v.get('stars', 1)))), 'day': int(v.get('day', 0)),
                            'n': max(1, int(v.get('n', 1))),
@@ -1095,7 +1109,7 @@ class Game:
 
     def walk_scene(self):
         """The scene you are walking around right now (the aquarium hall or Saltmarsh harbour), if any."""
-        return self.aqscene if self.overlay in ('aquarium', 'harbour') and self.aqscene else None
+        return self.aqscene if self.overlay in ('aquarium', 'harbour', 'farshore') and self.aqscene else None
 
     # ------------------------------------------------------------ the rowboat
     def open_map(self):
@@ -1600,7 +1614,9 @@ class Game:
             'colours': all(self.hatch['found'].get(m) for m in morphs.IDS),
             'delver': self.delve['bosses'] >= 1,
             'abyss': self.delve['best'] >= 20,
+            'clubstar': self.stats.get('club_wins', 0) >= 5,
         }
+        cond.update(farmod.badge_cond(self))
         for b in BADGES:
             if b['id'] not in self.badges and cond.get(b['id']):
                 self.badges.append(b['id'])
@@ -1707,11 +1723,15 @@ class Game:
             q = self.toast_q = []
         if any(t[0] == text for t in self.toasts) or any(t[0] == text for t in q):
             return
-        if len(self.toasts) < 2:
+        if len(self.toasts) < self.toast_max():
             self.toasts.append([text, 3.6, color])
         else:
             q.append([text, 3.6, color])
             del q[:-6]
+
+    def toast_max(self):
+        """How many notes show at once: one in the clean HUD (the rest queue up behind it), two otherwise."""
+        return 1 if self.hud_style() == 'clean' else 2
 
     def toasted(self, part):
         """Is a toast with this text showing or waiting? (for tests)"""
@@ -1842,6 +1862,7 @@ class Game:
         hatchery.morning(self)
         shoremod.morning(self)
         coast.morning(self)
+        farmod.morning(self)
         """Morning routine: forecast, the day's letter, birthdays and events."""
         d = self.day
         self.ensure_forecast()
@@ -1981,6 +2002,7 @@ class Game:
                 self.audio.play('jingle2', 0.6)
             if before < f['end'] <= self.minute:
                 self.finish_festival()
+        clubmod.tick(self, before)
         if before < 1200 <= self.minute and self.wagon_today():
             self.toast("Wren's Wagon sails off for the night. See you soon!", (70, 140, 150))
         self.ensure_festival()
@@ -2037,6 +2059,8 @@ class Game:
                     self.toast('%s: %s%s' % (f['name'], self.fest_score(rule, f['best']),
                                              '  - you are in the lead!' if f['best'] > lead else ''), (200, 120, 160))
         legends.on_catch(self, spec, size)
+        if not spec.get('junk'):
+            clubmod.on_catch(self, spec, size)
         req = self.request
         wanted = bool(req and not req.get('done') and req['fish'] == spec['id'])
         if (not new and not record and not spec.get('junk') and spec['rarity'] <= 2 and not wanted and not v
@@ -2213,6 +2237,8 @@ class Game:
                 items.append(('Crab pot', lambda: seasons.pot_action(self)))
             items.append(('Mailbox', self.open_mailbox))
             items.append(('The Drowned Stair', lambda: dungeon.open_stair(self)))
+            if farmod.unlocked(self) and self.visit_shore is None:
+                items.append(('Row to the Far Shore', lambda: farmod.go(self)))
             if self.shore.get('told') and self.visit_shore is None:
                 items.append(('The Shore', lambda: shoremod.open_panel(self)))
             if self.wagon_here():
@@ -2393,6 +2419,7 @@ class Game:
 
     def sleep_now(self):
         old_season = self.season_of(self.day)
+        clubmod.finish(self)
         f = self.festival
         if self.festival_today() and not f.get('done'):
             if f['best']:
@@ -2407,7 +2434,7 @@ class Game:
         self.minute = 360.0
         self.spot = 'dock'                 # you row home to sleep
         self.place = 'lake'                # ...or walk home from the village
-        if self.overlay in ('aquarium', 'harbour'):
+        if self.overlay in ('aquarium', 'harbour', 'farshore'):
             self.overlay = None
         self.aqscene = None
         self.mp_ready = False
@@ -2627,6 +2654,8 @@ class Game:
             self.icescene.release('mouse')
         if self.dungeon:
             self.dungeon.release('mouse')
+        if self.walk_scene():
+            self.aqscene.release('mouse')
         if self.mouse_hold:
             self.mouse_hold = False
             if not self.space_hold:
@@ -2639,6 +2668,8 @@ class Game:
             self.icescene.release('key')
         if k == pygame.K_SPACE and self.dungeon:
             self.dungeon.release('key')
+        if k in (pygame.K_SPACE, pygame.K_e, pygame.K_RETURN) and self.walk_scene():
+            self.aqscene.release('key')
         if k == pygame.K_SPACE and self.space_hold:
             self.space_hold = False
             if not self.mouse_hold:
@@ -2979,6 +3010,8 @@ class Game:
         self.fade = 1.0
         self.fade_dir = -1
         self.audio.play('ui', 0.6)
+        if not HEADLESS:
+            news.queue(self, continue_)          # an update since you last played: what's new
         self.next_queue()
 
     def screenshot(self):
@@ -3069,7 +3102,7 @@ class Game:
         for tt in self.toasts:
             tt[1] -= dt * hurry
         self.toasts = [tt for tt in self.toasts if tt[1] > 0]
-        while self.toast_q and len(self.toasts) < 2:
+        while self.toast_q and len(self.toasts) < self.toast_max():
             self.toasts.append(self.toast_q.pop(0))
         self._new_t = getattr(self, '_new_t', 0.0) - dt
         if self._new_t <= 0 and self.mode == 'play':
@@ -3404,6 +3437,8 @@ class Game:
                 goalmod.draw_panel(self, scr)
             elif ov == 'radio':
                 self.radio.draw_panel(scr)
+            elif ov == 'news':
+                news.draw(self, scr)
             elif ov == 'quick':
                 self.draw_quick(scr)
         elif self.rest_phase == 'row_cross':
@@ -3672,6 +3707,11 @@ class Game:
             out.append('request')
         if fest and 'festival' not in out:
             out.append('festival')
+        if clubmod.today(self) and not coast.at_coast(self):
+            if clubmod.live(self):
+                out.insert(1 if out and out[0] == 'expedition' else 0, 'club')
+            else:
+                out.append('club')
         pin = self.goals.get('pinned')
         if pin:
             if pin in out:
@@ -3787,9 +3827,40 @@ class Game:
         if self.goals.get('pinned') == gid:
             goalmod.draw_pin(s, (r.x + 10, r.y + 6))
 
+    def _hud_slim(self, s, y, CW, fill, border, icon, line, tip, act=None):
+        """A one-line tracker card for the clean HUD; the details hang under it when you point at it."""
+        ui = self.ui
+        r = ui.panel(s, (16, y, CW, 46), fill=fill, border=border, radius=16)
+        icon(r)
+        ui.blit_text(s, line, (r.x + 52, r.centery), 'smallb', U.INK, 'midleft', maxw=CW - 66)
+        if act:
+            ui.hotspot(r, act)
+        if r.collidepoint(ui.mouse) and tip:
+            self._hud_tip = (tip, (r.centerx, r.bottom + 6))
+        return r
+
     def _hud_festival(self, s, y, CW, objs):
         ui = self.ui
         fest = self.festival
+        if self._goal_slim:
+            if self.minute < fest['start']:
+                line = '%s at %s' % (fest['name'], fmt_clock(fest['start']))
+                tip = FESTIVALS[fest['season']]['desc']
+            else:
+                lead_nm, lead_sz = max(fest['rivals'] + self.friend_scores(), key=lambda e: e[1])
+                mine = self.fest_score(fest['rule'], fest['best'])
+                short = fest['name'].split()[-1]
+                if fest['best'] > lead_sz:
+                    line, tip = '%s %s - leading!' % (short, mine), 'In the lead! Ends %s' % fmt_clock(fest['end'])
+                else:
+                    top = self.fest_score(fest['rule'], lead_sz)
+                    line = '%s %s / %s' % (short, mine.split()[0], top)
+                    tip = '%s: %s has %s. Ends %s' % (fest['name'], lead_nm, self.fest_score(fest['rule'], lead_sz),
+                                                     fmt_clock(fest['end']))
+            self._hud_slim(s, y, CW, (252, 236, 240), (176, 100, 130),
+                           lambda r: U.trophy(s, (r.x + 26, r.centery), 0.7), line, tip,
+                           self.cycle_objective if len(objs) > 1 else None)
+            return
         r6 = ui.panel(s, (16, y, CW, 64), fill=(252, 236, 240), border=(176, 100, 130), radius=16)
         U.trophy(s, (r6.x + 30, r6.y + 32), 0.9)
         extra = self._hud_switch(s, r6, objs, 'festival') if len(objs) > 1 else 0
@@ -3809,8 +3880,33 @@ class Game:
                 ui.blit_text(s, 'To beat: %s, %s' % (lead_nm, self.fest_score(fest['rule'], lead_sz)),
                              (r6.x + 58, r6.y + 34), 'small', U.SOFT, maxw=tw)
 
+    def _hud_club(self, s, y, CW, objs):
+        """The Angling Club's card: your score against the leader (the board when you point at it)."""
+        ui = self.ui
+        line, tip = clubmod.hud(self)
+        icon = lambda r: clubmod.ribbon(s, (r.x + 26, r.centery - 4), clubmod.RIBBON_COL['blue'], 0.9)
+        if self._goal_slim:
+            self._hud_slim(s, y, CW, (234, 240, 252), (90, 110, 170), icon, line, tip,
+                           self.cycle_objective if len(objs) > 1 else None)
+            return
+        r = ui.panel(s, (16, y, CW, 64), fill=(234, 240, 252), border=(90, 110, 170), radius=16)
+        clubmod.ribbon(s, (r.x + 30, r.y + 26), clubmod.RIBBON_COL['blue'], 1.0)
+        extra = self._hud_switch(s, r, objs, 'club') if len(objs) > 1 else 0
+        ui.blit_text(s, line, (r.x + 58, r.y + 10), 'smallb', U.INK, maxw=CW - 70 - extra)
+        ui.blit_text(s, tip, (r.x + 58, r.y + 34), 'small', U.SOFT, maxw=CW - 70 - extra)
+
     def _hud_expedition(self, s, y, CW, objs):
         ui = self.ui
+        if self._goal_slim:
+            title, line = coop.exp_hud(self)
+
+            def flag(r):
+                cx, cy = r.x + 26, r.centery
+                pygame.draw.line(s, U.BROWN, (cx - 6, cy - 11), (cx - 6, cy + 11), 3)
+                pygame.draw.polygon(s, (60, 110, 150), [(cx - 4, cy - 11), (cx + 12, cy - 5), (cx - 4, cy + 1)])
+            self._hud_slim(s, y, CW, (232, 242, 246), (90, 130, 160), flag, title, line,
+                           lambda: (setattr(self, 'coop_tab', 'exp'), self.toggle('coop')))
+            return
         r = ui.panel(s, (16, y, CW, 64), fill=(232, 242, 246), border=(90, 130, 160), radius=16)
         cx, cy = r.x + 30, r.y + 32                  # a little pennant on a pole
         pygame.draw.line(s, U.BROWN, (cx - 8, cy - 14), (cx - 8, cy + 14), 3)
@@ -3880,6 +3976,9 @@ class Game:
         ll = legends.hud_line(self)
         if ll:
             lines.append(('festival', ll))
+        cl = clubmod.note(self)
+        if cl and self.tracked_objective()[0] != 'club':
+            lines.append(('club', cl))
         bl = biscuit.hud_line(self)
         if bl:
             lines.append(('birthday', bl))
@@ -3947,6 +4046,7 @@ class Game:
         self._goal_slim = style != 'full' and (self.hud_tuck > 0.5 or clean)
         calm_card = style in ('calm', 'clean')
         tip = None                 # (text, (x, y)): a little label under whatever the mouse is on
+        self._hud_tip = None       # ...or one a card set while it drew
         want = 1.0 if self.hud_quiet() else 0.0
         self.hud_calm += (want - self.hud_calm) * min(1.0, dt * (1.3 if want > self.hud_calm else 7))
         if abs(want - self.hud_calm) < 0.01:
@@ -4020,10 +4120,13 @@ class Game:
             y += self.goal_h() + 8
         elif cur == 'festival':
             self._hud_festival(s, y, CW, objs)
-            y += 72
+            y += 54 if self._goal_slim else 72
         elif cur == 'expedition':
             self._hud_expedition(s, y, CW, objs)
-            y += 72
+            y += 54 if self._goal_slim else 72
+        elif cur == 'club':
+            self._hud_club(s, y, CW, objs)
+            y += 54 if self._goal_slim else 72
         elif cur:
             self._hud_goal(s, y, CW, objs, cur)
             y += self.goal_h() + 8
@@ -4065,7 +4168,8 @@ class Game:
                     ui.blit_text(s, text, (r7.x + 58, r7.y + 25 + i * 30), 'small', U.INK, 'midleft', maxw=tw)
                 y = r7.bottom + 8
         if self.fishing.state not in ('fight', 'landing'):
-            y = self.radio.draw_widget(s, y, CW)
+            y = self.radio.draw_widget(s, y, CW, slim=clean)
+        tip = tip or self._hud_tip
         self._hud_left = y           # the chat sits under the left-hand cards
         # coins, bait and luck down the right-hand side
         b = BAIT_BY_ID[self.bait]
@@ -4325,16 +4429,60 @@ class Game:
 
     def draw_toasts(self, s):
         ui = self.ui
-        # over a panel they sit at the very top, clear of its buttons; on the lake, under any tip
+        # over a window: one slim line in the gap above it, clear of its title and buttons;
+        # on the lake, at the top (under any tip)
         bottom = False
         y, step = 18, 54
-        if self.overlay and self.overlay not in ('pause', 'options'):
-            y = 6
+        over = bool(self.overlay) and self.overlay not in ('pause', 'options')
+        if over:
+            y = 5
         elif tutorial.active(self) and tutorial.relevant(self) and self.overlay is None:
             y = 88
-        for text, life, col in self.toasts:
+        slim = self.hud_style() == 'clean'
+        for n_, (text, life, col) in enumerate(self.toasts):
             k = max(0.0, min(1.0, (3.6 - life) / 0.3, life / 0.35))
             e = 1 - (1 - k) ** 3
+            if over:
+                if n_:
+                    break                                 # one at a time over a window
+                waiting = len(self.toast_q) + len(self.toasts) - 1
+                tw_ = ui.fonts['smallb'].size(text)[0]
+                w = min(SW - 240, tw_ + 58 + (40 if waiting else 0))
+                r = pygame.Rect(SW // 2 - w // 2, y - int((1 - e) * 44), w, 32)
+                ui.panel(s, r, radius=16)
+                pygame.draw.circle(s, col, (r.x + 18, r.centery), 5)
+                pygame.draw.circle(s, U.darken(col, 0.3), (r.x + 18, r.centery), 5, 2)
+                ui.blit_text(s, text, (r.x + 32, r.centery), 'smallb', U.INK, 'midleft',
+                             maxw=r.w - 44 - (40 if waiting else 0))
+                if waiting:
+                    c = (r.right - 24, r.centery)
+                    pygame.draw.circle(s, (236, 222, 196), c, 12)
+                    ui.blit_text(s, '+%d' % waiting, c, 'tiny', U.BROWN, 'center')
+                continue
+            if slim:
+                # a small pill; long notes wrap onto two lines rather than stretching across the lake
+                lines = ui.wrap(text, 'smallb', SW - 16 - 188 - 12 - (16 + 320 + 12) - 110)[:2]
+                w = max(ui.fonts['smallb'].size(ln)[0] for ln in lines) + 58
+                waiting = len(self.toast_q)
+                if waiting:
+                    w += 40
+                h = 38 if len(lines) == 1 else 62
+                off = int((1 - e) * 60)
+                lo, hi = 16 + 320 + 12, SW - 16 - 188 - 12
+                cx = (lo + hi) // 2 if w > hi - lo else max(lo + w // 2, min(hi - w // 2, SW // 2))
+                r = pygame.Rect(cx - w // 2, y - off, w, h)
+                ui.panel(s, r, radius=18)
+                pygame.draw.circle(s, col, (r.x + 20, r.centery), 6)
+                pygame.draw.circle(s, U.darken(col, 0.3), (r.x + 20, r.centery), 6, 2)
+                for i, ln in enumerate(lines):
+                    ui.blit_text(s, ln, (r.x + 36, r.centery + (i * 2 - len(lines) + 1) * 12), 'smallb', U.INK,
+                                 'midleft')
+                if waiting:
+                    c = (r.right - 26, r.centery)
+                    pygame.draw.circle(s, (236, 222, 196), c, 13)
+                    ui.blit_text(s, '+%d' % waiting, c, 'tiny', U.BROWN, 'center')
+                y += h + 8
+                continue
             w = ui.fonts['bodyb'].size(text)[0] + 64
             off = int((1 - e) * 80)
             cx = SW // 2
@@ -4677,12 +4825,6 @@ class Game:
             ui.button(s, (tx + i * 130, rect.y + 26, 120, 40), label, lambda k=key: setattr(self, 'j_tab', k), st)
         caught = sum(1 for f in FISH if f['id'] in self.journal)
         fx = rect.x + 34
-        if self.j_tab == 'fish':
-            for i, label in enumerate(('Lake', 'Rowboat', 'Seasonal', 'Coast')):
-                ui.button(s, (rect.x + 28 + i * 104, rect.bottom - 52, 98, 36), label,
-                          lambda i=i: setattr(self, 'j_page', i), 'tab_on' if self.j_page == i else 'tab',
-                          font='smallb')
-            fx = rect.x + 456
         if self.j_tab == 'letters' and self.diary_entries():
             for i, label in enumerate(('Letters', "Rosie's diary")):
                 ui.button(s, (rect.x + 28 + i * 104, rect.bottom - 52, 98 + 48 * i, 36), label,
@@ -4691,33 +4833,83 @@ class Game:
             fx = rect.x + 300
         if self.j_tab == 'nature':
             return wildlife.draw_page(self, s, rect)
-        if self.j_tab != 'badges':              # the Badges tab has its own footer and page buttons
+        if self.j_tab == 'letters':
             ui.blit_text(s, 'Species  %d / %d      Letters  %d / %d      Fish caught  %d'
                          % (caught, len(FISH), len(self.letters), len(LETTERS), self.total),
                          (fx, rect.bottom - 40), 'smallb', U.SOFT)
-        if self.j_tab == 'letters':
             return self.draw_letters_tab(s, rect)
         if self.j_tab == 'badges':
             return self.draw_badges_tab(s, rect)
-        gx, gy = rect.x + 28, rect.y + 90
-        tw, th = 94, 110
-        hover_i = None
-        page = ([f for f in fish_at('dock') if not f.get('method')] if self.j_page == 0 else
-                [f for f in FISH if f['spot'] in ('cove', 'deep', 'creek') and not f.get('method')]
-                if self.j_page == 1 else [f for f in FISH if f.get('method') and f['method'] != 'sea']
-                if self.j_page == 2 else SEA_FISH)
-        if self.j_page == 1 and not self.has_boat() and not any(f['id'] in self.journal for f in page):
-            ui.blit_text(s, 'Fish from the far corners of the lake.', (gx + 6, gy + 250), 'small', U.SOFT)
-            ui.blit_text(s, 'A rowboat would take you there.', (gx + 6, gy + 272), 'small', U.SOFT)
-        if self.j_page == 3 and not coast.is_open(self) and not any(f['id'] in self.journal for f in page):
-            ui.blit_text(s, 'Fish from the sea at Saltmarsh, down the river.', (gx + 6, gy + 380), 'small', U.SOFT)
-            ui.blit_text(s, 'With a rowboat, the river will take you there.', (gx + 6, gy + 402), 'small', U.SOFT)
+        self.draw_fish_tab(s, rect, caught)
+
+    # the journal's fish pages: (chip label, a line about the place)
+    JOURNAL_PAGES = (
+        ('Lake', 'Fish from your dock and the open lake. Most of them bite all year round.'),
+        ('Rowboat', 'Fish from the cove, the deep water and the creek. Row out to meet them.'),
+        ('Seasonal', 'Fish that want a particular season, bait or way of fishing.'),
+        ('Coast', 'Fish from the sea at Saltmarsh, down the river. Mind the tide.'),
+        ('Far Shore', 'Fish from the Hollow Pool, in the woods across the lake. They rise after 7:30 PM.'),
+    )
+
+    def journal_page(self, i):
+        if i == 0:
+            return [f for f in fish_at('dock') if not f.get('method')]
+        if i == 1:
+            return [f for f in FISH if f['spot'] in ('cove', 'deep', 'creek') and not f.get('method')]
+        if i == 2:
+            return [f for f in FISH if f.get('method') and f['method'] not in ('sea', 'hollow')]
+        return SEA_FISH if i == 3 else HOLLOW_FISH
+
+    def journal_locked(self, i, page):
+        """How to reach a page's fish, while you can't yet (None once you can, or have caught one)."""
+        if any(f['id'] in self.journal for f in page):
+            return None
+        if i == 1 and not self.has_boat():
+            return 'A rowboat would take you there.'
+        if i == 3 and not coast.is_open(self):
+            return 'With a rowboat, the river will take you there.'
+        if i == 4 and not farmod.unlocked(self):
+            return 'Mend the old landing across from your dock to get there.'
+        return None
+
+    def draw_fish_tab(self, s, rect, caught):
+        ui = self.ui
+        gx, gw = rect.x + 28, 688
+        # the five places, as chips: how many you've found at each, with a little bar
+        cy, cw = rect.y + 92, (688 - 4 * 8) // 5
+        for i, (label, _) in enumerate(self.JOURNAL_PAGES):
+            pg = self.journal_page(i)
+            got = sum(1 for f in pg if f['id'] in self.journal)
+            r = pygame.Rect(gx + i * (cw + 8), cy, cw, 52)
+            on = self.j_page == i
+            hov = r.collidepoint(ui.mouse)
+            ui.tile(s, r, (252, 248, 236) if on else (246, 238, 220) if hov else (234, 222, 198),
+                    (150, 112, 76) if on else (200, 180, 154), on)
+            ui.blit_text(s, label, (r.x + 12, r.y + 8), 'smallb', U.INK if on else U.BROWN, maxw=cw - 22)
+            bar = pygame.Rect(r.x + 12, r.y + 35, cw - 70, 6)
+            pygame.draw.rect(s, (222, 206, 180), bar, border_radius=3)
+            if got:
+                full = got == len(pg)
+                pygame.draw.rect(s, U.GOLD if full else (120, 164, 110),
+                                 (bar.x, bar.y, max(6, bar.w * got // max(1, len(pg))), bar.h), border_radius=3)
+            ui.blit_text(s, '%d/%d' % (got, len(pg)), (r.right - 12, bar.centery), 'tiny',
+                         U.INK if on else U.SOFT, 'midright')
+            ui.hotspot(r, lambda i=i: setattr(self, 'j_page', i))
+        page = self.journal_page(self.j_page)
         if page and FISH[self.j_sel] not in page:
             self.j_sel = FISH.index(page[0])      # keep the detail card on this page
-        for n, f in enumerate(page):
+        # the grid sizes itself to the page: big tiles for a handful of fish, seven across for the lake
+        top = cy + 52 + 14
+        avail = rect.bottom - 24 - top
+        n = len(page)
+        cols = 7 if n > 15 else 5
+        tw = (gw - (cols - 1) * 8) // cols
+        rows = max(1, -(-n // cols))
+        th = min(tw + 8, 140, (avail - (rows - 1) * 8) // rows)
+        hover_i = None
+        for k, f in enumerate(page):
             i = FISH.index(f)
-            col, row = n % 7, n // 7
-            tr = pygame.Rect(gx + col * (tw + 6), gy + row * (th + 6), tw, th)
+            tr = pygame.Rect(gx + (k % cols) * (tw + 8), top + (k // cols) * (th + 8), tw, th)
             known = f['id'] in self.journal
             hov = tr.collidepoint(ui.mouse)
             if hov:
@@ -4725,67 +4917,96 @@ class Game:
             sel = i == self.j_sel
             fill = (252, 248, 236) if hov or sel else (240, 230, 210)
             ui.tile(s, tr, fill, RARITY_COLORS[f['rarity']] if known else (186, 170, 150), sel)
-            key = (f['id'], known)
+            src = art.fish_sprite(f, 1) if known else art.silhouette(f, 1)
+            sc = max(1, min(3, (tw - 18) // src.get_width(), (th - 54) // src.get_height()))
+            key = (f['id'], known, sc)
             spr = self._jcache.get(key)
             if spr is None:
-                src = art.fish_sprite(f, 2) if known else art.silhouette(f, 2)
-                spr = self._jcache[key] = pygame.transform.scale(src, (84, 42))
-            s.blit(spr, spr.get_rect(center=(tr.centerx, tr.y + 38)))
+                spr = self._jcache[key] = pygame.transform.scale(src, (src.get_width() * sc, src.get_height() * sc))
+            s.blit(spr, spr.get_rect(center=(tr.centerx, (tr.y + 8 + tr.bottom - 46) // 2)))
             name = f['name'] if known else '???'
-            nm = name if ui.fonts['small'].size(name)[0] < tw - 8 else name.split(' ')[-1]
-            ui.blit_text(s, nm, (tr.centerx, tr.bottom - 32), 'small', U.INK if known else U.SOFT, 'center')
-            for k in range(f['rarity']):
-                U.star(s, (tr.centerx - (f['rarity'] - 1) * 7 + k * 14, tr.bottom - 13), 5,
+            if ui.fonts['small'].size(name)[0] > tw - 12:
+                name = name.split(' ')[-1]
+            ui.blit_text(s, name, (tr.centerx, tr.bottom - 37), 'small', U.INK if known else U.SOFT, 'center',
+                         maxw=tw - 10)
+            for st in range(f['rarity']):
+                U.star(s, (tr.centerx - (f['rarity'] - 1) * 7 + st * 14, tr.bottom - 18), 5,
                        U.GOLD if known else (210, 198, 180))
             ui.hotspot(tr, lambda i=i: setattr(self, 'j_sel', i))
-        idx = hover_i if hover_i is not None else self.j_sel
-        f = FISH[idx]
+        # room left under a short page: a word about the place (and how to get there)
+        y0 = top + rows * (th + 8) + 4
+        if rect.bottom - 24 - y0 >= 70:
+            label, blurb = self.JOURNAL_PAGES[self.j_page]
+            lock = self.journal_locked(self.j_page, page)
+            lines = ui.wrap(blurb, 'small', gw - 48) + (ui.wrap(lock, 'small', gw - 48) if lock else [])
+            br = pygame.Rect(gx, y0, gw, 20 + 22 * len(lines) + 16)
+            pygame.draw.rect(s, (244, 234, 214), br, border_radius=14)
+            pygame.draw.rect(s, (222, 204, 178), br, 2, border_radius=14)
+            for k, ln in enumerate(lines):
+                lc = (90, 120, 150) if lock and k >= len(lines) - len(ui.wrap(lock, 'small', gw - 48)) else U.SOFT
+                ui.blit_text(s, ln, (br.x + 24, br.y + 18 + k * 22), 'small', lc)
+        self.draw_fish_detail(s, rect, FISH[hover_i if hover_i is not None else self.j_sel], caught)
+
+    def draw_fish_detail(self, s, rect, f, caught):
+        """The card on the right: the fish up close, then what you know about it; your totals under it."""
+        ui = self.ui
         known = f['id'] in self.journal
-        dx = rect.x + 740
-        dr = pygame.Rect(dx, rect.y + 90, 272, 470)
+        dr = pygame.Rect(rect.x + 740, rect.y + 92, 272, rect.h - 92 - 80)
         pygame.draw.rect(s, (244, 234, 214), dr, border_radius=16)
         pygame.draw.rect(s, (214, 196, 170), dr, 2, border_radius=16)
-        halo = pygame.Surface((240, 120), pygame.SRCALPHA)
+        halo = pygame.Surface((236, 112), pygame.SRCALPHA)
         hc = RARITY_COLORS[f['rarity']] if known else (190, 180, 170)
         pygame.draw.ellipse(halo, (*hc, 60), halo.get_rect())
         pygame.draw.ellipse(halo, (*hc, 60), halo.get_rect().inflate(-80, -40))
-        s.blit(halo, (dr.centerx - 120, dr.y + 22))
+        s.blit(halo, (dr.centerx - 118, dr.y + 16))
         spr = art.fish_sprite(f, 4) if known else art.silhouette(f, 4)
-        s.blit(spr, spr.get_rect(center=(dr.centerx, dr.y + 82)))
-        y = dr.y + 150
-        ui.blit_text(s, f['name'] if known else 'Unknown fish', (dr.centerx, y), 'h3', U.INK, 'center')
+        s.blit(spr, spr.get_rect(center=(dr.centerx, dr.y + 72)))
+        y = dr.y + 136
+        ui.blit_text(s, f['name'] if known else 'Unknown fish', (dr.centerx, y), 'h3', U.INK, 'center',
+                     maxw=dr.w - 24)
         y += 24
         ui.blit_text(s, RARITY_NAMES[f['rarity']], (dr.centerx, y), 'smallb', RARITY_COLORS[f['rarity']], 'center')
-        y += 30
+        y += 26
+        x0, iw = dr.x + 18, dr.w - 36
         if known:
             e = self.journal[f['id']]
-            for line in ui.wrap(f['desc'], 'small', dr.w - 36):
-                ui.blit_text(s, line, (dr.x + 18, y), 'small', U.INK)
+            for line in ui.wrap(f['desc'], 'small', iw)[:3]:
+                ui.blit_text(s, line, (x0, y), 'small', U.INK)
                 y += 22
-            y += 10
-            ui.blit_text(s, 'Biggest:  %.1f cm' % e['best'], (dr.x + 18, y), 'smallb', U.INK)
-            y += 24
-            ui.blit_text(s, 'Caught:  %d' % e['count'], (dr.x + 18, y), 'smallb', U.INK)
-            y += 24
-            ui.blit_text(s, 'Worth about:  %d' % f['price'], (dr.x + 18, y), 'smallb', U.INK)
-            y += 34
-            ui.blit_text(s, 'Where & when', (dr.x + 18, y), 'smallb', U.SOFT)
-            y += 22
+            y += 8
+            bw = (iw - 12) // 3
+            for k, (lab, val) in enumerate((('Biggest', '%.1f cm' % e['best']), ('Caught', '%d' % e['count']),
+                                            ('Sells for', '%d' % f['price']))):
+                br = pygame.Rect(x0 + k * (bw + 6), y, bw, 46)
+                pygame.draw.rect(s, (236, 224, 200), br, border_radius=10)
+                ui.blit_text(s, lab, (br.centerx, br.y + 13), 'tiny', U.SOFT, 'center', maxw=bw - 6)
+                ui.blit_text(s, val, (br.centerx, br.y + 32), 'smallb', U.INK, 'center', maxw=bw - 8)
+            y += 60
+            ui.blit_text(s, 'Where and when', (x0, y), 'smallb', U.SOFT)
         else:
-            ui.blit_text(s, 'Not caught yet.', (dr.x + 18, y), 'small', U.SOFT)
-            y += 32
-            ui.blit_text(s, 'Hint', (dr.x + 18, y), 'smallb', U.SOFT)
-            y += 22
-        for line in ui.wrap(f['hint'], 'small', dr.w - 36):
-            ui.blit_text(s, line, (dr.x + 18, y), 'small', U.INK)
+            ui.blit_text(s, 'Not caught yet.', (x0, y), 'small', U.SOFT)
+            y += 30
+            ui.blit_text(s, 'Hint', (x0, y), 'smallb', U.SOFT)
+        y += 22
+        for line in ui.wrap(f['hint'], 'small', iw):
+            ui.blit_text(s, line, (x0, y), 'small', U.INK)
             y += 22
         others = [SPOT_BY_ID[sp]['name'] for sp in spots_of(f['id']) if sp != (f['spot'] or 'dock')]
         if others and y < dr.bottom - 30:
             text = 'Also at %s.' % ' and '.join(others) if len(others) < 3 else 'Also at %s and %s.' % (
                 ', '.join(others[:-1]), others[-1])
-            for line in ui.wrap(text, 'small', dr.w - 36)[:max(1, (dr.bottom - 8 - y) // 22)]:
-                ui.blit_text(s, line, (dr.x + 18, y + 4), 'small', (90, 120, 150))
+            for line in ui.wrap(text, 'small', iw)[:max(1, (dr.bottom - 8 - y) // 22)]:
+                ui.blit_text(s, line, (x0, y + 4), 'small', (90, 120, 150))
                 y += 22
+        # your totals, under the card
+        ty = dr.bottom + 16
+        ui.blit_text(s, '%d / %d species' % (caught, len(FISH)), (dr.x + 4, ty), 'smallb', U.INK)
+        ui.blit_text(s, '%d caught' % self.total, (dr.right - 4, ty), 'small', U.SOFT, 'topright')
+        bar = pygame.Rect(dr.x + 4, ty + 28, dr.w - 8, 8)
+        pygame.draw.rect(s, (222, 206, 180), bar, border_radius=4)
+        if caught:
+            pygame.draw.rect(s, (120, 164, 110), (bar.x, bar.y, max(8, bar.w * caught // len(FISH)), bar.h),
+                             border_radius=4)
 
     def diary_entries(self):
         """The diary pages Biscuit has found, in order, then the letter from the tin under the bench."""
@@ -4933,6 +5154,10 @@ class Game:
                 ui.blit_text(s, '+%d' % (len(self.trophies) - 6), (shelf_x + 226, iy + 30), 'smallb', U.SOFT)
         else:
             ui.blit_text(s, 'Trophy shelf (win a festival)', (shelf_x + 110, iy + 26), 'small', U.SOFT, 'center')
+        rb = [(k, n) for k, n in self.club['ribbons'].items() if n]
+        for i, (k, n_) in enumerate(rb):             # the Angling Club's ribbons, pinned under the shelf
+            clubmod.ribbon(s, (shelf_x + 18 + i * 62, iy + 70), clubmod.RIBBON_COL[k], 0.8)
+            ui.blit_text(s, 'x%d' % n_, (shelf_x + 34 + i * 62, iy + 72), 'smallb', U.SOFT, 'midleft')
         can_sleep = self.minute >= 1080 or self.minute < 300
         ui.button(s, (rect.right - 214, iy + 4, 180, 48), 'Sleep  (Z)', self.sleep_from_cabin, 'primary',
                   enabled=can_sleep)
@@ -7099,8 +7324,8 @@ def run_bot(seconds):
             return
         if tn.target is not None:
             return
-        if not tb['plan']:
-            g.go_place('lake')
+        if not tb['plan'] or (clubmod.today(g) and g.minute >= 16 * 60 + 30):
+            g.go_place('lake')                    # (home in time for the Angling Club on Lanternday)
             return
         x, act = tb['plan'].pop(0)
         tn.walk_to(x, act)
@@ -7115,6 +7340,11 @@ def run_bot(seconds):
             g.scene.auto(dt)
         elif in_town:
             town_step()
+        elif g.overlay == 'farshore' and g.aqscene:
+            if tb.get('far_seen') is not g.aqscene:
+                tb['far_seen'] = g.aqscene
+                did('farshore')
+            g.aqscene.auto(dt, rng)              # finds, Bramwell, the fire, the pool after dark
         elif g.overlay == 'harbour' and g.aqscene:
             if tb.get('hb_seen') is not g.aqscene:
                 tb['hb_seen'] = g.aqscene
@@ -7316,17 +7546,31 @@ def run_bot(seconds):
             tb['need_plan'] = True
             g.go_place('town')
         elif (g.rest_phase is None and f.state in ('idle', 'waiting') and g.overlay is None and g.spot == 'dock'
-              and g.place == 'lake' and tb.get('dg_day') != g.day and 600 <= g.minute < 1080 and rng.random() < 0.01):
+              and g.place == 'lake' and tb.get('dg_day') != g.day and 600 <= g.minute < 1080 and rng.random() < 0.01
+              and not (clubmod.today(g) and g.minute >= 14 * 60)):
             tb['dg_day'] = g.day
             dungeon.open_stair(g)                 # down the stone steps under the hill
+        elif (g.rest_phase is None and f.state == 'idle' and g.overlay is None and g.spot == 'dock'
+              and g.place == 'lake' and farmod.unlocked(g) and tb.get('far_day') != g.day
+              and 19 * 60 + 40 <= g.minute < 22 * 60):
+            tb['far_day'] = g.day
+            farmod.go(g)                          # row across to the Far Shore for the evening
+        elif (g.rest_phase is None and f.state == 'idle' and g.overlay is None and g.spot != 'dock'
+              and g.place == 'lake' and farmod.unlocked(g) and tb.get('far_day') != g.day
+              and tb.get('far_home') != g.day and 19 * 60 + 10 <= g.minute < 21 * 60):
+            tb['far_home'] = g.day
+            g.travel('dock')                      # head home to the dock first: the landing is across from it
         elif (g.rest_phase is None and f.state == 'idle' and g.overlay is None and g.spot == 'pier'
               and tb.get('hb_day') != g.day and 420 <= g.minute < 1140):
             tb['hb_day'] = g.day
             g.go_place('town')                    # up the steps into Saltmarsh
         elif g.rest_phase is None and f.state == 'idle' and g.overlay is None and rng.random() < 0.05:
-            g.travel(rng.choice([sid for sid in coast.reachable(g) if sid != g.spot]))
+            near = [sid for sid in coast.reachable(g) if sid != g.spot]
+            if clubmod.today(g) and g.minute >= 15 * 60:   # Lanternday evening: stay on the lake for the club
+                near = [sid for sid in near if sid in LAKE_SPOTS] or near
+            g.travel(rng.choice(near))
             stats['trips'] = stats.get('trips', 0) + 1
-        if g.rest_phase is not None or g.mp_ready or in_town or g.overlay in ('ice', 'harbour', 'dungeon'):
+        if g.rest_phase is not None or g.mp_ready or in_town or g.overlay in ('ice', 'harbour', 'dungeon', 'farshore'):
             pass
         elif f.state == 'idle':
             stats['casts'] += 1

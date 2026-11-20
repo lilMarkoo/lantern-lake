@@ -202,13 +202,35 @@ class Radio:
         return parts[k]
 
     # ------------------------------------------------------------ drawing
-    def draw_widget(self, s, y, CW):
+    def draw_widget(self, s, y, CW, slim=False):
         """A small card under the others while a station is on. Returns the y below it."""
         if self.station is None:
             return y
         g = self.g
         ui = g.ui
         st = BY_ID[self.station]
+        if slim:
+            # a little pill: the set and its meter; what's on comes up when the host talks or you point at it
+            sub = self.subtitle()
+            r = pygame.Rect(16, y, 168, 42)
+            hov = r.collidepoint(ui.mouse) or (getattr(self, '_wide', False) and
+                                               pygame.Rect(16, y, CW, 62).collidepoint(ui.mouse))
+            if sub or hov:
+                r.w, r.h = CW, 62
+            self._wide = bool(sub or hov)
+            ui.panel(s, r, radius=18)
+            ui.hotspot(r, lambda: g.toggle('radio'))
+            radio_icon(s, (r.x + 26, r.y + 21), g.t, st['col'])
+            ui.blit_text(s, '%.1f' % st['freq'], (r.x + 50, r.y + 21), 'smallb', U.INK, 'midleft')
+            for i in range(4):
+                h = 4 + int(10 * abs(math.sin(g.t * (3 + i * 1.3) + i))) if not g.audio.radio_duck else 3
+                s.fill(st['col'], (r.x + 112 + i * 9, r.y + 28 - h, 6, h))
+            if sub:
+                ui.blit_text(s, sub, (r.x + 50, r.y + 44), 'small', U.INK, 'midleft', maxw=CW - 64)
+            elif hov:
+                ui.blit_text(s, "%s: '%s'" % (st['name'], self.title[0]), (r.x + 50, r.y + 44), 'small', U.SOFT,
+                             'midleft', maxw=CW - 64)
+            return r.bottom + 8
         r = ui.panel(s, (16, y, CW, 64), radius=16)
         ui.hotspot(r, lambda: g.toggle('radio'))
         radio_icon(s, (r.x + 30, r.y + 32), g.t, st['col'])

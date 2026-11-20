@@ -68,6 +68,8 @@ class Pad:
         self.hat = (0, 0)
         self.nav_dir = (0, 0)
         self.nav_t = 0.0
+        self.snap_dir = (0, 0)        # the d-pad held in a window, and the time to its next repeat
+        self.snap_t = 0.0
         self.up_was = False
         try:
             if not pygame.joystick.get_init():
@@ -364,9 +366,62 @@ class Pad:
             d = dy or dx
             self.g.key_down(pygame.K_DOWN if d > 0 else pygame.K_UP)
 
+    def snap(self, dx, dy):
+        """The d-pad in a window: jump the pointer to the nearest button, card or fish in that direction."""
+        g = self.g
+        hot = [r for r, _ in getattr(g.ui, 'hot', ()) if r.w > 4 and r.h > 4]
+        if not hot:
+            return False
+        if self.cursor is None or not self.pointer_on():
+            # the pointer was hidden: start on whatever is nearest the middle of the window
+            cx, cy = self._center()
+            r = min(hot, key=lambda r: math.hypot(r.centerx - cx, r.centery - cy))
+            self.cursor = [float(r.centerx), float(r.centery)]
+            self.cursor_t = 0.0
+            g.mouse_move(tuple(self.cursor))
+            return True
+        px, py = self.cursor
+        here = [r for r in hot if r.collidepoint(px, py)]
+        if here:
+            cur = min(here, key=lambda r: r.w * r.h)          # the smallest thing under the pointer
+            px, py = cur.center
+        seen, best, best_s = set(), None, None
+        for r in hot:
+            key = (r.x, r.y, r.w, r.h)
+            if key in seen or r.collidepoint(px, py):
+                continue
+            seen.add(key)
+            # measure to the nearest point of the rect, so long rows and tall columns line up sensibly
+            cx = min(max(px, r.left), r.right - 1)
+            cy = min(max(py, r.top), r.bottom - 1)
+            vx, vy = cx - px, cy - py
+            along = vx * dx + vy * dy
+            if along <= 2:
+                continue
+            side = abs(vx * dy - vy * dx)
+            if side > along * 2.5 + 40:                          # well off to the side: not "that way"
+                continue
+            sc = along + side * 2.2
+            if best_s is None or sc < best_s:
+                best, best_s = r, sc
+        if best is None:
+            return False
+        self.cursor = [float(best.centerx), float(best.centery)]
+        self.cursor_t = 0.0
+        g.mouse_move(tuple(self.cursor))
+        return True
+
     def _dir_edge(self):
         ctx = self.context()
         dx, dy = self.direction()
+        if ctx == 'cursor':
+            hd = (self.hat[0], -self.hat[1])
+            if hd != self.snap_dir:
+                self.snap_dir = hd
+                self.snap_t = 0.4
+                if any(hd):
+                    self.snap(*hd)
+            return
         if ctx in ('menu', 'typing'):
             d = (dx, dy)
             if d != self.nav_dir:
@@ -394,6 +449,11 @@ class Pad:
         ice = ctx == 'ice' and self.g.typing is None      # ice fishing: the stick sets the lure's depth
         self._hold(pygame.K_s, ice and dy > 0)
         self._hold(pygame.K_w, ice and dy < 0)
+        if ctx == 'cursor' and any(self.snap_dir):
+            self.snap_t -= dt
+            if self.snap_t <= 0:
+                self.snap_t = 0.16
+                self.snap(*self.snap_dir)
         if ctx in ('menu', 'typing') and self.nav_dir and any(self.nav_dir):
             self.nav_t -= dt
             if self.nav_t <= 0:
@@ -403,9 +463,8 @@ class Pad:
         ry = self.axes[3] if abs(self.axes[3]) > DEAD else 0.0
         if ctx in ('cursor', 'play'):
             if ctx == 'cursor':
-                sx, sy = self.stick()
-                hx, hy = self.hat[0], -self.hat[1]
-                vx, vy = (sx or hx * 0.6) or rx, (sy or hy * 0.6) or ry
+                sx, sy = self.stick()          # the d-pad snaps between buttons instead (snap)
+                vx, vy = sx or rx, sy or ry
             else:
                 vx, vy = rx, ry                  # during play only the right stick moves the pointer
             mag = math.hypot(vx, vy)
