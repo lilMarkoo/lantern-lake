@@ -2,7 +2,7 @@
 
 ![Biscuit and the angler share a wooden dock as the sunset reflects off the lake](launcher/banner.png)
 
-Cast from the dock with Biscuit the cat at your side. When the bobber dips, set the hook and follow the fish through its lunges. That first catch could become dinner, a gift for a neighbour, or the newest resident of Fernwick Aquarium.
+Cast from the dock with Biscuit the cat at your side. When the bobber dips, set the hook and follow the fish through its lunges. That first catch could become dinner, a gift for a neighbour, stock for your market stall, or the newest resident of Fernwick Aquarium.
 
 Grandma Rosie once tended four lanterns around the lake. Each wakes in a different season. As you get to know Fernwick, you'll learn what it takes to light them again. Follow the river to Saltmarsh for sea fishing, changing tides, and a harbour full of new neighbours. Fish at your own pace, or invite up to three friends to share the dock.
 
@@ -10,7 +10,22 @@ Grandma Rosie once tended four lanterns around the lake. Each wakes in a differe
 
 ## What’s new
 
-The latest update, **0.4.0**, takes you across the lake to **the Far Shore**. Mend the old landing, row over to the woodland trail, and meet Bramwell the forest ranger. Gather seasonal wild finds, cook supper by the fire, sleep under canvas, and return after dark to fish the Hollow Pool. The Far Shore is a solo adventure.
+**0.5.0 brings your own market stall to Fernwick.** From your second day, Mayor Hazel has a pitch waiting at the top of the lake path. Every **Leafday from 9 AM to 1 PM**, fill your crates with fish, cooked dishes, and garden or wild finds, then chalk up your prices and open for the morning.
+
+| Set your prices | Open for market day |
+| --- | --- |
+| ![The market stall setup with fish and garden produce in four priced crates](docs/images/market_stall_setup.png) | ![The open market stall in Fernwick with the angler and four stocked crates](docs/images/market_stall_open.png) |
+| **Fill the crates.** Choose what to sell and adjust each price before or during the market. | **Meet the customers.** Neighbours and visitors buy a bargain, haggle over a higher price, or walk on. |
+
+- **Get to know your customers.** Neighbours pay more for favourite fish and dishes, and some order a fish for the next Leafday at double the price. Sales build your reputation and bring more people by, including visitors from Saltmarsh.
+- **Grow the stall.** The *Your stall* tab offers a Striped Awning, Brass Bell, Weighing Scale, Chalkboard special, and Second Table, which expands the stall from four crates to six. Sell 60 things to earn the Stallholder badge.
+- **Find your way there.** Market day appears on the calendar and in the HUD. Click its note to walk to the stall. Goods stay in your inventory until they sell, so you can pack up early without losing them.
+
+[Market stall guide](docs/player-guide.md#your-market-stall) · [0.5.0 release notes](https://github.com/lilMarkoo/lantern-lake/releases/tag/v0.5.0)
+
+## Explore the Far Shore
+
+In **0.4.0**, the Far Shore opened across the lake. Mend the old landing, row over to the woodland trail, and meet Bramwell the forest ranger. Gather seasonal wild finds, cook supper by the fire, sleep under canvas, and return after dark to fish the Hollow Pool. The Far Shore is a solo adventure.
 
 | Along the woodland trail | After dark |
 | --- | --- |
@@ -92,7 +107,7 @@ Recent updates also let you:
 
 ## Play on Windows
 
-1. Open the [latest release](https://github.com/lilMarkoo/lantern-lake/releases/latest) and download the full **LanternLake-…-windows.zip** under **Assets**.
+1. Open the [latest release](https://github.com/lilMarkoo/lantern-lake/releases/latest) and download the full **LanternLake-0.5.0-windows.zip** under **Assets**.
 2. Extract the ZIP and open **LanternLake.exe**. The launcher checks for updates.
 3. Choose **Play**. At the dock, hold **Space** or the **left mouse button** to wind up, then release to cast. Wait for the bobber to go under before you hook the fish.
 
@@ -115,6 +130,6 @@ python main.py
 - [Rowboat routes and fishing spots](docs/player-guide.md#the-rowboat-and-fishing-spots) and [the Far Shore](docs/player-guide.md#the-far-shore)
 - [Saltmarsh and the tides](docs/player-guide.md#saltmarsh-down-the-river), [the harbour](docs/player-guide.md#the-harbour), and [the coastal lighthouse](docs/player-guide.md#the-lighthouse)
 - [The aquarium](docs/player-guide.md#the-aquarium) and [shoreline projects](docs/player-guide.md#the-shoreline)
-- [Seasonal legends](docs/player-guide.md#legends-of-the-lake), [festival calendar](docs/player-guide.md#the-calendar), and [the Angling Club](docs/player-guide.md#the-angling-club)
+- [Seasonal legends](docs/player-guide.md#legends-of-the-lake), [festival calendar](docs/player-guide.md#the-calendar), [the Angling Club](docs/player-guide.md#the-angling-club), and [your market stall](docs/player-guide.md#your-market-stall)
 - [Biscuit](docs/player-guide.md#biscuit), [the cabin garden](docs/player-guide.md#the-garden) and [wildlife photography](docs/player-guide.md#wildlife-and-the-nature-page)
 - [Developer checks](docs/player-guide.md#developer-checks) and [release workflow](docs/player-guide.md#releasing-an-update)
