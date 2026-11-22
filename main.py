@@ -83,6 +83,7 @@ import radio as radiomod
 import news
 import farshore as farmod
 import club as clubmod
+import stall as stallmod
 import pad as padmod
 import lakelife
 import lakeshow
@@ -756,6 +757,8 @@ class Game:
         self.coast = coast.new()     # Saltmarsh, down the river (coast.py)
         self.far = farmod.new()      # the Far Shore, across from the landing (farshore.py)
         self.club = clubmod.new()    # the Angling Club on Lanternday evenings (club.py)
+        self.stall = stallmod.new()  # your market stall on Leafday mornings (stall.py)
+        self.stallrun = None         # this morning's market (not saved)
         self.goals = goalmod.new()   # the welcome quest and the pinned goal (goals.py)
         goalmod.fmt_clock = fmt_clock
         self.cat_bond = 0            # Biscuit (biscuit.py): bond points, today's little things, a present
@@ -795,7 +798,8 @@ class Game:
                     cat_bond=self.cat_bond, cat_day=self.cat_day, cat_gift=self.cat_gift,
                     cat_follow=self.cat_follow, home=self.home, tut=self.tut, tut_day=self.tut_day,
                     garden=self.garden, nature=self.nature, shore=self.shore, finds=self.finds,
-                    coast=self.coast, goals=self.goals, hatch=self.hatch, delve=self.delve, far=self.far, club=self.club)
+                    coast=self.coast, goals=self.goals, hatch=self.hatch, delve=self.delve, far=self.far, club=self.club,
+                    stall=self.stall)
         if self.solo:
             data.update(self.solo)       # visiting a friend: your own lake keeps its own day and weather
         try:
@@ -913,7 +917,7 @@ class Game:
                   'museum', 'friends', 'friend_gifts', 'buffs', 'jobs', 'tickets', 'projects', 'town_day',
                   'recipes', 'pantry', 'meal', 'upgrades', 'cook_best', 'story', 'heart_seen', 'market', 'hunts', 'pot', 'sky', 'ice_hole',
                   'cat_bond', 'cat_day', 'cat_gift', 'cat_follow', 'home', 'tut', 'tut_day', 'garden',
-                  'nature', 'shore', 'finds', 'coast', 'hatch', 'delve', 'far', 'club'):
+                  'nature', 'shore', 'finds', 'coast', 'hatch', 'delve', 'far', 'club', 'stall'):
             if k in d:
                 setattr(self, k, d[k])
         self.place = 'lake'
@@ -943,6 +947,8 @@ class Game:
         self.coast = coast.clean(self.coast)
         self.far = farmod.clean(getattr(self, 'far', None))
         self.club = clubmod.clean(getattr(self, 'club', None))
+        self.stall = stallmod.clean(getattr(self, 'stall', None))
+        self.stallrun = None
         self.goals = goalmod.clean(d.get('goals'))
         self.nature = {k: {'stars': max(1, min(3, int(v.get('stars', 1)))), 'day': int(v.get('day', 0)),
                            'n': max(1, int(v.get('n', 1))),
@@ -1617,6 +1623,7 @@ class Game:
             'clubstar': self.stats.get('club_wins', 0) >= 5,
         }
         cond.update(farmod.badge_cond(self))
+        cond.update(stallmod.badge_cond(self))
         for b in BADGES:
             if b['id'] not in self.badges and cond.get(b['id']):
                 self.badges.append(b['id'])
@@ -2003,6 +2010,7 @@ class Game:
             if before < f['end'] <= self.minute:
                 self.finish_festival()
         clubmod.tick(self, before)
+        stallmod.tick(self, before)
         if before < 1200 <= self.minute and self.wagon_today():
             self.toast("Wren's Wagon sails off for the night. See you soon!", (70, 140, 150))
         self.ensure_festival()
@@ -2872,6 +2880,8 @@ class Game:
                 self.keep_catch()
             elif ov == 'letter':
                 self.close_letter()
+            elif ov == 'stall':
+                stallmod.close(self)
             elif ov:
                 self.overlay = None
                 self.audio.play('page', 0.5)
@@ -3029,12 +3039,15 @@ class Game:
         paused = self.overlay is not None or self.rest_phase is not None
         if self.walk_scene() and self.aqscene.panel is None and self.rest_phase is None:
             paused = False                                 # strolling the aquarium or the quay: the day goes on
+        if stallmod.running(self) and self.rest_phase is None:
+            paused = False                                 # the market morning goes by while you sell
         if self.net.online:
             paused = self.rest_phase in ('out', 'in')     # with friends here the lake never stops
         if self.mode == 'play' and self.net.role == 'guest':
             self.guest_clock()
         elif self.mode == 'play' and not paused:
-            self.advance_time(dt * MINUTES_PER_SECOND * self.day_speed())
+            self.advance_time(dt * MINUTES_PER_SECOND * self.day_speed() * (stallmod.SPEED if stallmod.running(self)
+                                                                             else 1.0))
         elif self.mode == 'title':
             self.minute = (self.minute + dt * 1.0) % 1440
         env.minute = self.minute
@@ -3049,6 +3062,8 @@ class Game:
             self.icescene.update(dt)
         if self.overlay == 'dungeon' and self.dungeon:
             self.dungeon.update(dt)
+        if self.overlay == 'stall':
+            stallmod.update(self, dt)
         if self.walk_scene():
             self.aqscene.update(dt)
         if self.mode == 'play':
@@ -3441,6 +3456,8 @@ class Game:
                 news.draw(self, scr)
             elif ov == 'quick':
                 self.draw_quick(scr)
+            elif ov == 'stall':
+                stallmod.draw(self, scr)
         elif self.rest_phase == 'row_cross':
             pass                                     # rowing across: just the lake and the boat
         elif self.mode == 'play' and self.place == 'lake':
@@ -3924,6 +3941,8 @@ class Game:
             return self.open_lanterns
         if kind == 'garden':
             return lambda: self.open_cabin_tab('garden')
+        if kind == 'stall':
+            return (lambda: stallmod.open_(self)) if self.place == 'town' else (lambda: self.go_place('town'))
         if kind == 'reeds':
             return lambda: shoremod.open_panel(self)
         if kind == 'mail' and self.place == 'lake' and self.spot == 'dock':
@@ -3979,6 +3998,9 @@ class Game:
         cl = clubmod.note(self)
         if cl and self.tracked_objective()[0] != 'club':
             lines.append(('club', cl))
+        sl = stallmod.day_note(self)
+        if sl:
+            lines.append(('stall', sl))
         bl = biscuit.hud_line(self)
         if bl:
             lines.append(('birthday', bl))
@@ -4809,6 +4831,8 @@ class Game:
         self.audio.play('ui', 0.5)
 
     def close_overlay(self):
+        if self.overlay == 'stall':
+            return stallmod.close(self)
         if self.walk_scene() and self.aqscene.panel:
             self.aqscene.close_panel()       # a window inside the aquarium or the harbour: back to walking
             return
@@ -7286,6 +7310,8 @@ def run_bot(seconds):
                                     'lookout', 'tackle', 'cocoa')]
         plan += [chat(k) for k in FOLK_KEYS if tn.folk_here(k, g.minute)]
         rng.shuffle(plan)
+        if stallmod.market_open(g) and stallmod.run(g) is None:
+            plan.insert(0, at('stall'))           # Leafday: the market stall comes first
         return plan
 
     def town_step():
@@ -7299,6 +7325,11 @@ def run_bot(seconds):
         ov = g.overlay
         if ov == 'aquarium' and g.aqscene:
             g.aqscene.auto(dt, rng)              # a little tour: donate, look, sit, leave
+            return
+        if ov == 'stall':
+            stallmod.auto(g, dt, rng)            # set out everything, sell the morning, pack up
+            if g.overlay is None:
+                did('stall')
             return
         if ov == 'ringtoss':
             rt = tn.rt
@@ -7541,7 +7572,8 @@ def run_bot(seconds):
                 g.draw()
             g.overlay = None
         elif (g.rest_phase is None and f.state in ('idle', 'waiting') and g.overlay is None
-              and 750 <= g.minute < 960 and tb['day'] != g.day):
+              and (750 <= g.minute < 960 or stallmod.market_open(g) and 540 <= g.minute < 720 and (g.basket or g.pantry))
+              and tb['day'] != g.day):
             tb['day'] = g.day
             tb['need_plan'] = True
             g.go_place('town')

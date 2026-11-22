@@ -924,6 +924,7 @@ The calendar (K) shows a three-day weather forecast, the moon phase and every ev
 - **Feastday**: a festival with its own rules. Spring Blossom Derby (biggest fish), summer Lantern Night
   (most fish, at night, with fireworks and lanterns), autumn Harvest Haul (longest total), winter Frost Cup
   (points by rarity). The Festival Goldfish only bites on festival days
+- **Leafday**: **market day** in Fernwick, 9 AM to 1 PM, at your own stall (see below)
 - **Fishday**: a fish run. One species bites four times as often and sells for 1.5x
 - **Lanternday**: the **Angling Club** meets from 5 to 7 PM (see below)
 - **Starday**: a meteor shower from 9 PM. The sky stays clear, stars fall constantly, and the Starfall Shiner
@@ -946,6 +947,31 @@ At 7 PM the prizes are given out: 150 coins and a **blue ribbon** for first, 80 
 yellow for third (10 coins for taking part). A win also puts an Angling Club cup on your trophy shelf, and the
 ribbons are pinned under it in the cabin's Fish tank tab. Marlo writes after every meet with the full results and
 your record against him. Win five meets for the *Club Champion* badge.
+
+### Your market stall
+
+From your second day, Mayor Hazel keeps a pitch for you at the top of the lake path in Fernwick, right by Old
+Tom's. Every **Leafday from 9 AM to 1 PM** you can set up a stall there and sell what you've caught, cooked and
+grown at your own prices. Walk up to it (or click the stall note in the HUD) to set up.
+
+- **Setting up**: click fish, dishes or garden things on the left to put them in your crates (four crates of up to
+  six things each; **Set out all** fills them for you). The arrows on each crate change its price, from a
+  *Bargain* below what Old Tom pays, through *Fair*, to *Pricey* and *Steep*. Nothing leaves your basket, pantry or
+  garden basket until someone buys it, so packing up early never loses anything. Opening before 9 waits for nine
+  o'clock.
+- **Selling**: the clock runs while the stall is open. Neighbours and visitors stop by, pick a crate and decide:
+  under their idea of a fair price they buy (two, if it's a real bargain); a little over and they **haggle**
+  (take the offer with *Deal* or wave it off); too far over and they walk on. Prices can change while you're
+  open. People pay more for their **favourite fish and dish**, and selling cheap to a neighbour warms them to you.
+- **Orders**: now and then a neighbour asks you to save them a fish for next Leafday. Have it in a crate when they
+  come by and they pay double.
+- **Reputation** grows with every sale (more for favourites and orders) and brings more people by. At *The talk
+  of Fernwick* folk come up the river from Saltmarsh to buy.
+- **Upgrades** (the *Your stall* tab, any day): a Striped Awning (rain no longer keeps people away), a Brass Bell
+  (more people, and you can ring it once an hour to draw a crowd), a Weighing Scale (fish fetch more), a
+  Chalkboard (chalk up a special crate that draws twice the interest) and a Second Table (six crates).
+
+Sell 60 things at your stall for the *Stallholder* badge.
 
 ## Features
 

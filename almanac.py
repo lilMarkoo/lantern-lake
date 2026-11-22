@@ -61,6 +61,9 @@ def events_on(day):
         rule = 'the biggest single fish' if club.rule_for(day) == 'biggest' else 'the most different species'
         out.append(('club', 'Angling Club', 'From 5 to 7 PM, fish anywhere on the lake against Marlo, Dottie, '
                     'Ferris and Old Hen. This week: %s. Ribbons for the top three.' % rule))
+    if d == 3:
+        out.append(('stall', 'Market day', 'From 9 AM to 1 PM, set up your stall in Fernwick, at the top of the lake '
+                    'path. Sell fish, dishes and garden things at your own prices.'))
     if d == FISH_RUN_DAY:
         name = FISH_BY_ID[run_fish(day)]['name']
         out.append(('run', '%s run' % name,
@@ -107,6 +110,16 @@ def event_icon(s, kind, center, scale=1.0):
         U.rowboat(s, (x, y + 1), 0.75 * scale)
     elif kind == 'town':
         U.house(s, (x, y + 1))
+    elif kind == 'stall':
+        k = scale
+        for i in range(4):
+            pygame.draw.rect(s, (200, 84, 90) if i % 2 == 0 else (250, 242, 228),
+                             (x - int(12 * k) + int(6 * k) * i, y - int(11 * k), int(6 * k) + 1, int(6 * k)))
+        s.fill((150, 104, 70), (x - int(11 * k), y - int(5 * k), max(2, int(2 * k)), int(14 * k)))
+        s.fill((150, 104, 70), (x + int(9 * k), y - int(5 * k), max(2, int(2 * k)), int(14 * k)))
+        s.fill((176, 126, 84), (x - int(11 * k), y + int(3 * k), int(22 * k), int(6 * k)))
+        s.fill((120, 170, 200), (x - int(6 * k), y, int(5 * k), int(3 * k)))
+        s.fill((236, 120, 90), (x + int(1 * k), y, int(5 * k), int(3 * k)))
     elif kind == 'garden':
         pygame.draw.line(s, (110, 80, 54), (x - 9, y + 7), (x + 9, y + 7), 3)
         pygame.draw.line(s, (96, 156, 70), (x, y + 6), (x, y - 3), 2)

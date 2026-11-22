@@ -599,6 +599,7 @@ BADGES = [
     dict(id='hollowlight', name='Keeper of the Hollow', desc='Light the Hollow Lantern in the old oak.',
          reward=500),
     dict(id='clubstar', name='Club Champion', desc='Win the Angling Club on Lanternday five times.', reward=400),
+    dict(id='stallholder', name='Stallholder', desc='Sell 60 things at your Leafday market stall.', reward=300),
 ]
 TANK_SIZE = 8
 

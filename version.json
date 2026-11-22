@@ -1,18 +1,15 @@
 {
-  "version": "0.4.0",
+  "version": "0.5.0",
   "highlights": [
-    ["The Far Shore", "Row across from the mended landing: forage the woods, camp by the fire, fish the Hollow Pool after dark, and help Bramwell relight his lantern."],
-    ["The Angling Club", "Every Lanternday, 5 to 7 PM: fish against Marlo, Dottie, Ferris and Old Hen for ribbons, coins and a cup."],
-    ["D-pad snapping", "On a controller, the d-pad jumps the pointer straight to the next card, button or bed in windows."],
-    ["A calmer HUD", "Slimmer festival, club and expedition cards, one note at a time, and a radio that stays small until it speaks."],
-    ["Fixes", "Swapping shells with Kit now spreads the cost across your spares, plus other small fixes."]
+    ["Your market stall", "Every Leafday, 9 AM to 1 PM: set up a stall in Fernwick and sell your fish, dishes and garden things at your own prices."],
+    ["Haggling and orders", "Folk haggle when you're a little dear, pay more for their favourites, and order fish for next week at double the price."],
+    ["Stall upgrades", "An awning, a brass bell, a weighing scale, a chalkboard special and a second table, plus a reputation that grows with every sale."],
+    ["New badge", "Sell 60 things at your stall to become a Stallholder."]
   ],
   "notes": [
-    "The Far Shore: once the old landing is mended, row across to the woods on the other side. Gather wild finds that change with the seasons (they cook into dishes and sell), meet Bramwell the forest ranger and help him with a favour a day, roast supper or brew tea at the campfire, sleep in the tent, and fish the Hollow Pool after dark for five new fish with their own journal page. Mend and light the old Hollow Lantern and the Hollow King starts to bite.",
-    "The Angling Club meets every Lanternday from 5 to 7 PM. Fish anywhere on the lake against four regulars (biggest fish one week, most species the next) while the board moves through the evening. Ribbons for the top three, a cup for a win, and a letter from your rival Marlo after every meet.",
-    "Controllers: in windows with a pointer (the Trading Post, garden, hatchery, journal, cabin) the d-pad now snaps the pointer to the nearest thing in that direction, and holding it keeps stepping.",
-    "A calmer Clean HUD: the festival, club and expedition cards are one slim line (point at them for more), notes come one at a time with a small count of what's waiting, and the radio is a small pill that opens up when the host speaks. Notes over a window are one slim line above it instead of covering its title.",
-    "A tidier journal: the five fish pages are chips along the top showing how many you've found at each, tiles size themselves to the page, the fish card shows its record, count and price at a glance, and a bold W no longer looks like an N.",
-    "A What's new card after each update, four new badges, and fixes: swapping shells with Kit spreads the cost across your spare shells instead of taking them all from one kind, plus other small fixes."
+    "Your market stall: from your second day, Mayor Hazel keeps you a pitch at the top of the lake path in Fernwick. Every Leafday from 9 AM to 1 PM, fill up to four crates with fish, dishes and garden things, chalk up your prices and open up. The morning goes by while neighbours and visitors stop at the stall. Nothing leaves your basket until it sells, so packing up early never loses anything.",
+    "Everyone has their own idea of a fair price: under it they buy (two, if it's a bargain), a little over and they haggle (Deal or No thanks), too far over and they walk on. Neighbours pay more for their favourite fish and dish, warm to you when you sell cheap, and now and then order a fish for next Leafday at double the price.",
+    "Reputation grows with every sale and brings more people by, up to folk from Saltmarsh. Five stall upgrades in the Your stall tab: a Striped Awning, a Brass Bell you can ring, a Weighing Scale, a Chalkboard special and a Second Table for six crates.",
+    "Market day is on the calendar and in the HUD notes (click the note to walk to the stall), and there's a new Stallholder badge for selling 60 things."
   ]
 }

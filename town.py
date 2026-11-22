@@ -101,6 +101,7 @@ REQ_TO_FOLK = {f['req']: k for k, f in FOLK.items()}
 # ---------------------------------------------------------------- buildings and places along the street
 # id: name, left and right edge, door x, opening hours (minutes) and who runs it
 PLACES = [
+    dict(id='stall', name='Your market stall', x0=82, x1=120, door=100, hours=None),
     dict(id='lake', name='Path to Lantern Lake', x0=0, x1=96, door=44, hours=None),
     dict(id='tackle', name="Old Tom's Tackle", x0=132, x1=318, door=226, hours=(420, 1140), keeper='tom'),
     dict(id='bakery', name="Mabel's Bakery", x0=338, x1=474, door=404, hours=(360, 1080), keeper='mabel'),
@@ -1400,6 +1401,11 @@ class Town:
             return '%s  (opens %s)' % (p['name'], fmt_hour(p['hours'][0]))
         if key == 'lookout' and self.can_stargaze(g):
             return 'Lie back and look at the stars'
+        if key == 'stall':
+            import stall
+            if not g.stall['told']:
+                return 'A market stall under a tarp'
+            return 'Set up your stall' if stall.market_open(g) and stall.run(g) is None else                 'Your market stall  (Leafdays, 9 AM to 1 PM)' if not stall.running(g) else 'Your market stall'
         return {'lake': 'Walk back to the lake', 'board': 'Read the notices', 'museum': 'Go into the aquarium', 'fountain': 'Make a wish (10 coins)',
                 'lookout': 'Sit and watch the lake'}.get(key, 'Go into %s' % p['name'])
 
@@ -1577,7 +1583,7 @@ class Town:
                 return
         for p in PLACES:
             top = GROUND - {'museum': 130, 'hall': 180, 'lookout': 60, 'lake': 50, 'board': 64,
-                            'fountain': 56, 'cocoa': 44}.get(p['id'], 100)
+                            'fountain': 56, 'cocoa': 44, 'stall': 52}.get(p['id'], 100)
             if p['x0'] <= tx <= p['x1'] and top < wy < GROUND + 4:
                 self.walk_to(p['door'], lambda pid=p['id']: self.use_place(g, pid))
                 return
@@ -1660,7 +1666,10 @@ class Town:
             g.toast('%s is closed. It opens at %s.' % (p['name'], fmt_hour(p['hours'][0])), (150, 140, 130))
             return
         g.audio.play('page', 0.6)
-        if pid == 'lake':
+        if pid == 'stall':
+            import stall
+            stall.open_(g)
+        elif pid == 'lake':
             g.go_place('lake')
         elif pid == 'tackle':
             g.shop_tab = 'sell'
@@ -1997,6 +2006,8 @@ class Town:
                 s.fill((246, 206, 80), (int(c[0] - sc), int(c[1]), 2, 2))
         import yeartwo
         yeartwo.draw_cottage(s, g, sc, GROUND, t)
+        import stall
+        stall.draw_street(s, g, sc, GROUND, t)       # your market stall, at the top of the lake path
         # Mabel's cocoa cart
         cx = 709 - sc
         if -40 < cx < W + 40:
