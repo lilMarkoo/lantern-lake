@@ -136,6 +136,8 @@ python -m pip install pygame-ce numpy
 python main.py
 ```
 
+Gameplay modules live in `game/`. The root `main.py` starts the game, while `launcher/`, `tools/`, and `server/` contain the launcher, release tools, and online relay.
+
 ## Field guide
 
 - [Keyboard and controller controls](docs/player-guide.md#controls) and [display options](docs/player-guide.md#options)

@@ -64,14 +64,15 @@ def version_info():
 
 
 def game_files():
-    """The files an update ships: every top-level .py, the README and version.json."""
+    """The entry point and game modules, plus the README and version."""
     files = sorted(n for n in os.listdir(ROOT) if n.endswith('.py') and os.path.isfile(os.path.join(ROOT, n)))
+    files += ['game/' + n for n in sorted(os.listdir(os.path.join(ROOT, 'game'))) if n.endswith('.py')]
     files += ['README.md', 'version.json']
     return files
 
 
 def game_modules():
-    return {f[:-3] for f in game_files() if f.endswith('.py')}
+    return {os.path.basename(f)[:-3] for f in game_files() if f.endswith('.py')}
 
 
 def hidden_imports():
@@ -80,7 +81,7 @@ def hidden_imports():
     for f in game_files():
         if not f.endswith('.py'):
             continue
-        with open(os.path.join(ROOT, f), encoding='utf-8') as fh:
+        with open(os.path.join(ROOT, *f.split('/')), encoding='utf-8') as fh:
             tree = ast.parse(fh.read())
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
@@ -125,7 +126,9 @@ def write_game(dest):
     files = game_files()
     for f in files:
         if f != 'version.json':
-            shutil.copyfile(os.path.join(ROOT, f), os.path.join(dest, f))
+            target = os.path.join(dest, *f.split('/'))
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            shutil.copyfile(os.path.join(ROOT, *f.split('/')), target)
     info = version_info()
     info['files'] = files
     with open(os.path.join(dest, 'version.json'), 'w', encoding='utf-8') as f:
@@ -137,7 +140,7 @@ def build(skip_exe=False):
     cfg = load_config()
     info = version_info()
     ver = info['version']
-    shutil.copyfile(os.path.join(ROOT, 'pixfont.py'), os.path.join(LAUNCHER, 'lfont.py'))
+    shutil.copyfile(os.path.join(ROOT, 'game', 'pixfont.py'), os.path.join(LAUNCHER, 'lfont.py'))
     for art in ('icon.ico', 'icon.png', 'banner.png'):
         if not os.path.exists(os.path.join(LAUNCHER, art)):
             subprocess.check_call([sys.executable, os.path.join(HERE, 'make_art.py')], cwd=ROOT)
@@ -175,7 +178,7 @@ def build(skip_exe=False):
     payload = os.path.join(out, 'lantern-lake-game-%s.zip' % ver)
     with zipfile.ZipFile(payload, 'w', zipfile.ZIP_DEFLATED) as z:
         for f in files:
-            z.write(os.path.join(PACKAGE, 'game', f), f)
+            z.write(os.path.join(PACKAGE, 'game', *f.split('/')), f)
     man = {'version': ver, 'tag': 'v' + ver, 'notes': info.get('notes', []),
            'zip': os.path.basename(payload), 'sha256': sha256(payload), 'size': os.path.getsize(payload),
            'full': os.path.basename(full), 'min_launcher': cfg['min_launcher']}
@@ -228,13 +231,19 @@ def install(dest):
     except (OSError, ValueError):
         pass
     for rel in old:
-        if rel not in new and rel.endswith('.py') and '/' not in rel and '\\' not in rel:
-            p = os.path.join(game, rel)
+        parts = rel.replace('\\', '/').split('/') if isinstance(rel, str) else []
+        if (rel not in new and parts and all(p not in ('', '.', '..') and ':' not in p for p in parts)
+                and (len(parts) == 1 or len(parts) == 2 and parts[0] == 'game')
+                and parts[-1].endswith('.py')):
+            p = os.path.join(game, *parts)
             if os.path.isfile(p):
                 os.remove(p)
     for rel in new:
-        shutil.copyfile(os.path.join(PACKAGE, 'game', rel), os.path.join(game, rel))
+        target = os.path.join(game, *rel.split('/'))
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        shutil.copyfile(os.path.join(PACKAGE, 'game', *rel.split('/')), target)
     shutil.rmtree(os.path.join(game, '__pycache__'), ignore_errors=True)
+    shutil.rmtree(os.path.join(game, 'game', '__pycache__'), ignore_errors=True)
     # where updates come from: keep the player's file unless it is still empty
     cfg = load_config()
     up = os.path.join(dest, 'update.json')

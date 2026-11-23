@@ -11,6 +11,11 @@ import random
 import sys
 import time
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+GAME_MODULES = os.path.join(HERE, 'game')
+if GAME_MODULES not in sys.path:
+    sys.path.insert(0, GAME_MODULES)
+
 HEADLESS = '--shots' in sys.argv or '--bot' in sys.argv
 if HEADLESS:
     os.environ['SDL_VIDEODRIVER'] = 'dummy'
@@ -111,7 +116,6 @@ DOCK_PROP_POS = {'bench': (156, DECK_Y - 12), 'pinwheel': (197, DECK_Y - 14), 'l
                  'teaset': (170, DECK_Y - 6), 'lights': (180, 252)}
 
 SW, SH = 1280, 720
-HERE = os.path.dirname(os.path.abspath(__file__))
 SAVE_PATH = os.path.join(HERE, 'save.json')
 SETTINGS_PATH = os.path.join(HERE, 'settings.json')
 
