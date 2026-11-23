@@ -20,6 +20,8 @@
 | Goals: see everything on the go, pin one to the HUD | Q |
 | The radio | R |
 | Walk up to Fernwick village and back | T, or the Town / Lake button |
+| Rosie's truck: the region map, garage and orders | V, or the Truck button |
+| Driving: gas / brake / stop and look / horn / pull over | D / A (or the arrow keys) / E / H / Esc |
 | In Fernwick: walk / go in or talk | A and D (or the arrow keys, or click where to go) / E, W or Space |
 | Pet Biscuit, read the mailbox, visit the cabin, shop at Wren's Wagon | Click the cat, the mailbox, the cabin door, the houseboat |
 | Open the garden | Click the beds under the cabin |
@@ -63,6 +65,7 @@ Switch B):
 | View / Share / - | **Quick menu** | Close the quick menu |
 | Menu / Options / + | Pause | Back / close, skip a cutscene |
 | Left / right stick click | Lake map / walk to Fernwick or back to the lake | |
+| RT, LT / R2, L2 / ZR, ZL (driving) | Gas, brake. The bottom button stops to look, the left button is the horn | |
 
 In cooking and cutscenes the bottom button works like Space. Moving the mouse hides the controller's pointer.
 
@@ -714,6 +717,68 @@ wick) and a Wisp Eel (to hold the light). Then come back after dark and light it
 the Hollow King starts to bite. Badges: *Forager* (pick 30 wild finds), *Under Canvas* (sleep in the tent) and
 *Keeper of the Hollow* (light the lantern).
 
+## Rosie's truck and the roads
+
+On your fourth morning Old Tom writes about **Grandma Rosie's old pickup**, still in the shed behind the cabin.
+Press **V** (or the *Truck* button, or *Rosie's truck* in the quick menu) to look it over. The **Garage** tab shows
+what it needs: a new battery (250 coins), four good tyres (200 coins) and a tune-up from Old Tom (three fish from
+your basket). Once all three are done the engine roars into life and four roads open. Road trips are for playing on
+your own, so the truck stays in the shed while playing together.
+
+**Setting off.** The truck leaves from the cabin, so row home to the dock first. The **Map** tab shows the region
+with your cabin in the middle: pick a place and press *Drive there*. Once you've driven a road, **Fast travel** takes
+you straight there (the clock moves on by the road's minutes).
+
+| Road | To | Time | What it's like |
+|---|---|---|---|
+| The Hill Road | Pinecrest Reservoir | 45 min | Pines, hairpins and a long climb to the dam. Snowy in winter |
+| The River Road | Copper Falls | 35 min | Gentle and green, past the old mill and over Copper Bridge |
+| The Coast Road | Gull Point | 55 min | Over the downs, with the sea opening out beside you |
+| The Quarry Track | The Old Quarry | 25 min | Rutted gravel: bumpy, so mind the cooler |
+
+**Driving** is a side-on scenic drive. Hold **D** (or the right arrow, or RT) for gas and **A** (or the left arrow,
+or LT) to brake; the truck tilts with the hills and bounces over the bumps, and Biscuit rides in the cab. **H** (X
+on a controller) toots the horn and **Esc** pulls over, where you can carry on or turn round. Rain makes the road
+slick. In winter the climbs are slippery and the wheels spin, so the truck crawls up them; **Snow Tyres** fix that.
+After dark the headlights come on. The clock pauses while you drive, and the trip moves it on by the road's
+minutes as you go.
+
+**Along the way:**
+
+- **Viewpoints**: two on each road, with a camera sign. Stop beside one and press **E** for a photo (+25 coins the
+  first time). Photograph all eight for the *Sightseer* badge
+- **Hitchhikers**: someone with a thumb out. Stop and press **E** to give them a lift; they pay you when you arrive
+- **Animals on the road**: deer on the hill road, ducks by the river, sheep on the coast, a hedgehog on the quarry
+  track. The truck eases to a stop behind them. Wait, or toot the horn to hurry them along
+- **Lost things**: each road has one, glinting in the verge (Pip's kite, Juniper's notebook, Fen's sketchbook and
+  Old Tom's lucky lure). Stop and pick it up, and a thank-you letter with 100 coins comes the next morning
+
+**Orders.** The **Orders** tab has a board of requests from the people up the roads, new each morning. Take one at
+a time, then drive (or fast-travel) to that place with the fish in your basket before 9 PM. They go into the cooler
+in the back. **Drive gently**: big bumps and crests at speed fill the *Bumps* bar, and when it's full a fish bounces
+out. The ice melts as the minutes pass, and warm fish only fetch half. The **Big Cooler** keeps them cold twice as
+long and takes more bumps. Deliver ten orders for the *Country Courier* badge.
+
+**The places.** Each is a short walk with the truck parked at the left end (press **E** at it, or **Esc**, to drive
+or fast-travel home), someone to chat to, and water with three fish of its own. All twelve are on the journal's
+new **Roads** page.
+
+- **Pinecrest Reservoir**: a cold lake behind an old stone dam, with Ranger Ida's fire tower. The Cutthroat Trout
+  bites all year and the Kokanee in summer and autumn. The **Golden Trout** lives only in the deep water: with the
+  **Roof Rack** your rowboat comes along, so row out from the landing to reach it
+- **Copper Falls**: a waterfall pool below a copper-coloured cliff, and Hal's lodge. Rainbow Darters outside winter,
+  Steelhead in winter and spring, and in autumn at dawn or dusk, the legendary **Copperjaw**
+- **Gull Point**: a sandy beach under the cliffs, with Morag's Clifftop Cafe. Shanny Blennies and Sand Eels by day,
+  Sea Trout at dusk and after dark. Peer into the **rock pools** (sometimes there's a Pearl Clam), or take the
+  **cliff steps** by the cafe down to Saltmarsh's harbour; leaving the harbour brings you back up to the truck
+- **The Old Quarry**: a deep, flooded pool where Bertram keeps watch. Its fish only stir after dark: the Blind
+  Cavefish, the Iron Carp and, on clear nights, the glowing **Glowscale** (more likely from the rowboat)
+
+**Truck upgrades** (Garage tab): Snow Tyres (300), Big Cooler (350) and Roof Rack (450, needs your rowboat), plus
+six paint colours at 60 coins each (switching back to one you own is free). The Garage also keeps your trip log.
+Badges: *Road Tripper* (visit all four places), *Country Courier*, *Sightseer* and *Backroads Angler* (catch all
+twelve road fish).
+
 ## The garden
 
 The slope under the cabin is laid out in two lawns. The garden terrace sits up top, edged by a fieldstone wall
@@ -977,9 +1042,12 @@ Sell 60 things at your stall for the *Stallholder* badge.
 
 - Day and night cycle (one day is 12 real minutes), four seven-day seasons, and weather: clear, cloudy, rain with
   thunder, fog and snow
-- 70 fish, including event fish, 9 that only live at the rowboat spots, 19 from the sea at Saltmarsh, 15 caught
-  with the crab pot, fly rod, ice auger or on rare nights, and 3 that arrive in year two, plus treasures and 10
-  bottled letters to collect
+- 87 fish: 27 in the lake (event fish among them), 9 that only live at the rowboat spots, 19 from the sea at
+  Saltmarsh, 12 caught with the crab pot, fly rod, ice auger or on rare nights, 5 from the Hollow Pool, 12 from
+  the places Rosie's truck reaches, and 3 that arrive in year two, plus treasures and 10 bottled letters
+- Grandma Rosie's truck: a side-on scenic drive along four roads to four new places to fish, with viewpoints to
+  photograph, hitchhikers, animals on the road, lost things to return, cooler deliveries, upgrades and fast
+  travel
 - Saltmarsh, a second region down the river: a harbour village with five new neighbours, tides that change what
   bites, daily orders, beachcombing, a boatyard and a lighthouse to light again
 - Aim your casts. Bubbling hotspots on the water give quicker bites and rarer fish
@@ -990,7 +1058,7 @@ Sell 60 things at your stall for the *Stallholder* badge.
   pond where pairs lay eggs and the young can inherit their parents' colours
 - The Drowned Stair: a roguelike fishing dungeon under the hill. Start with nothing, find gear for five slots in
   a twelve-slot bag, beat a boss fish every fifth floor, and climb out with your haul, or lose it all
-- 33 badges with coin rewards (Journal, Badges tab)
+- 42 badges with coin rewards (Journal, Badges tab)
 - A walkable aquarium with twelve themed exhibits, benches and visitors
 - A cabin garden with 13 crops, and 19 animals to photograph for the Nature page and frame on your wall
 - Three shoreline restoration projects that change the lake and bring new animals

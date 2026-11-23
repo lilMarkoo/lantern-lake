@@ -10,7 +10,23 @@ Grandma Rosie once tended four lanterns around the lake. Each wakes in a differe
 
 ## What’s new
 
-**0.5.0 brings your own market stall to Fernwick.** From your second day, Mayor Hazel has a pitch waiting at the top of the lake path. Every **Leafday from 9 AM to 1 PM**, fill your crates with fish, cooked dishes, and garden or wild finds, then chalk up your prices and open for the morning.
+**0.5.5 hands you the keys to Grandma Rosie’s old pickup.** On your fourth day Old Tom writes about the truck in the shed behind the cabin. Fit a battery and tyres, get a tune-up, and four roads open from your dock: up into the hills, along the river, over the downs to the sea, and out to an old flooded quarry.
+
+| A cozy scenic drive | Four new places to fish |
+| --- | --- |
+| ![Rosie’s red pickup on the coast road at sunset, with the sea behind and a viewpoint sign ahead](docs/images/truck_coast_road.png) | ![Fishing from the rowboat on Pinecrest Reservoir below the pines and the old stone dam](docs/images/pinecrest_reservoir.png) |
+| **Take the long way round.** Ease over the hills with Biscuit in the cab, through rain, snow and the dark with the headlights on. | **Meet the neighbours up the roads.** Each place has its own person to chat to and three fish you won’t find anywhere else. |
+
+- **Pinecrest Reservoir, Copper Falls, Gull Point and the Old Quarry.** Row out for the Golden Trout, wait for the autumn Copperjaw under the falls, peer into Gull Point’s rock pools or walk down the cliff steps to Saltmarsh, and fish the quarry after dark for the glowing Glowscale. All twelve new fish have their own Roads page in the journal.
+- **Things along the way.** Stop at viewpoints to take a photo, give hitchhikers a lift, wait for the ducks (or toot the horn), and bring home lost things for a thank-you letter.
+- **Cooler deliveries.** Take orders from the board each morning and drive the fish over before 9 PM. Big bumps spill them and the ice melts as you go, so drive gently.
+- **Make it yours.** Snow Tyres for the winter climbs, a Big Cooler, a Roof Rack that brings your rowboat, and six paint colours. Fast travel any road you’ve driven, and play with a controller (RT to drive, LT to brake). Four new badges.
+
+[Truck and roads guide](docs/player-guide.md#rosies-truck-and-the-roads)
+
+## Run a market stall
+
+**Since 0.5.0, you can run your own market stall in Fernwick.** From your second day, Mayor Hazel has a pitch waiting at the top of the lake path. Every **Leafday from 9 AM to 1 PM**, fill your crates with fish, cooked dishes, and garden or wild finds, then chalk up your prices and open for the morning.
 
 | Set your prices | Open for market day |
 | --- | --- |
@@ -107,7 +123,7 @@ Recent updates also let you:
 
 ## Play on Windows
 
-1. Open the [latest release](https://github.com/lilMarkoo/lantern-lake/releases/latest) and download the full **LanternLake-0.5.0-windows.zip** under **Assets**.
+1. Open the [latest release](https://github.com/lilMarkoo/lantern-lake/releases/latest) and download the full **LanternLake-0.5.5-windows.zip** under **Assets**.
 2. Extract the ZIP and open **LanternLake.exe**. The launcher checks for updates.
 3. Choose **Play**. At the dock, hold **Space** or the **left mouse button** to wind up, then release to cast. Wait for the bobber to go under before you hook the fish.
 

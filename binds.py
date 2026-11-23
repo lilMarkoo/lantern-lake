@@ -19,6 +19,8 @@ ACTIONS = [
     ('music', 'Music on and off', pygame.K_m),
     ('goals', 'Goals', pygame.K_q),
     ('radio', 'Radio', pygame.K_r),
+    ('truck', "Rosie's truck and the map", pygame.K_v),
+    ('horn', 'Truck horn', pygame.K_h),
 ]
 DEFAULT = {a: k for a, _, k in ACTIONS}
 NAMES = {a: n for a, n, _ in ACTIONS}

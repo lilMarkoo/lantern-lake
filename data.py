@@ -341,8 +341,67 @@ FISH += [
       depth=(0.6, 1.0), strength=.85, agility=.4, spot='hollow', method='hollow',
       desc='Bramwell swears it ate his old lantern. It has whiskers like a ranger and eyes like two lamps.',
       hint='Once the Hollow Lantern shines again: the Hollow Pool at night.'),
+    # 0.5.5: the places Rosie's truck reaches (areas.py). Each lives at one place only.
+    # Pinecrest Reservoir, up the hill road
+    F('cutthroat', 'Cutthroat Trout', 2, 34, (20, 45), 'normal', (150, 140, 90), (226, 214, 170), c3=(220, 90, 70),
+      pattern='spots', pc=(70, 60, 50), strength=.45, agility=.5, spot='reservoir', method='road',
+      desc='Named for the red slash under its jaw. It likes water cold enough to make your fingers ache.',
+      hint='Pinecrest Reservoir, any time.'),
+    F('kokanee', 'Kokanee', 2, 40, (20, 38), 'normal', (120, 150, 180), (220, 230, 236), c3=(210, 80, 70),
+      pattern=None, seasons=(1, 2), depth=(0.3, 0.8), strength=.4, agility=.55, spot='reservoir', method='road',
+      desc='Silver all summer, then it blushes bright red for autumn.',
+      hint='Pinecrest Reservoir in summer and autumn.'),
+    F('goldtrout', 'Golden Trout', 4, 260, (25, 45), 'normal', (230, 180, 70), (250, 226, 140), c3=(210, 80, 60),
+      pattern='spots', pc=(120, 140, 90), depth=(0.6, 1.0), strength=.55, agility=.7, spot='reservoir',
+      method='road',
+      desc='As if someone dipped a trout in the sunset. It only lives where the water is deep and very clean.',
+      hint='Pinecrest Reservoir, from the rowboat (it needs the roof rack), out in the deep water.'),
+    # Copper Falls, down the river road
+    F('darter', 'Rainbow Darter', 1, 14, (5, 9), 'small', (90, 130, 150), (240, 170, 90), c3=(200, 90, 80),
+      pattern='stripes', pc=(70, 150, 140), seasons=(0, 1, 2), strength=.15, agility=.7, spot='falls',
+      method='road', desc='Tiny, quick and painted like a parrot. It hides under stones in the rapids.',
+      hint='Copper Falls, outside winter.'),
+    F('steelhead', 'Steelhead', 3, 120, (50, 85), 'long', (110, 130, 150), (230, 236, 240), c3=(220, 120, 130),
+      pattern='spots', pc=(70, 80, 90), seasons=(0, 3), depth=(0.4, 1.0), strength=.75, agility=.6,
+      spot='falls', method='road',
+      desc='A rainbow trout that went to sea and came home bigger. It fights like it is still in the ocean.',
+      hint='Copper Falls in winter and spring.'),
+    F('copperjaw', 'Copperjaw', 5, 1300, (90, 140), 'long', (170, 100, 60), (236, 196, 150), c3=(210, 120, 60),
+      pattern='scales', pc=(200, 130, 70), glow=(255, 190, 120), seasons=(2,), phases=('dawn', 'dusk'),
+      depth=(0.6, 1.0), strength=1.0, agility=.55, spot='falls', method='road',
+      desc='The old salmon king of the falls, with a jaw like a hammered pan. Some years nobody sees it at all.',
+      hint='Copper Falls in autumn, at dawn or dusk, under the waterfall.'),
+    # Gull Point, along the coast road
+    F('blenny', 'Shanny Blenny', 1, 12, (6, 14), 'small', (120, 110, 80), (210, 196, 150), c3=(90, 80, 60),
+      pattern='spots', pc=(80, 70, 50), strength=.15, agility=.4, spot='gullpoint', method='road',
+      desc='Lives in rock pools and can wriggle from one to the next when the tide goes out.',
+      hint='Gull Point, any time.'),
+    F('sandeel', 'Sand Eel', 1, 18, (12, 22), 'eel', (170, 190, 190), (236, 240, 236), c3=(140, 170, 170),
+      seasons=(0, 1, 2), strength=.15, agility=.75, spot='gullpoint', method='road',
+      desc='Dives headfirst into the sand when a gull goes over. Puffins love them.',
+      hint='Gull Point, outside winter.'),
+    F('seatrout', 'Sea Trout', 3, 110, (35, 70), 'normal', (130, 140, 150), (230, 232, 236), c3=(60, 70, 80),
+      pattern='spots', pc=(50, 56, 66), phases=('dusk', 'night'), depth=(0.3, 0.9), strength=.6, agility=.6,
+      spot='gullpoint', method='road',
+      desc='A brown trout that ran away to sea. It comes into the bay as the light goes.',
+      hint='Gull Point at dusk and after dark.'),
+    # the Old Quarry, down the quarry track (its fish only bite after dark)
+    F('cavefish', 'Blind Cavefish', 2, 45, (8, 14), 'small', (236, 220, 220), (250, 244, 244), c3=(240, 190, 196),
+      phases=('night',), strength=.2, agility=.5, spot='quarry', method='road',
+      desc='Pink, eyeless and perfectly happy. It finds your bait by feeling the water move.',
+      hint='The Old Quarry, after dark.'),
+    F('ironcarp', 'Iron Carp', 3, 95, (40, 70), 'round', (110, 100, 96), (170, 150, 140), c3=(150, 90, 60),
+      pattern='scales', pc=(160, 100, 70), phases=('night',), depth=(0.5, 1.0), strength=.8, agility=.2,
+      spot='quarry', method='road', desc='Rusty red scales, as if it has been lying among the old machinery '
+      'for years. It probably has.', hint='The Old Quarry, deep down, after dark.'),
+    F('glowscale', 'Glowscale', 4, 300, (30, 55), 'normal', (60, 90, 110), (150, 230, 220), c3=(90, 200, 190),
+      pattern='spots', pc=(180, 255, 240), glow=(140, 255, 230), phases=('night',), depth=(0.6, 1.0),
+      strength=.55, agility=.65, spot='quarry', method='road',
+      desc='Its spots light up green when it is startled. The quarrymen called it the night lamp.',
+      hint='The Old Quarry, deep down, on a clear night.'),
 ]
 SEA_FISH = [f for f in FISH if f.get('method') == 'sea']
+ROAD_FISH = [f for f in FISH if f.get('method') == 'road']
 HOLLOW_FISH = [f for f in FISH if f.get('method') == 'hollow']
 FISH_BY_ID = {f['id']: f for f in FISH}
 
@@ -600,6 +659,10 @@ BADGES = [
          reward=500),
     dict(id='clubstar', name='Club Champion', desc='Win the Angling Club on Lanternday five times.', reward=400),
     dict(id='stallholder', name='Stallholder', desc='Sell 60 things at your Leafday market stall.', reward=300),
+    dict(id='roadtrip', name='Road Tripper', desc="Drive Rosie's truck to all four new places.", reward=300),
+    dict(id='courier', name='Country Courier', desc='Deliver ten cooler orders by truck.', reward=300),
+    dict(id='sightseer', name='Sightseer', desc='Photograph every viewpoint along the roads.', reward=250),
+    dict(id='backroads', name='Backroads Angler', desc='Catch all twelve fish from the new places.', reward=500),
 ]
 TANK_SIZE = 8
 

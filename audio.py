@@ -325,6 +325,23 @@ class Audio:
             t = self._t(d)
             return (np.sin(2 * np.pi * f0 * t) + 0.2 * np.sin(4 * np.pi * f0 * t)) * np.sin(np.pi * t / d) ** 1.5
         S['hoot'] = self._snd(self._mix([(0, hoot(380, 0.28), 1), (0.42, hoot(350, 0.55), 1)], 1.1), 0.32)
+        # Rosie's truck (drive.py): an engine loop (whole-hertz partials over exactly one second, so it loops
+        # without a click), a two-note horn and the door
+        t = self._t(1.0)
+        rum = (np.sin(2 * np.pi * 46 * t) + 0.6 * np.sin(2 * np.pi * 92 * t + 1.0) + 0.35 * np.sin(2 * np.pi * 138 * t)
+               + 0.2 * np.sin(2 * np.pi * 184 * t + 2.0)) * (0.8 + 0.2 * np.sin(2 * np.pi * 23 * t))
+        chug = self._band(self._noise(len(t)), 60, 400) * (0.5 + 0.5 * np.sin(2 * np.pi * 23 * t)) ** 2
+        S['engine'] = self._snd(rum + chug * 0.6, 0.35)
+        t = self._t(0.5)
+
+        def beep(f, d):
+            tt = self._t(d)
+            x = np.sign(np.sin(2 * np.pi * f * tt)) * 0.5 + np.sin(2 * np.pi * f * 1.5 * tt) * 0.5
+            return self._band(x, 200, 2500) * np.minimum(1, tt / 0.01) * np.minimum(1, (d - tt) / 0.03)
+        S['horn'] = self._snd(self._mix([(0, beep(392, 0.18), 1), (0.22, beep(330, 0.26), 1)], 0.5), 0.45)
+        t = self._t(0.25)
+        S['door'] = self._snd(self._band(self._noise(len(t)), 60, 500) * np.exp(-t * 30)
+                              + np.sin(2 * np.pi * 70 * t) * np.exp(-t * 25), 0.6)
 
         # --- pads for the music
         def mf(m):
@@ -452,6 +469,19 @@ class Audio:
             self._radio_music(dt, quiet=self.band_vol > 0.3)
         else:
             self._music(dt, env, quiet=self.band_vol > 0.3, town=bool(ctx.get('town')))
+
+    def engine(self, level):
+        """The truck's engine: level 0 (off) to 1 (foot down). Plays on channel 7, which nothing else uses."""
+        if not self.ok or 'engine' not in self.sounds:
+            return
+        ch = pygame.mixer.Channel(7)
+        if level <= 0:
+            if ch.get_busy():
+                ch.fadeout(300)
+            return
+        if not ch.get_busy():
+            ch.play(self.sounds['engine'], loops=-1)
+        ch.set_volume(min(1.0, (0.25 + 0.75 * level) * self.sfx_vol * 0.8))
 
     def step(self, vol=0.3):
         self.play('step%d' % random.randrange(4), vol * random.uniform(0.7, 1.0), random.uniform(0.42, 0.58))

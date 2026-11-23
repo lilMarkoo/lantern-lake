@@ -40,7 +40,7 @@ DEAD = 0.35
 CURSOR_SPEED = 1100.0          # logical pixels a second at full tilt
 
 # overlays the pointer is not used for: they have their own button meanings below
-DIRECT = (None, 'cooking', 'scene', 'catch', 'letter', 'ringtoss', 'ice')
+DIRECT = (None, 'cooking', 'scene', 'catch', 'letter', 'ringtoss', 'ice', 'drive')
 MENU_NAV = ('pause', 'quick')  # simple lists you step through with the d-pad
 PTR_IDLE = 4.0                 # seconds before an unused pointer hides again
 # the on-screen keyboard for names, addresses and chat
@@ -323,6 +323,11 @@ class Pad:
             if b == A:
                 g.key_down(pygame.K_RETURN)
             return
+        if ctx == 'drive':
+            k = {A: pygame.K_e, X: pygame.K_h}.get(b)
+            if k:
+                g.key_down(k)
+            return
         if ctx in ('cooking', 'scene', 'ice'):
             if b == A:
                 self.a_down = pygame.K_SPACE
@@ -444,8 +449,12 @@ class Pad:
         dx, dy = self.direction()
         # walking, steering the cast and the reel: the pad holds A/D like the keyboard
         walk = ctx in ('play', 'cooking') and self.g.typing is None
-        self._hold(pygame.K_d, walk and dx > 0)
-        self._hold(pygame.K_a, walk and dx < 0)
+        # driving Rosie's truck: RT (or the stick) is the gas, LT the brake
+        drv = ctx == 'drive' and self.g.typing is None and getattr(self.g.aqscene, 'panel', 1) is None
+        rt = self.axes[5] > 0.3 if len(self.axes) > 5 else False
+        lt = self.axes[4] > 0.3 if len(self.axes) > 4 else False
+        self._hold(pygame.K_d, (walk and dx > 0) or (drv and (dx > 0 or rt)))
+        self._hold(pygame.K_a, (walk and dx < 0) or (drv and (dx < 0 or lt)))
         ice = ctx == 'ice' and self.g.typing is None      # ice fishing: the stick sets the lure's depth
         self._hold(pygame.K_s, ice and dy > 0)
         self._hold(pygame.K_w, ice and dy < 0)

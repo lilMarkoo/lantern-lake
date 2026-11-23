@@ -1,15 +1,16 @@
 {
-  "version": "0.5.0",
+  "version": "0.5.5",
   "highlights": [
-    ["Your market stall", "Every Leafday, 9 AM to 1 PM: set up a stall in Fernwick and sell your fish, dishes and garden things at your own prices."],
-    ["Haggling and orders", "Folk haggle when you're a little dear, pay more for their favourites, and order fish for next week at double the price."],
-    ["Stall upgrades", "An awning, a brass bell, a weighing scale, a chalkboard special and a second table, plus a reputation that grows with every sale."],
-    ["New badge", "Sell 60 things at your stall to become a Stallholder."]
+    ["Rosie's truck", "Fix up Grandma Rosie's old pickup and take a cozy side-on drive over the hills, through rain, snow and the dark, with Biscuit in the passenger seat."],
+    ["Four new places", "Pinecrest Reservoir, Copper Falls, Gull Point (with a cliff path down to Saltmarsh) and the Old Quarry, each with its own neighbour and three new fish."],
+    ["On the road", "Photograph viewpoints, give hitchhikers a lift, wait for the ducks, find lost things, and deliver cooler orders without spilling them."],
+    ["Upgrades and fast travel", "Snow tyres, a big cooler, a roof rack for your rowboat and six paint colours. A region map with fast travel, a Roads page in the journal and four new badges."]
   ],
   "notes": [
-    "Your market stall: from your second day, Mayor Hazel keeps you a pitch at the top of the lake path in Fernwick. Every Leafday from 9 AM to 1 PM, fill up to four crates with fish, dishes and garden things, chalk up your prices and open up. The morning goes by while neighbours and visitors stop at the stall. Nothing leaves your basket until it sells, so packing up early never loses anything.",
-    "Everyone has their own idea of a fair price: under it they buy (two, if it's a bargain), a little over and they haggle (Deal or No thanks), too far over and they walk on. Neighbours pay more for their favourite fish and dish, warm to you when you sell cheap, and now and then order a fish for next Leafday at double the price.",
-    "Reputation grows with every sale and brings more people by, up to folk from Saltmarsh. Five stall upgrades in the Your stall tab: a Striped Awning, a Brass Bell you can ring, a Weighing Scale, a Chalkboard special and a Second Table for six crates.",
-    "Market day is on the calendar and in the HUD notes (click the note to walk to the stall), and there's a new Stallholder badge for selling 60 things."
+    "Rosie's truck: on your fourth day Old Tom writes about Grandma Rosie's pickup in the shed. Press V (or the new Truck button) to open it: fit a new battery and tyres and get a tune-up from Old Tom, and four roads open from your cabin.",
+    "Driving is a side-on scenic drive: D or RT for gas, A or LT to brake, H for the horn. The truck tilts over the hills and bounces over the bumps; rain makes the road slick, winter climbs are slippery without snow tyres, and the headlights come on after dark. Each road has two viewpoints to photograph, sometimes a hitchhiker or animals on the road, and one lost thing to bring home for a thank-you letter.",
+    "Four new places, each a short walk with someone to talk to: Pinecrest Reservoir (Ranger Ida, the Golden Trout in the deep water), Copper Falls (Hal's lodge and the autumn Copperjaw), Gull Point (Morag's cafe, rock pools, and a cliff path down to Saltmarsh) and the Old Quarry (Bertram, and fish that only stir after dark). Twelve new fish in all, on a new Roads page in the journal.",
+    "The Orders board has new requests from up the roads every morning. Pack the fish in the cooler and drive gently: big bumps spill them, and the ice melts as the minutes pass. Garage upgrades: Snow Tyres, Big Cooler, a Roof Rack that brings your rowboat, and six paint colours. Once you've driven a road you can fast-travel it from the map.",
+    "Controller support for driving (RT / LT, the bottom button to stop and look, the left button for the horn), two new rebindable keys (V and H) and four new badges: Road Tripper, Country Courier, Sightseer and Backroads Angler."
   ]
 }

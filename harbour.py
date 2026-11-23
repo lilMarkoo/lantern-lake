@@ -482,6 +482,16 @@ class HarbourScene:
         if g.overlay == 'harbour':
             g.overlay = None
         g.release_holds()
+        if getattr(g, 'road_trip', None):
+            # you walked down from Gull Point: back up the cliff steps to the truck
+            import areas
+            area, g.road_trip = g.road_trip, None
+            g.advance_time(10)
+            areas.enter(g, area)
+            g.fade, g.fade_dir = 1.0, -1
+            g.toast('You climb the cliff steps back up to Gull Point.', (90, 140, 180))
+            g.save()
+            return
         g.audio.play('plop', 0.4)
         g.toast('You climb back down into your boat.', (90, 140, 180))
         g.save()

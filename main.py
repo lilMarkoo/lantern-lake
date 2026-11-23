@@ -84,6 +84,9 @@ import news
 import farshore as farmod
 import club as clubmod
 import stall as stallmod
+import truck as truckmod
+import drive as drivemod
+import areas as areamod
 import pad as padmod
 import lakelife
 import lakeshow
@@ -97,7 +100,7 @@ from data import (FISH, FISH_BY_ID, ALL_BY_ID, LETTERS, VILLAGERS, REQUEST_REASO
                   FESTIVALS, WAGON_DAYS, FROST_POINTS, METEOR_DAY, FESTIVAL_DAY, FISH_RUN_DAY, SPOT_BY_ID,
                   fish_at, spots_of, BOAT)
 import tank as tankmod
-from data import LAKE_SPOTS, COAST_SPOTS, COAST_IDS, SEA_FISH, HOLLOW_FISH
+from data import LAKE_SPOTS, COAST_SPOTS, COAST_IDS, SEA_FISH, HOLLOW_FISH, ROAD_FISH
 from fishing import Fishing, PLAYER_X, HAND, cast_point, aim_for, clamp, spot_depth
 from world import World, Env, WAGON_RECT, CROSS_POS, cross_at
 
@@ -753,12 +756,16 @@ class Game:
         aqmod.HEADLESS, aqmod.fmt_clock = HEADLESS, fmt_clock
         hbmod.HEADLESS, hbmod.fmt_clock = HEADLESS, fmt_clock
         farmod.HEADLESS, farmod.fmt_clock = HEADLESS, fmt_clock
+        drivemod.HEADLESS, drivemod.fmt_clock = HEADLESS, fmt_clock
+        areamod.HEADLESS, areamod.fmt_clock = HEADLESS, fmt_clock
         self.aqscene = None          # also Saltmarsh harbour (harbour.py), under overlay 'harbour'
         self.coast = coast.new()     # Saltmarsh, down the river (coast.py)
         self.far = farmod.new()      # the Far Shore, across from the landing (farshore.py)
         self.club = clubmod.new()    # the Angling Club on Lanternday evenings (club.py)
         self.stall = stallmod.new()  # your market stall on Leafday mornings (stall.py)
         self.stallrun = None         # this morning's market (not saved)
+        self.truck = truckmod.new()  # Grandma Rosie's truck and the roads out (truck.py, drive.py, areas.py)
+        self.road_trip = None        # walked down to Saltmarsh from Gull Point (not saved)
         self.goals = goalmod.new()   # the welcome quest and the pinned goal (goals.py)
         goalmod.fmt_clock = fmt_clock
         self.cat_bond = 0            # Biscuit (biscuit.py): bond points, today's little things, a present
@@ -785,7 +792,7 @@ class Game:
             return
         data = dict(coins=self.coins, day=self.day, minute=self.minute, weather=self.weather, rod=self.rod,
                     rods=self.rods, bait=self.bait, baits=self.baits, owned=self.owned, journal=self.journal,
-                    letters=self.letters, basket=self.basket, request=self.request, luck=self.luck,
+                    letters=self.letters, basket=self.basket + truckmod.in_cooler(self), request=self.request, luck=self.luck,
                     pet_day=self.pet_day, total=self.total, settings=self.settings, tank=self.tank,
                     badges=self.badges, stats=self.stats, trophies=self.trophies, festival=self.festival,
                     forecast=self.forecast, hat=self.hat, hats=self.hats, look=self.look, cat_item=self.cat_item,
@@ -799,7 +806,7 @@ class Game:
                     cat_follow=self.cat_follow, home=self.home, tut=self.tut, tut_day=self.tut_day,
                     garden=self.garden, nature=self.nature, shore=self.shore, finds=self.finds,
                     coast=self.coast, goals=self.goals, hatch=self.hatch, delve=self.delve, far=self.far, club=self.club,
-                    stall=self.stall)
+                    stall=self.stall, truck=self.truck)
         if self.solo:
             data.update(self.solo)       # visiting a friend: your own lake keeps its own day and weather
         try:
@@ -917,7 +924,7 @@ class Game:
                   'museum', 'friends', 'friend_gifts', 'buffs', 'jobs', 'tickets', 'projects', 'town_day',
                   'recipes', 'pantry', 'meal', 'upgrades', 'cook_best', 'story', 'heart_seen', 'market', 'hunts', 'pot', 'sky', 'ice_hole',
                   'cat_bond', 'cat_day', 'cat_gift', 'cat_follow', 'home', 'tut', 'tut_day', 'garden',
-                  'nature', 'shore', 'finds', 'coast', 'hatch', 'delve', 'far', 'club', 'stall'):
+                  'nature', 'shore', 'finds', 'coast', 'hatch', 'delve', 'far', 'club', 'stall', 'truck'):
             if k in d:
                 setattr(self, k, d[k])
         self.place = 'lake'
@@ -949,6 +956,8 @@ class Game:
         self.club = clubmod.clean(getattr(self, 'club', None))
         self.stall = stallmod.clean(getattr(self, 'stall', None))
         self.stallrun = None
+        self.truck = truckmod.clean(getattr(self, 'truck', None))
+        self.road_trip = None
         self.goals = goalmod.clean(d.get('goals'))
         self.nature = {k: {'stars': max(1, min(3, int(v.get('stars', 1)))), 'day': int(v.get('day', 0)),
                            'n': max(1, int(v.get('n', 1))),
@@ -1115,7 +1124,8 @@ class Game:
 
     def walk_scene(self):
         """The scene you are walking around right now (the aquarium hall or Saltmarsh harbour), if any."""
-        return self.aqscene if self.overlay in ('aquarium', 'harbour', 'farshore') and self.aqscene else None
+        return self.aqscene if self.overlay in ('aquarium', 'harbour', 'farshore', 'drive', 'area') and \
+            self.aqscene else None
 
     # ------------------------------------------------------------ the rowboat
     def open_map(self):
@@ -1624,6 +1634,7 @@ class Game:
         }
         cond.update(farmod.badge_cond(self))
         cond.update(stallmod.badge_cond(self))
+        cond.update(truckmod.badge_cond(self))
         for b in BADGES:
             if b['id'] not in self.badges and cond.get(b['id']):
                 self.badges.append(b['id'])
@@ -1870,6 +1881,7 @@ class Game:
         shoremod.morning(self)
         coast.morning(self)
         farmod.morning(self)
+        truckmod.morning(self)
         """Morning routine: forecast, the day's letter, birthdays and events."""
         d = self.day
         self.ensure_forecast()
@@ -2011,6 +2023,7 @@ class Game:
                 self.finish_festival()
         clubmod.tick(self, before)
         stallmod.tick(self, before)
+        truckmod.tick(self, before)
         if before < 1200 <= self.minute and self.wagon_today():
             self.toast("Wren's Wagon sails off for the night. See you soon!", (70, 140, 150))
         self.ensure_festival()
@@ -2247,6 +2260,8 @@ class Game:
             items.append(('The Drowned Stair', lambda: dungeon.open_stair(self)))
             if farmod.unlocked(self) and self.visit_shore is None:
                 items.append(('Row to the Far Shore', lambda: farmod.go(self)))
+            if self.truck['told'] and self.visit_shore is None:
+                items.append(("Rosie's truck", lambda: truckmod.open_(self)))
             if self.shore.get('told') and self.visit_shore is None:
                 items.append(('The Shore', lambda: shoremod.open_panel(self)))
             if self.wagon_here():
@@ -2442,9 +2457,11 @@ class Game:
         self.minute = 360.0
         self.spot = 'dock'                 # you row home to sleep
         self.place = 'lake'                # ...or walk home from the village
-        if self.overlay in ('aquarium', 'harbour', 'farshore'):
+        if self.overlay in ('aquarium', 'harbour', 'farshore', 'drive', 'area', 'truck'):
             self.overlay = None
         self.aqscene = None
+        self.road_trip = None
+        self.audio.engine(0)
         self.mp_ready = False
         self.net_world_t = 0               # host: tell everyone it is morning right away
         self.luck = max(0.0, self.luck - 0.5)
@@ -2944,6 +2961,11 @@ class Game:
             self.toggle('goals')
         elif k == pygame.K_r and ov in (None, 'radio'):
             self.toggle('radio')
+        elif k == pygame.K_v and ov in (None, 'truck'):
+            if ov == 'truck':
+                self.close_overlay()
+            elif self.rest_phase is None:
+                truckmod.open_(self)
         elif ov:
             return
         elif k == pygame.K_t:
@@ -3037,7 +3059,8 @@ class Game:
         env = self.env
         self.net_update(dt)
         paused = self.overlay is not None or self.rest_phase is not None
-        if self.walk_scene() and self.aqscene.panel is None and self.rest_phase is None:
+        if self.walk_scene() and self.aqscene.panel is None and self.rest_phase is None and \
+                self.overlay != 'drive':
             paused = False                                 # strolling the aquarium or the quay: the day goes on
         if stallmod.running(self) and self.rest_phase is None:
             paused = False                                 # the market morning goes by while you sell
@@ -3064,6 +3087,7 @@ class Game:
             self.dungeon.update(dt)
         if self.overlay == 'stall':
             stallmod.update(self, dt)
+        truckmod.update(self, dt)
         if self.walk_scene():
             self.aqscene.update(dt)
         if self.mode == 'play':
@@ -3458,6 +3482,8 @@ class Game:
                 self.draw_quick(scr)
             elif ov == 'stall':
                 stallmod.draw(self, scr)
+            elif ov == 'truck':
+                truckmod.draw(self, scr)
         elif self.rest_phase == 'row_cross':
             pass                                     # rowing across: just the lake and the boat
         elif self.mode == 'play' and self.place == 'lake':
@@ -3945,6 +3971,8 @@ class Game:
             return (lambda: stallmod.open_(self)) if self.place == 'town' else (lambda: self.go_place('town'))
         if kind == 'reeds':
             return lambda: shoremod.open_panel(self)
+        if kind == 'truck':
+            return lambda: truckmod.open_(self, 'orders' if self.truck['order'] else None)
         if kind == 'mail' and self.place == 'lake' and self.spot == 'dock':
             return self.open_mailbox
         if kind == 'festival' and text.startswith('Legend'):
@@ -4001,6 +4029,9 @@ class Game:
         sl = stallmod.day_note(self)
         if sl:
             lines.append(('stall', sl))
+        tl = truckmod.day_note(self)
+        if tl:
+            lines.append(('truck', tl))
         bl = biscuit.hud_line(self)
         if bl:
             lines.append(('birthday', bl))
@@ -4264,6 +4295,8 @@ class Game:
                      ('Rest', 'Z', self.try_rest)]
             if self.has_boat():
                 slots.insert(5, ('Boat', 'B', self.open_map))
+            if self.truck['told'] and not self.net.online:
+                slots.insert(len(slots) - 1, ('Truck', 'V', lambda: truckmod.open_(self)))
         n = len(slots)
         fold = False
         if calm_card:
@@ -4309,6 +4342,9 @@ class Game:
                     U.calendar_icon(s, c)
                 elif label == 'Boat':
                     U.rowboat(s, (c[0], c[1] + 2), 1.0)
+                elif label == 'Truck':
+                    spr = truckmod.truck_sprite(truckmod.paint_col(self) if self.truck['fixed'] else (150, 130, 120))
+                    s.blit(spr, spr.get_rect(center=(c[0], c[1] + 2)))
                 elif label in ('Town', 'Lake', 'Harbour'):
                     townmod.signpost_icon(s, c, label == 'Lake')
                 else:
@@ -4873,6 +4909,8 @@ class Game:
         ('Seasonal', 'Fish that want a particular season, bait or way of fishing.'),
         ('Coast', 'Fish from the sea at Saltmarsh, down the river. Mind the tide.'),
         ('Far Shore', 'Fish from the Hollow Pool, in the woods across the lake. They rise after 7:30 PM.'),
+        ('Roads', "Fish from the places Rosie's truck reaches: the reservoir, the falls, Gull Point and the "
+                  'quarry.'),
     )
 
     def journal_page(self, i):
@@ -4881,7 +4919,9 @@ class Game:
         if i == 1:
             return [f for f in FISH if f['spot'] in ('cove', 'deep', 'creek') and not f.get('method')]
         if i == 2:
-            return [f for f in FISH if f.get('method') and f['method'] not in ('sea', 'hollow')]
+            return [f for f in FISH if f.get('method') and f['method'] not in ('sea', 'hollow', 'road')]
+        if i == 5:
+            return ROAD_FISH
         return SEA_FISH if i == 3 else HOLLOW_FISH
 
     def journal_locked(self, i, page):
@@ -4894,13 +4934,16 @@ class Game:
             return 'With a rowboat, the river will take you there.'
         if i == 4 and not farmod.unlocked(self):
             return 'Mend the old landing across from your dock to get there.'
+        if i == 5 and not truckmod.unlocked(self):
+            return "Fix up Grandma Rosie's old truck to reach them."
         return None
 
     def draw_fish_tab(self, s, rect, caught):
         ui = self.ui
         gx, gw = rect.x + 28, 688
-        # the five places, as chips: how many you've found at each, with a little bar
-        cy, cw = rect.y + 92, (688 - 4 * 8) // 5
+        # the places, as chips: how many you've found at each, with a little bar
+        npg = len(self.JOURNAL_PAGES)
+        cy, cw = rect.y + 92, (688 - (npg - 1) * 8) // npg
         for i, (label, _) in enumerate(self.JOURNAL_PAGES):
             pg = self.journal_page(i)
             got = sum(1 for f in pg if f['id'] in self.journal)
@@ -7371,6 +7414,18 @@ def run_bot(seconds):
             g.scene.auto(dt)
         elif in_town:
             town_step()
+        elif g.overlay in ('drive', 'area') and g.aqscene:
+            key = 'drive_seen' if g.overlay == 'drive' else 'area_seen'
+            if tb.get(key) is not g.aqscene:
+                tb[key] = g.aqscene
+                did(g.overlay + ('_' + g.aqscene.rid if g.overlay == 'drive' else '_' + g.aqscene.area))
+            g.aqscene.auto(dt, rng)              # drive along stopping for everything; fish, chat, drive home
+        elif g.overlay == 'truck':
+            truckmod.bot_garage(g)
+            for tab in ('map', 'garage', 'orders'):
+                g.truck_tab = tab
+                g.draw()
+            g.overlay = None
         elif g.overlay == 'farshore' and g.aqscene:
             if tb.get('far_seen') is not g.aqscene:
                 tb['far_seen'] = g.aqscene
@@ -7582,6 +7637,19 @@ def run_bot(seconds):
               and not (clubmod.today(g) and g.minute >= 14 * 60)):
             tb['dg_day'] = g.day
             dungeon.open_stair(g)                 # down the stone steps under the hill
+        elif (g.rest_phase is None and f.state in ('idle', 'waiting') and g.overlay is None and g.spot == 'dock'
+              and g.place == 'lake' and g.truck['told'] and tb.get('truck_day') != g.day
+              and 7 * 60 <= g.minute < 10 * 60):
+            tb['truck_day'] = g.day
+            g.fishing.reset()
+            truckmod.open_(g)                     # a look in the shed: fix it up, buy things, the board
+            did('truck_window')
+        elif (g.rest_phase is None and f.state in ('idle', 'waiting') and g.overlay is None and g.spot == 'dock'
+              and g.place == 'lake' and g.truck['fixed'] and tb.get('road_day') != g.day
+              and (8 * 60 <= g.minute < 12 * 60 or 20 * 60 <= g.minute < 21 * 60) and not g.net.online):
+            if truckmod.bot_trip(g, rng):          # off up one of the roads (the quarry after dark)
+                tb['road_day'] = g.day
+                did('road_trip')
         elif (g.rest_phase is None and f.state == 'idle' and g.overlay is None and g.spot == 'dock'
               and g.place == 'lake' and farmod.unlocked(g) and tb.get('far_day') != g.day
               and 19 * 60 + 40 <= g.minute < 22 * 60):

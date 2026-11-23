@@ -131,6 +131,13 @@ def event_icon(s, kind, center, scale=1.0):
         pygame.draw.circle(s, (200, 220, 236), (x, y + 1), 5)
         pygame.draw.circle(s, (90, 120, 150), (x, y + 1), 3)
         s.fill((250, 230, 150), (x + 5, y - 4, 3, 2))
+    elif kind == 'truck':                      # Rosie's truck
+        import truck as TR
+        spr = TR.truck_sprite((190, 74, 76))
+        if scale != 1.0:
+            spr = pygame.transform.scale(spr, (int(spr.get_width() * scale * 0.7),
+                                               int(spr.get_height() * scale * 0.7)))
+        s.blit(spr, spr.get_rect(center=(x, y)))
     elif kind == 'paw':                        # Biscuit's paw print
         c = (214, 132, 70)
         pygame.draw.ellipse(s, c, (x - 6, y - 1, 12, 9))
